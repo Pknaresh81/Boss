@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';"
+    >
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>License Activation</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: transparent;
+            font-family: Arial, sans-serif;
+            user-select: none;
+        }
+
+        .license-window {
+    width: 320px;
+    height: 180px;
+    position: relative;
+
+    border-radius: 14px;
+
+    background: #111827;
+
+    border: 1px solid rgba(255, 255, 255, 0.12);
+
+    box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.45);
+
+    color: white;
+
+    padding: 16px;
+}
+
+.close-button {
+    position: absolute;
+
+    top: 8px;
+    right: 10px;
+
+    width: 24px;
+    height: 24px;
+
+    border: none;
+    border-radius: 6px;
+
+    background: transparent;
+
+    color: #9ca3af;
+
+    font-size: 20px;
+    font-weight: 400;
+
+    line-height: 20px;
+
+    cursor: pointer;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    z-index: 10;
+}
+
+.close-button:hover {
+    background: rgba(255, 255, 255, 0.10);
+    color: white;
+}
+
+.title {
+    font-size: 18px;
+    font-weight: 700;
+
+    margin-bottom: 4px;
+
+    line-height: 22px;
+}
+
+.subtitle {
+    color: #9ca3af;
+
+    font-size: 11px;
+
+    margin-bottom: 10px;
+
+    line-height: 14px;
+}
+
+.input {
+    width: 100%;
+    height: 34px;
+
+    border: 1px solid #374151;
+
+    border-radius: 8px;
+
+    background: #1f2937;
+
+    color: white;
+
+    padding: 0 10px;
+
+    font-size: 12px;
+
+    outline: none;
+}
+
+.input:focus {
+    border-color: #6366f1;
+}
+
+.button {
+    width: 100%;
+    height: 34px;
+
+    margin-top: 8px;
+
+    border: 0;
+
+    border-radius: 8px;
+
+    background: #6366f1;
+
+    color: white;
+
+    font-size: 12px;
+
+    font-weight: 600;
+
+    cursor: pointer;
+}
+
+.button:hover {
+    background: #4f46e5;
+}
+
+.button:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.message {
+    min-height: 14px;
+
+    margin-top: 5px;
+
+    font-size: 10px;
+
+    line-height: 12px;
+
+    text-align: center;
+
+    color: #fca5a5;
+}
+
+.message.success {
+    color: #86efac;
+}
+    </style>
+</head>
+
+<body>
+
+    <div class="license-window">
+
+    <button
+        id="closeLicenseBtn"
+        class="close-button"
+        type="button"
+        aria-label="Close"
+    >
+        ×
+    </button>
+
+    <div class="title">
+            License Activation
+        </div>
+
+        <div class="subtitle">
+            Apna valid license key enter karein.
+        </div>
+
+        <input
+            id="licenseKey"
+            class="input"
+            type="text"
+            placeholder="Enter License Key"
+            autocomplete="off"
+            spellcheck="false"
+        >
+
+        <button
+            id="activateBtn"
+            class="button"
+            type="button"
+        >
+            Activate License
+        </button>
+
+        <div
+            id="message"
+            class="message"
+        ></div>
+
+    </div>
+
+    <script>
+
+        // ==========================================
+        // DEBUG
+        // ==========================================
+
+        console.log(
+            '[LICENSE HTML] Script loaded'
+        );
+
+        console.log(
+            '[LICENSE HTML] electronAPI:',
+            window.electronAPI
+        );
+
+        console.log(
+            '[LICENSE HTML] verifyLicenseKey:',
+            window.electronAPI?.verifyLicenseKey
+        );
+
+
+        // ==========================================
+        // ELEMENTS
+        // ==========================================
+
+        const licenseKeyInput =
+            document.getElementById('licenseKey');
+
+        const activateBtn =
+            document.getElementById('activateBtn');
+
+        const message =
+            document.getElementById('message');
+
+
+        // ==========================================
+        // MESSAGE
+        // ==========================================
+
+        function showMessage(
+            text,
+            success = false
+        ) {
+
+            message.textContent = text;
+
+            message.className =
+                success
+                    ? 'message success'
+                    : 'message';
+        }
+
+
+        // ==========================================
+        // LICENSE ACTIVATION
+        // ==========================================
+
+        async function activateLicense() {
+
+            console.log(
+                '[LICENSE HTML] Activate clicked'
+            );
+
+            const key =
+                licenseKeyInput.value.trim();
+
+            console.log(
+                '[LICENSE HTML] Key:',
+                key
+            );
+
+
+            // Empty key check
+            if (!key) {
+
+                showMessage(
+                    'Kripya License Key enter karein.'
+                );
+
+                licenseKeyInput.focus();
+
+                return;
+            }
+
+
+            // Check preload API
+            if (
+                !window.electronAPI ||
+                typeof window.electronAPI.verifyLicenseKey !== 'function'
+            ) {
+
+                console.error(
+                    '[LICENSE HTML] verifyLicenseKey API unavailable'
+                );
+
+                showMessage(
+                    'License system load nahi hua.'
+                );
+
+                return;
+            }
+
+
+            // Loading state
+            activateBtn.disabled = true;
+
+            activateBtn.textContent =
+                'Verifying...';
+
+            showMessage(
+                'License verify ho raha hai...'
+            );
+
+
+            try {
+
+                console.log(
+                    '[LICENSE HTML] Calling IPC...'
+                );
+
+
+                const result =
+                    await window.electronAPI.verifyLicenseKey(
+                        key
+                    );
+
+
+                console.log(
+                    '[LICENSE HTML] IPC result:',
+                    result
+                );
+
+
+                // Successful verification
+                if (
+                    result &&
+                    result.success
+                ) {
+
+                    showMessage(
+                        result.message ||
+                        'License Successfully Activated!',
+                        true
+                    );
+
+                    console.log(
+                        '[LICENSE HTML] License verified successfully.'
+                    );
+
+                    /*
+                     * Main process successful verification
+                     * ke baad license window close karega
+                     * aur dashboard open karega.
+                     */
+
+                    return;
+                }
+
+
+                // Failed verification
+                showMessage(
+                    result?.message ||
+                    result?.error ||
+                    'License verification failed.'
+                );
+
+
+                console.warn(
+                    '[LICENSE HTML] License rejected:',
+                    result
+                );
+
+
+            } catch (error) {
+
+                console.error(
+                    '[LICENSE HTML] IPC ERROR:',
+                    error
+                );
+
+
+                showMessage(
+                    error?.message ||
+                    'License verification failed.'
+                );
+
+
+            } finally {
+
+                activateBtn.disabled = false;
+
+                activateBtn.textContent =
+                    'Activate License';
+            }
+        }
+
+
+        // ==========================================
+        // BUTTON CLICK
+        // ==========================================
+
+        activateBtn.addEventListener(
+            'click',
+            activateLicense
+        );
+
+
+        // ==========================================
+// CLOSE LICENSE WINDOW
+// ==========================================
+
+const closeLicenseBtn =
+    document.getElementById('closeLicenseBtn');
+
+closeLicenseBtn.addEventListener(
+    'click',
+    () => {
+
+        console.log(
+            '[LICENSE HTML] Close button clicked'
+        );
+
+        if (
+            window.electronAPI &&
+            typeof window.electronAPI.closeLicenseWindow === 'function'
+        ) {
+            window.electronAPI.closeLicenseWindow();
+        } else {
+            console.error(
+                '[LICENSE HTML] closeLicenseWindow API unavailable'
+            );
+        }
+    }
+);
+
+
+        // ==========================================
+        // ENTER KEY
+        // ==========================================
+
+        licenseKeyInput.addEventListener(
+            'keydown',
+            (event) => {
+
+                if (event.key === 'Enter') {
+
+                    event.preventDefault();
+
+                    activateLicense();
+                }
+            }
+        );
+
+
+        // ==========================================
+        // DOM READY
+        // ==========================================
+
+        window.addEventListener(
+            'DOMContentLoaded',
+            () => {
+
+                console.log(
+                    '[LICENSE HTML] DOM ready'
+                );
+
+                licenseKeyInput.focus();
+            }
+        );
+
+    </script>
+
+</body>
+</html>
+
+Iske baad **Electron completely restart** karein — sirf license window close/open nahi, poora app restart.
+
+Phir **Ctrl + Shift + I → Console** mein sabse pehle ye 3 lines dekhein:
+
+```text
+[LICENSE HTML] Script loaded
+[LICENSE HTML] electronAPI: ...
+[LICENSE HTML] verifyLicenseKey: ...
+```
+
+Activate dabane ke baad:
+
+```text
+[LICENSE HTML] Activate clicked
+[LICENSE HTML] Calling IPC...
+```
+
+Aur agar IPC sahi connected hai to terminal mein:
+
+```text
+[LICENSE] Verification request received: YOUR_KEY
+[LICENSE] Calling verifyLicense()...
+```
+
+aana chahiye.
+
+**Agar ab bhi terminal mein `[LICENSE] Verification request received` nahi aata, to next mujhe DevTools Console ka poora output bhej dena.**

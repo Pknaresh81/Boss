@@ -1,0 +1,3192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Boss Automation Software</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        html,
+body {
+    background: transparent !important;
+}
+
+body {
+    color: #1e293b;
+    user-select: none;
+    margin: 0;
+    padding: 0;
+    font-family: sans-serif;
+    overflow: hidden;
+    height: 100%;
+}
+
+        .main-container {
+    position: absolute;
+
+    top: 0;
+    left: 0;
+
+    transform: none;
+
+    width: 100%;
+    max-width: none;
+
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+
+    overflow: hidden;
+    z-index: 1000;
+    box-sizing: border-box;
+}
+
+/* =========================================================
+   STARTUP COLLAPSED STATE
+========================================================= */
+
+        .window-header {
+            cursor: default;
+        }
+
+        .tab-content {
+            display: none;
+            opacity: 0;
+            height: 0;
+            overflow: hidden;
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        .tab-content.active {
+            display: block;
+            opacity: 1;
+            height: auto;
+        }
+
+        .scrollable-container {
+            max-height: 580px;
+            overflow-y: auto;
+        }
+
+        #floating-windows-layer {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            z-index: 9999;
+            pointer-events: auto;
+        }
+
+    </style>
+</head>
+
+<body>
+
+<!-- ==========================================
+     APP UPDATE POPUP
+========================================== -->
+
+<div id="appUpdatePopup"
+     class="fixed inset-0 z-[99999] hidden items-center justify-center bg-black/40">
+
+    <div class="bg-white rounded-xl shadow-2xl border border-slate-200 w-[360px] p-5">
+
+        <div class="text-lg font-bold text-slate-800">
+            New Update Available
+        </div>
+
+        <div class="text-sm text-slate-500 mt-2">
+            Boss Software ka naya version available hai.
+        </div>
+
+        <div id="appUpdateVersion"
+             class="text-sm font-semibold text-blue-600 mt-2">
+        </div>
+
+        <div class="flex justify-end gap-2 mt-5">
+
+            <button
+                id="appUpdateLater"
+                class="px-4 py-2 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-sm">
+                Later
+            </button>
+
+            <button
+                id="appUpdateNow"
+                class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm">
+                Update Now
+            </button>
+
+        </div>
+
+    </div>
+</div>
+
+<div id="floating-windows-layer"></div>
+
+<!-- CAPTCHA MODAL (Added for Backend Integration) -->
+<div id="captcha-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; justify-content: center; align-items: center;">
+    <div class="bg-white border border-slate-300 p-5 rounded-xl max-w-sm w-full text-center text-slate-800 space-y-4 shadow-2xl">
+        <h3 class="text-sm font-bold text-indigo-600">IRCTC Captcha Verification</h3>
+        <div>
+            <img id="captcha-img" src="" alt="Captcha" class="mx-auto rounded border border-slate-300 mb-3 bg-slate-50 p-1" style="max-height: 80px;" />
+            <input type="text" id="captcha-input" placeholder="Enter Captcha Text" class="w-full bg-slate-100 border border-slate-300 rounded p-2 text-slate-800 text-center uppercase tracking-widest font-mono" />
+        </div>
+        <div class="flex justify-end space-x-2">
+            <button id="submit-captcha-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded text-xs font-bold w-full">Submit Captcha</button>
+        </div>
+    </div>
+</div>
+
+<div id="mainWindow" class="main-container text-slate-800 flex flex-col">
+
+    <!-- HEADER -->
+    <header id="windowHeader"
+            class="window-header bg-slate-100 px-4 py-3 flex justify-between items-center border-b border-slate-200">
+
+        <div class="relative flex items-end pointer-events-none">
+    <span class="font-bold text-base leading-none">
+        <span class="text-orange-500">B</span>
+        <span class="text-blue-500">o</span>
+        <span class="text-pink-500">s</span>
+
+        <span class="relative text-sky-400">
+            s
+
+            <span class="absolute left-1/2 -translate-x-1/2 -top-3 text-[10px] text-amber-600 font-bold leading-none">
+                PRO
+            </span>
+        </span>
+    </span>
+</div>
+
+        <nav class="flex space-x-1">
+            <!-- Colorful Tabs -->
+    
+         <button onclick="toggleTab('book')" id="book-tab"
+                    class="tab-btn px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 font-semibold">
+                Book
+            </button>
+
+            <button onclick="toggleTab('tickets')" id="tickets-tab"
+                    class="tab-btn px-3 py-1.5 rounded-lg text-xs font-medium text-amber-600 bg-amber-50 hover:bg-amber-100 font-semibold">
+                Tickets
+            </button>
+
+            <button onclick="toggleTab('tokens')" id="tokens-tab"
+                    class="tab-btn px-3 py-1.5 rounded-lg text-xs font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 font-semibold">
+                Tokens
+            </button>
+
+            <button onclick="toggleTab('settings')" id="settings-tab"
+                    class="tab-btn px-3 py-1.5 rounded-lg text-xs font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 font-semibold">
+                Settings
+            </button>
+
+            <button onclick="toggleTab('profile')" id="profile-tab"
+                    class="tab-btn px-3 py-1.5 rounded-lg text-xs font-medium text-cyan-600 bg-cyan-50 hover:bg-cyan-100 font-semibold">
+                Profile
+            </button>
+
+            <button onclick="toggleTab('payment')" id="payment-tab"
+                    class="tab-btn px-3 py-1.5 rounded-lg text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 font-semibold">
+                Payment
+            </button>
+        </nav>
+
+        <div class="flex items-center space-x-2">
+
+    <div id="browser-status-panel"
+         class="flex items-center gap-1">
+
+    <!-- ==========================================
+     BROWSER BUTTONS
+========================================== -->
+
+<div id="browser-status-panel"
+     class="flex items-center gap-2">
+
+    <!-- CHROME -->
+    <button
+        id="browser-btn-WEB"
+        type="button"
+        onclick="connectBrowser('WEB')"
+        class="flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 transition cursor-pointer">
+
+        <img
+            src="assets/browser-icons/chrome.svg"
+            alt="Chrome"
+            class="w-5 h-5 object-contain"
+        >
+
+        <span
+            id="browser-status-WEB"
+            class="text-[9px] font-semibold text-emerald-600">
+            Ready
+        </span>
+
+    </button>
+
+
+    <!-- EDGE -->
+    <button
+        id="browser-btn-WEB2"
+        type="button"
+        onclick="connectBrowser('WEB2')"
+        class="flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 transition cursor-pointer">
+
+        <img
+            src="assets/browser-icons/edge.svg"
+            alt="Edge"
+            class="w-5 h-5 object-contain"
+        >
+
+        <span
+            id="browser-status-WEB2"
+            class="text-[9px] font-semibold text-emerald-600">
+            Ready
+        </span>
+
+    </button>
+
+
+    <!-- BRAVE -->
+    <button
+        id="browser-btn-WEB3"
+        type="button"
+        onclick="connectBrowser('WEB3')"
+        class="flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 transition cursor-pointer">
+
+        <img
+            src="assets/browser-icons/brave.svg"
+            alt="Brave"
+            class="w-5 h-5 object-contain"
+        >
+
+        <span
+            id="browser-status-WEB3"
+            class="text-[9px] font-semibold text-emerald-600">
+            Ready
+        </span>
+
+    </button>
+
+</div>
+
+
+    <span class="text-xs font-mono text-slate-500"
+          id="live-clock">
+        00:00:00
+    </span>
+
+
+    <button onclick="window.close()"
+            class="text-slate-400 hover:text-red-600 font-bold text-sm px-1">
+        ✕
+    </button>
+
+</div>
+    </header>
+
+
+    <!-- CONTENT -->
+    <main class="relative bg-slate-50">
+
+        <div id="scrollableContainer" class="scrollable-container p-6">
+
+            <!-- BOOK -->
+            <section id="tab-book" class="tab-content">
+
+                <div class="max-w-4xl mx-auto space-y-4">
+
+                    <h2 class="text-sm font-bold text-indigo-600 tracking-wider">
+                        NEW TICKET BOOKING CONFIGURATION
+                    </h2>
+
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 space-y-4 text-xs shadow-sm">
+
+                        <div class="grid grid-cols-3 gap-3">
+
+                            <div>
+                                <label class="text-slate-600 block mb-1">
+                                    Train Number
+                                </label>
+
+                                <input type="text"
+                                       id="inp-train"
+                                       value=" "
+                                       class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+                            </div>
+
+                            <div>
+                                <label class="text-slate-600 block mb-1">
+                                    From Station
+                                </label>
+
+                               <input type="text"
+                                        id="inp-from"
+                                     value=" "
+                                   oninput="this.value = this.value.toUpperCase()"
+                                     class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+                                </div>
+
+                            <div>
+                                <label class="text-slate-600 block mb-1">
+                                    To Station
+                                </label>
+
+                                <input type="text"
+                                         id="inp-to"
+                                      value=" "
+                                    oninput="this.value = this.value.toUpperCase()"
+                                      class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+                             </div>
+
+                        </div>
+
+
+                        <div class="grid grid-cols-3 gap-3">
+
+                            <div>
+                                <label class="text-slate-600 block mb-1">
+                                    Class
+                                </label>
+
+                                <select id="inp-class"
+                                        class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+
+                                    <option value="SL">
+                                        Sleeper (SL)
+                                    </option>
+
+                                    <option value="3E">
+                                        AC 3 Economy (3E)
+                                    </option>
+
+                                    <option value="3A">
+                                        AC 3 Tier (3A)
+                                    </option>
+
+                                    <option value="2A">
+                                        AC 2 Tier (2A)
+                                    </option>
+
+                                    <option value="1A">
+                                        AC First Class (1A)
+                                    </option>
+
+                                </select>
+                            </div>
+
+
+                            <div>
+                                <label class="text-slate-600 block mb-1">
+                                    Quota
+                                </label>
+
+                                <select id="inp-quota"
+                                        class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+
+                                    <option value="GN">
+                                        GN (General)
+                                    </option>
+
+                                    <option value="TQ">
+                                        TQ (Tatkal)
+                                    </option>
+
+                                    <option value="PT">
+                                        PT (Premium Tatkal)
+                                    </option>
+
+                                </select>
+                            </div>
+
+
+                            <div>
+                                <label class="text-slate-600 block mb-1">
+                                    Booking Date
+                                </label>
+
+                                <input type="date"
+                                       id="bookingDate"
+                                       class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+                            </div>
+
+                        </div>
+
+
+                        <!-- PASSENGERS -->
+                        <div class="border-t border-slate-200 pt-3">
+
+                            <label class="text-indigo-600 block mb-2 font-bold">
+                                Passenger Details (Up to 6 Members)
+                            </label>
+
+                            <div id="passengers-rows-container"
+                                 class="space-y-2">
+                            </div>
+
+                        </div>
+
+
+                        <!-- ACCOUNT / PAYMENT / MOBILE -->
+                        <div class="border-t border-slate-200 pt-3 grid grid-cols-3 gap-3">
+
+                            <div>
+
+                                <label class="text-slate-600 block mb-1">
+                                    Select IRCTC Account ID
+                                </label>
+
+                                <select id="inp-irctc"
+                                        class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+                                </select>
+
+                            </div>
+
+
+                            <div>
+
+                                <label class="text-slate-600 block mb-1">
+                                    Payment Method
+                                </label>
+
+                                <select id="inp-pay"
+                                        class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+                                </select>
+
+                            </div>
+
+
+                            <div>
+
+                                <label class="text-slate-600 block mb-1">
+                                    Mobile Number
+                                </label>
+
+                                <input type="text"
+                                       id="mobileNumber"
+                                       placeholder="Enter Mobile No"
+                                       class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="flex justify-between items-center pt-2">
+
+                            <label class="flex items-center space-x-2 text-slate-700">
+
+                                <input type="checkbox"
+                                       id="confirmedOnly"
+                                       checked
+                                       class="rounded bg-slate-50 border-slate-300">
+
+                                <span>
+                                    Book only if berth/seat is confirmed
+                                </span>
+
+                            </label>
+
+
+                            <button onclick="saveTicketToQueue()"
+                                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded shadow">
+
+                                Save Ticket to Queue
+
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- TICKETS -->
+            <section id="tab-tickets" class="tab-content">
+
+                <h2 class="text-sm font-bold text-indigo-600 mb-3">
+                    SAVED TICKET QUEUE
+                </h2>
+
+                <div id="tickets-container"
+                     class="space-y-3">
+                </div>
+
+            </section>
+
+
+            <!-- TOKENS -->
+            <section id="tab-tokens" class="tab-content">
+
+                <h2 class="text-sm font-bold text-indigo-600 mb-3">
+                    TOKENS MANAGEMENT PANEL
+                </h2>
+
+                <div class="bg-white p-4 rounded-xl border border-slate-200 text-xs space-y-3 shadow-sm">
+
+                    <div class="flex gap-3">
+
+                        <input type="text"
+                               id="token-input"
+                               placeholder="Enter API Token / Session Key"
+                               class="flex-1 bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+
+                        <button onclick="addToken()"
+                                class="bg-indigo-600 text-white px-4 py-2 rounded font-bold">
+                            Save Token
+                        </button>
+
+                    </div>
+
+                    <div id="tokens-list"
+                         class="space-y-2 mt-3 text-slate-700">
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- SETTINGS -->
+            <section id="tab-settings" class="tab-content">
+
+                <h2 class="text-sm font-bold text-indigo-600 mb-3">
+                    SOFTWARE CONFIGURATION SETTINGS
+                </h2>
+
+                <div class="bg-white p-4 rounded-xl border border-slate-200 text-xs space-y-4 shadow-sm">
+
+                    <label class="flex items-center space-x-3 text-slate-700">
+
+                        <input type="checkbox"
+                               id="set-sound"
+                               checked
+                               class="rounded bg-slate-50 border-slate-300 w-4 h-4">
+
+                        <span>
+                            Enable Audio Alerts on Availability Found
+                        </span>
+
+                    </label>
+
+
+                    <label class="flex items-center space-x-3 text-slate-700">
+
+                        <input type="checkbox"
+                               id="set-fast"
+                               checked
+                               class="rounded bg-slate-50 border-slate-300 w-4 h-4">
+
+                        <span>
+                            High-Speed Multi-Threaded Request Mode
+                        </span>
+
+                    </label>
+
+
+                    <button onclick="alert('Settings saved successfully!')"
+                            class="bg-indigo-600 text-white px-4 py-2 rounded font-bold">
+
+                        Save Settings
+
+                    </button>
+
+                </div>
+
+            </section>
+
+
+            <!-- PROFILE -->
+            <section id="tab-profile" class="tab-content">
+
+                <h2 class="text-sm font-bold text-indigo-600 mb-3">
+                    MANAGE MULTIPLE IRCTC ACCOUNTS
+                </h2>
+
+                <div class="bg-white p-4 rounded-xl border border-slate-200 text-xs space-y-3 shadow-sm">
+
+                    <div class="grid grid-cols-3 gap-3">
+
+                        <input type="text"
+                               id="profile-user"
+                               placeholder="IRCTC Username"
+                               class="bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+
+                        <input type="password"
+                               id="profile-pass"
+                               placeholder="Password"
+                               class="bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+
+                        <button onclick="addIrctcAccount()"
+                                class="bg-indigo-600 text-white rounded font-bold">
+
+                            + Add IRCTC Account
+
+                        </button>
+
+                    </div>
+
+                    <div id="profiles-list"
+                         class="mt-4 space-y-2">
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- PAYMENT -->
+            <section id="tab-payment" class="tab-content">
+
+                <h2 class="text-sm font-bold text-indigo-600 mb-3">
+                    UPI & QR GATEWAY CONFIGURATION
+                </h2>
+
+                <div class="bg-white p-4 rounded-xl border border-slate-200 text-xs space-y-3 shadow-sm">
+
+                    <div class="grid grid-cols-3 gap-3">
+
+                        <select id="pay-type"
+                                class="bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+
+                            <option>PHONEPE QR</option>
+                            <option>PAYTM QR</option>
+                            <option>IPAY QR</option>
+                            <option>PAYTM UPI</option>
+                            <option>GPay UPI</option>
+                            <option>BHIM UPI</option>
+
+                        </select>
+
+
+                        <input type="text"
+                               id="pay-upi"
+                               placeholder="youname@bank or UPI/Merchant ID"
+                               class="bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+
+
+                        <button onclick="addPaymentMethod()"
+                                class="bg-indigo-600 text-white rounded font-bold">
+
+                            + Add Payment Method
+
+                        </button>
+
+                    </div>
+
+
+                    <div id="payments-list"
+                         class="mt-4 space-y-2">
+                    </div>
+
+                </div>
+
+            </section>
+
+        </div>
+
+    </main>
+
+</div>
+
+
+<script>
+
+/* =========================================================
+   ELECTRON IPC & PROGRESS LISTENER (Updated)
+========================================================= */
+
+let ipcRenderer = null;
+
+try {
+    if (typeof require === "function") {
+        const electron = require("electron");
+        ipcRenderer = electron.ipcRenderer;
+    }
+} catch (error) {
+    console.warn("Electron IPC not available:", error);
+}
+
+// Live Progress Listener from apiengine.js
+if (ipcRenderer) {
+    ipcRenderer.on('booking-progress', (event, data) => {
+        console.log('[Boss] Progress received:', data);
+        if (data && data.winId) {
+            const statusBanner = document.getElementById(data.winId + '-status');
+            const resultTag = document.getElementById(data.winId + '-result');
+            
+            if (statusBanner) {
+                if (data.step && data.step.toLowerCase() === 'error') {
+                    statusBanner.style.background = '#dc2626';
+                    statusBanner.innerText = String(data.message || 'ERROR').toUpperCase();
+                } else {
+                    statusBanner.style.background = '#2563eb';
+                    statusBanner.innerText = String(data.step || 'PROCESSING').toUpperCase();
+                }
+            }
+
+            if (resultTag) {
+                resultTag.innerText = String(data.message || data.step || 'RUNNING');
+                resultTag.style.background = data.step && data.step.toLowerCase() === 'error' ? '#fecaca' : '#fef08a';
+            }
+        }
+    });
+}
+
+/* =========================================================
+   CAPTCHA LISTENERS
+========================================================= */
+
+let activeCaptchaBrowser = 'WEB';
+
+if (
+    window.electronAPI &&
+    typeof window.electronAPI.onShowCaptcha === "function"
+) {
+    window.electronAPI.onShowCaptcha((data) => {
+
+        const captchaImgElement =
+            document.getElementById('captcha-img');
+
+        const captchaModal =
+            document.getElementById('captcha-modal');
+
+        const captchaInput =
+            document.getElementById('captcha-input');
+
+        activeCaptchaBrowser =
+            String(
+                data?.browserType || 'WEB'
+            ).trim().toUpperCase();
+
+        const image =
+            data?.image || '';
+
+        console.log(
+            `[CAPTCHA ${activeCaptchaBrowser}] Captcha received.`
+        );
+
+        if (
+            captchaImgElement &&
+            captchaModal
+        ) {
+            captchaImgElement.src = image;
+            captchaModal.style.display = 'flex';
+
+            if (captchaInput) {
+                captchaInput.value = '';
+                captchaInput.focus();
+            }
+        }
+    });
+}
+
+document.addEventListener(
+    'DOMContentLoaded',
+    () => {
+
+        const submitCaptchaBtn =
+            document.getElementById(
+                'submit-captcha-btn'
+            );
+
+        if (!submitCaptchaBtn) return;
+
+        submitCaptchaBtn.addEventListener(
+            'click',
+            () => {
+
+                const input =
+                    document.getElementById(
+                        'captcha-input'
+                    );
+
+                const userCaptchaText =
+                    String(
+                        input?.value || ''
+                    ).trim();
+
+                if (!userCaptchaText) {
+                    return;
+                }
+
+                console.log(
+                    `[CAPTCHA ${activeCaptchaBrowser}] Submitting captcha.`
+                );
+
+                if (
+                    window.electronAPI &&
+                    typeof window.electronAPI.submitCaptcha ===
+                        "function"
+                ) {
+                    window.electronAPI.submitCaptcha(
+                        userCaptchaText,
+                        activeCaptchaBrowser
+                    );
+                }
+
+                const captchaModal =
+                    document.getElementById(
+                        'captcha-modal'
+                    );
+
+                if (captchaModal) {
+                    captchaModal.style.display =
+                        'none';
+                }
+            }
+        );
+    }
+);
+
+/* =========================================================
+   CLOCK
+========================================================= */
+
+setInterval(() => {
+
+    const now = new Date();
+
+    const timeString =
+        now.toTimeString().split(" ")[0];
+
+    const clockEl =
+        document.getElementById("live-clock");
+
+    if (clockEl) {
+        clockEl.innerText = timeString;
+    }
+
+    document
+        .querySelectorAll(".mini-clock")
+        .forEach(el => {
+            el.innerText = timeString;
+        });
+
+}, 1000);
+
+
+/* =========================================================
+   STORAGE HELPERS
+========================================================= */
+
+function loadStorage(key, fallback) {
+
+    try {
+
+        const data =
+            localStorage.getItem(key);
+
+        if (!data) {
+            return fallback;
+        }
+
+        return JSON.parse(data);
+
+    } catch (error) {
+
+        console.error(
+            "Storage read error:",
+            error
+        );
+
+        return fallback;
+    }
+}
+
+
+function saveStorage(key, value) {
+
+    try {
+
+        localStorage.setItem(
+            key,
+            JSON.stringify(value)
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Storage write error:",
+            error
+        );
+    }
+}
+
+
+/* =========================================================
+   DATA
+========================================================= */
+
+let ticketsQueue =
+    loadStorage("Boss_tickets_queue", []);
+
+
+let irctcAccounts =
+    loadStorage(
+        "Boss_irctc_accounts",
+        []
+    );
+
+
+let paymentMethods =
+    loadStorage(
+        "Boss_payment_methods",
+        []
+    );
+
+
+let tokensList =
+    loadStorage(
+        "Boss_tokens",
+        ["Boss_TOKEN_SECURE_9982"]
+    );
+
+
+let latestSavedTicket = null;
+
+let editingTicketIndex = -1;
+
+
+/* =========================================================
+   PASSENGER INPUTS
+========================================================= */
+
+function renderPassengerInputs() {
+
+    const container =
+        document.getElementById(
+            "passengers-rows-container"
+        );
+
+    if (!container) return;
+
+    let html = "";
+
+    for (let i = 1; i <= 6; i++) {
+
+        html += `
+
+        <div class="grid grid-cols-4 gap-2 bg-slate-50 p-2 rounded border border-slate-200">
+
+            <div>
+                <label class="text-slate-600 block mb-1 text-[10px]">
+                    Name ${i}
+                </label>
+
+                <input
+                    type="text"
+                    id="p-name-${i}"
+                    placeholder="Name"
+                    class="w-full bg-white border border-slate-300 rounded p-1 text-slate-800"
+                >
+            </div>
+
+
+            <div>
+                <label class="text-slate-600 block mb-1 text-[10px]">
+                    Age ${i}
+                </label>
+
+                <input
+                    type="number"
+                    id="p-age-${i}"
+                    placeholder="Age"
+                    class="w-full bg-white border border-slate-300 rounded p-1 text-slate-800"
+                >
+            </div>
+
+
+            <div>
+                <label class="text-slate-600 block mb-1 text-[10px]">
+                    Gender ${i}
+                </label>
+
+                <select
+                    id="p-gender-${i}"
+                    class="w-full bg-white border border-slate-300 rounded p-1 text-slate-800">
+
+                    <option>Male</option>
+                    <option>Female</option>
+
+                </select>
+            </div>
+
+
+            <div>
+                <label class="text-slate-600 block mb-1 text-[10px]">
+                    Berth ${i}
+                </label>
+
+                <select
+                    id="p-berth-${i}"
+                    class="w-full bg-white border border-slate-300 rounded p-1 text-slate-800">
+
+                    <option>No Preference</option>
+                    <option>Lower</option>
+                    <option>Middle</option>
+                    <option>Upper</option>
+                    <option>Side Lower</option>
+
+                </select>
+            </div>
+        </div>
+
+        `;
+    }
+
+    container.innerHTML = html;
+}
+
+
+/* =========================================================
+   SAVE TICKET
+========================================================= */
+
+function saveTicketToQueue() {
+
+    const train = document.getElementById("inp-train").value.trim();
+    const from = document.getElementById("inp-from").value.trim();
+    const to = document.getElementById("inp-to").value.trim();
+
+    const quota = String(
+        document.getElementById("inp-quota")?.value || ""
+    ).trim().toUpperCase();
+
+    const cls = document.getElementById("inp-class").value;
+    const bookingDate = document.getElementById("bookingDate").value;
+    const irctc = document.getElementById("inp-irctc").value;
+    const payment = document.getElementById("inp-pay").value;
+    const mobile = document.getElementById("mobileNumber").value.trim();
+    const confirmedOnly = document.getElementById("confirmedOnly").checked;
+
+    if (!train || !from || !to) {
+        alert("Please fill the required train details!");
+        return;
+    }
+
+    const passengersList = [];
+
+    for (let i = 1; i <= 6; i++) {
+
+        const nameElement = document.getElementById(`p-name-${i}`);
+        if (!nameElement) continue;
+
+        const name = nameElement.value.trim();
+
+ if (name !== "") {
+ passengersList.push({
+    name,
+    age: document.getElementById(`p-age-${i}`).value,
+    gender: document.getElementById(`p-gender-${i}`).value,
+    berth: document.getElementById(`p-berth-${i}`).value
+});
+        }
+    }
+
+    if (!passengersList.length) {
+        alert("Please add at least one passenger name!");
+        return;
+    }
+
+    const oldTicket =
+        editingTicketIndex >= 0
+            ? ticketsQueue[editingTicketIndex]
+            : null;
+
+    const ticket = {
+        id: oldTicket?.id || (
+            "ticket_" +
+            Date.now() +
+            "_" +
+            Math.random().toString(36).substring(2, 8)
+        ),
+
+        train,
+        from,
+        to,
+        quota,
+        class: cls,
+        bookingDate,
+        payment,
+        mobile,
+        confirmedOnly,
+        passengers: passengersList,
+        irctc,
+
+        createdAt:
+            oldTicket?.createdAt ||
+            new Date().toISOString()
+    };
+
+    if (editingTicketIndex >= 0) {
+
+        ticketsQueue[editingTicketIndex] = ticket;
+        latestSavedTicket = ticket;
+
+        saveStorage(
+            "Boss_tickets_queue",
+            ticketsQueue
+        );
+
+        editingTicketIndex = -1;
+
+        renderTickets();
+
+        alert(
+            "Ticket Updated Successfully!\n\n" +
+            train + " : " + from + " → " + to
+        );
+
+    } else {
+
+        ticketsQueue.push(ticket);
+        latestSavedTicket = ticket;
+
+        saveStorage(
+            "Boss_tickets_queue",
+            ticketsQueue
+        );
+
+        renderTickets();
+
+        alert(
+            "Ticket Saved Successfully!\n\n" +
+            train + " : " + from + " → " + to
+        );
+    }
+
+    toggleTab("tickets");
+}
+
+
+/* =========================================================
+   RENDER TICKETS
+========================================================= */
+
+function renderTickets() {
+
+    const container =
+        document.getElementById("tickets-container");
+
+    if (!container) return;
+
+    if (ticketsQueue.length === 0) {
+
+        container.innerHTML = `
+            <div class="bg-white p-3 rounded-lg border border-slate-200
+                        text-center text-slate-500 text-[11px] shadow-sm">
+                No saved tickets.
+            </div>
+        `;
+
+        return;
+    }
+
+    container.innerHTML = ticketsQueue.map((t, idx) => `
+
+        <div class="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+
+            <div class="flex items-center justify-between gap-3">
+
+                <div class="min-w-0 flex-1 text-[11px] leading-4">
+
+                    <div class="flex items-center gap-2 flex-wrap">
+
+                        <span class="font-bold text-slate-800">
+                            ${escapeHtml(t.train)}
+                        </span>
+
+                        <span class="text-slate-600">
+                            ${escapeHtml(t.from)}
+                            →
+                            ${escapeHtml(t.to)}
+                        </span>
+
+                        <span class="text-amber-600 font-semibold">
+                            ${escapeHtml(t.quota || "")}
+                        </span>
+
+                        <span class="text-indigo-600 font-semibold">
+                            ${escapeHtml(t.class || "SL")}
+                        </span>
+
+                        <span class="text-slate-400">
+                            ${escapeHtml(t.bookingDate || "No Date")}
+                        </span>
+
+                    </div>
+
+                    <div class="text-slate-500 mt-0.5">
+
+                        ${t.passengers?.length || 0} passenger(s)
+                        •
+                        ${escapeHtml(t.irctc || "No Account")}
+                        •
+                        ${escapeHtml(t.payment || "No Payment")}
+
+                    </div>
+
+                </div>
+
+
+                <div class="flex items-center gap-1 shrink-0">
+
+                    <button
+                        onclick="launchLiveMiniAutomation(${idx})"
+                        class="bg-emerald-600 hover:bg-emerald-700
+                               text-white px-2.5 py-1 rounded
+                               font-semibold text-[11px]">
+                        Launch
+                    </button>
+
+                    <button
+                        onclick="editTicket(${idx})"
+                        class="bg-blue-600 hover:bg-blue-700
+                               text-white px-2.5 py-1 rounded
+                               font-semibold text-[11px]">
+                        Edit
+                    </button>
+
+                    <button
+                        onclick="removeTicket(${idx})"
+                        class="bg-red-600 hover:bg-red-700
+                               text-white px-2.5 py-1 rounded
+                               font-semibold text-[11px]">
+                        Delete
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    `).join("");
+}
+
+/* =========================================================
+   EDIT TICKET
+========================================================= */
+
+function editTicket(idx) {
+
+    if (
+        !Number.isInteger(idx) ||
+        idx < 0 ||
+        idx >= ticketsQueue.length
+    ) {
+        alert("Selected ticket not found.");
+        return;
+    }
+
+    const ticket = ticketsQueue[idx];
+
+    if (!ticket) {
+        alert("Ticket data not found.");
+        return;
+    }
+
+    editingTicketIndex = idx;
+    latestSavedTicket = ticket;
+
+    document.getElementById("inp-train").value =
+        ticket.train || "";
+
+    document.getElementById("inp-from").value =
+        ticket.from || "";
+
+    document.getElementById("inp-to").value =
+        ticket.to || "";
+
+    document.getElementById("inp-class").value =
+        ticket.class || "SL";
+
+    document.getElementById("inp-quota").value =
+        ticket.quota || "GN";
+
+    document.getElementById("bookingDate").value =
+        ticket.bookingDate || "";
+
+    document.getElementById("inp-irctc").value =
+        ticket.irctc || "";
+
+    document.getElementById("inp-pay").value =
+        ticket.payment || "";
+
+    document.getElementById("mobileNumber").value =
+        ticket.mobile || "";
+
+    document.getElementById("confirmedOnly").checked =
+        ticket.confirmedOnly !== false;
+
+
+    renderPassengerInputs();
+
+
+    const passengers =
+        Array.isArray(ticket.passengers)
+            ? ticket.passengers
+            : [];
+
+
+    passengers.slice(0, 6).forEach((p, i) => {
+
+        const n = i + 1;
+
+        document.getElementById(`p-name-${n}`).value =
+            p.name || "";
+
+        document.getElementById(`p-age-${n}`).value =
+            p.age || "";
+
+        document.getElementById(`p-gender-${n}`).value =
+            p.gender || "Male";
+
+        document.getElementById(`p-berth-${n}`).value =
+            p.berth || "No Preference";
+
+    });
+
+
+    toggleTab("book");
+
+    console.log(
+        "[EDIT] Ticket loaded:",
+        idx,
+        ticket
+    );
+}
+
+
+/* =========================================================
+   DELETE TICKET
+========================================================= */
+
+function removeTicket(idx) {
+
+    if (
+        idx < 0 ||
+        idx >= ticketsQueue.length
+    ) {
+        return;
+    }
+
+
+    const removed =
+        ticketsQueue[idx];
+
+
+    if (
+        !confirm(
+            `Delete ticket ${removed.train} ${removed.from} → ${removed.to}?`
+        )
+    ) {
+        return;
+    }
+
+
+    ticketsQueue.splice(idx, 1);
+
+
+    saveStorage(
+        "Boss_tickets_queue",
+        ticketsQueue
+    );
+
+
+    if (
+        latestSavedTicket &&
+        latestSavedTicket.id === removed.id
+    ) {
+        latestSavedTicket = null;
+    }
+
+
+    renderTickets();
+}
+
+
+async function launchLiveMiniAutomation(ticketIndex) {
+
+    if (
+        !Number.isInteger(ticketIndex) ||
+        ticketIndex < 0 ||
+        ticketIndex >= ticketsQueue.length
+    ) {
+        alert("Selected ticket not found.");
+        return;
+    }
+
+    const ticket = ticketsQueue[ticketIndex];
+
+if (!ticket) {
+    alert("Ticket data not found.");
+    return;
+}
+
+latestSavedTicket = ticket;
+
+// =========================================
+// MINI WINDOW DATA
+// =========================================
+
+const miniTicket = {
+
+    ...ticket,
+
+browserType:
+    String(
+        ticket.browserType ||
+        ticket.browser ||
+        "WEB"
+    ).trim().toUpperCase(),
+
+    trainNo:
+        String(ticket.train || ""),
+
+    fromStation:
+        String(ticket.from || "").toUpperCase(),
+
+    toStation:
+        String(ticket.to || "").toUpperCase(),
+
+    date:
+        String(ticket.bookingDate || ""),
+
+    classType:
+        String(ticket.class || "SL"),
+
+    quota:
+        String(ticket.quota || "")
+            .trim()
+            .toUpperCase(),
+
+    irctc:
+        String(ticket.irctc || ""),
+
+    payment:
+        String(ticket.payment || ""),
+
+    mobile:
+        String(ticket.mobile || ""),
+
+    confirmedOnly:
+        ticket.confirmedOnly !== false,
+
+    passengers:
+        Array.isArray(ticket.passengers)
+            ? ticket.passengers.map(
+                passenger => ({
+                    name:
+                        String(
+                            passenger?.name || ""
+                        ),
+
+                    age:
+                        String(
+                            passenger?.age || ""
+                        ),
+
+                    gender:
+                        String(
+                            passenger?.gender || ""
+                        ),
+
+                    berth:
+                        String(
+                            passenger?.berth || ""
+                        ),
+
+                })
+            )
+            : [],
+
+    miniIrctcAccounts:
+    Array.isArray(irctcAccounts)
+        ? irctcAccounts.map(account => ({
+            username:
+                typeof account === "string"
+                    ? account
+                    : String(
+                        account?.username || ""
+                    ).trim(),
+
+            password:
+                typeof account === "string"
+                    ? ""
+                    : String(
+                        account?.password || ""
+                    )
+        }))
+        : [],
+
+    miniPaymentMethods:
+        Array.isArray(paymentMethods)
+            ? [...paymentMethods]
+            : [],
+
+    journeyDate:
+        ticket.journeyDate ||
+        ticket.bookingDate ||
+        ""
+};
+
+
+    // ==========================================
+    // OPEN REAL INDEPENDENT ELECTRON WINDOW
+    // ==========================================
+
+    if (
+        !window.electronAPI ||
+        typeof window.electronAPI.openMiniAutomationWindow !== "function"
+    ) {
+        console.error(
+            "[MINI WINDOW] openMiniAutomationWindow IPC unavailable."
+        );
+
+        alert(
+            "Mini window IPC available nahi hai.\n\n" +
+            "Please restart the Electron app."
+        );
+
+        return;
+    }
+
+    try {
+
+        console.log(
+            "[MINI WINDOW] Opening independent window for ticket:",
+            ticketIndex
+        );
+
+        const response =
+    await window.electronAPI.openMiniAutomationWindow(
+        miniTicket,
+        ticketIndex
+    );
+
+        if (
+            !response ||
+            response.success !== true
+        ) {
+
+            console.error(
+                "[MINI WINDOW] Failed:",
+                response
+            );
+
+            alert(
+                response?.error ||
+                "Mini automation window open nahi hui."
+            );
+
+            return;
+        }
+
+        console.log(
+            "[MINI WINDOW] Independent window opened:",
+            response.windowId
+        );
+
+    } catch (error) {
+
+        console.error(
+            "[MINI WINDOW] IPC error:",
+            error
+        );
+
+        alert(
+            error?.message ||
+            "Mini automation window open karne mein error."
+        );
+    }
+}
+
+
+/* =========================================================
+   AUTOMATION NODE (Browser Mapping: WEB->Chrome, WEB 2->Edge, WEB 3->Brave)
+========================================================= */
+
+async function triggerAutomationNode(
+    winId,
+    nodeType,
+    ticketIndex
+) {
+
+    console.log(
+    "[AUTO LOGIN DEBUG] triggerAutomationNode() CALLED"
+);
+
+    // Browser explicit mapping requirement
+    const targetBrowser =
+    String(nodeType || 'WEB')
+        .trim()
+        .toUpperCase();
+
+    console.log(
+        "[Boss] Automation requested:",
+        targetBrowser,
+        "Ticket index:",
+        ticketIndex
+    );
+
+    if (
+        !Number.isInteger(ticketIndex) ||
+        ticketIndex < 0 ||
+        ticketIndex >= ticketsQueue.length
+    ) {
+
+        alert(
+            "Selected ticket not found."
+        );
+
+        return;
+    }
+
+    const ticket =
+        ticketsQueue[ticketIndex];
+
+console.log("[QUOTA 1] ticket.quota =", ticket?.quota);
+console.log("[QUOTA 2] ticket =", ticket);
+
+    if (!ticket) {
+
+        alert(
+            "Selected ticket data is missing."
+        );
+
+        return;
+    }
+
+    latestSavedTicket = ticket;
+
+    const statusBanner =
+        document.getElementById(
+            winId + "-status"
+        );
+
+    const resultTag =
+        document.getElementById(
+            winId + "-result"
+        );
+
+    if (statusBanner) {
+
+        statusBanner.style.background =
+            "#2563eb";
+
+        statusBanner.innerText =
+            `CONNECTING (${targetBrowser})...`;
+    }
+
+    if (resultTag) {
+
+        resultTag.innerText =
+            "STARTING...";
+
+        resultTag.style.background =
+            "#fef08a";
+    }
+
+    const automationData = {
+
+        ticketId:
+            String(
+                ticket.id || ""
+            ),
+
+        winId:
+            String(
+                winId || ""
+            ),
+
+        browserType:
+    targetBrowser,
+
+        trainNo:
+            String(
+                ticket.train || ""
+            ),
+
+        fromStation:
+            String(
+                ticket.from || ""
+            ).toUpperCase(),
+
+        toStation:
+            String(
+                ticket.to || ""
+            ).toUpperCase(),
+
+        date:
+            String(
+                ticket.bookingDate || ""
+            ),
+
+        classType:
+            String(
+                ticket.class || "SL"
+            ),
+
+        quota:
+        String(
+            ticket.quota || ""
+        ).trim().toUpperCase(),
+
+        irctc:
+            String(
+                ticket.irctc || ""
+            ),
+
+                credentials: (() => {
+        const selectedUsername =
+            String(ticket.irctc || "").trim();
+
+        const account =
+            Array.isArray(irctcAccounts)
+                ? irctcAccounts.find(item =>
+                    typeof item === "string"
+                        ? item === selectedUsername
+                        : String(item?.username || "").trim() === selectedUsername
+                )
+                : null;
+
+        return {
+            username:
+                typeof account === "string"
+                    ? account
+                    : String(account?.username || ""),
+            password:
+                typeof account === "string"
+                    ? ""
+                    : String(account?.password || "")
+        };
+    })(),
+
+        payment:
+            String(
+                ticket.payment || ""
+            ),
+
+        mobile:
+            String(
+                ticket.mobile || ""
+            ),
+
+        confirmedOnly:
+            ticket.confirmedOnly !== false,
+
+        passengers:
+            Array.isArray(ticket.passengers)
+                ? ticket.passengers.map(
+                    passenger => ({
+                        name:
+                            String(
+                                passenger?.name || ""
+                            ),
+
+                        age:
+                            String(
+                                passenger?.age || ""
+                            ),
+
+                        gender:
+                            String(
+                                passenger?.gender || ""
+                            ),
+
+                        berth:
+                            String(
+                                passenger?.berth || ""
+                            ),
+
+                    })
+                )
+                : []
+    };
+
+console.log("[QUOTA 3] automationData.quota =", automationData.quota);
+
+console.log(
+    "[AUTO LOGIN DEBUG] Selected IRCTC:",
+    automationData.irctc
+);
+
+console.log(
+    "[AUTO LOGIN DEBUG] Username:",
+    automationData.credentials?.username
+        ? "YES"
+        : "NO"
+);
+
+console.log(
+    "[AUTO LOGIN DEBUG] Password:",
+    automationData.credentials?.password
+        ? "YES"
+        : "NO"
+);
+
+    if (!automationData.trainNo) {
+
+        setAutomationError(
+            statusBanner,
+            resultTag,
+            "TRAIN NUMBER MISSING"
+        );
+
+        return;
+    }
+
+    if (!automationData.fromStation) {
+
+        setAutomationError(
+            statusBanner,
+            resultTag,
+            "FROM STATION MISSING"
+        );
+
+        return;
+    }
+
+    if (!automationData.toStation) {
+
+        setAutomationError(
+            statusBanner,
+            resultTag,
+            "TO STATION MISSING"
+        );
+
+        return;
+    }
+
+    if (!automationData.date) {
+
+        setAutomationError(
+            statusBanner,
+            resultTag,
+            "JOURNEY DATE MISSING"
+        );
+
+        return;
+    }
+
+    if (
+        !automationData.passengers.length
+    ) {
+
+        setAutomationError(
+            statusBanner,
+            resultTag,
+            "PASSENGER DETAILS MISSING"
+        );
+
+        return;
+    }
+
+    if (
+        !window.electronAPI ||
+        typeof window.electronAPI.startBooking !==
+            "function"
+    ) {
+
+        console.error(
+            "[Boss] electronAPI.startBooking unavailable."
+        );
+
+        setAutomationError(
+            statusBanner,
+            resultTag,
+            "PRELOAD IPC NOT AVAILABLE"
+        );
+
+        return;
+    }
+
+    try {
+
+        const response =
+            await window.electronAPI.startBooking(
+                automationData,
+                targetBrowser
+            );
+
+        if (
+            !response ||
+            response.success !== true
+        ) {
+
+            const errorMessage =
+                response?.error ||
+                "Booking process failed.";
+
+            setAutomationError(
+                statusBanner,
+                resultTag,
+                errorMessage
+            );
+
+            return;
+        }
+
+        if (statusBanner) {
+
+            statusBanner.style.background =
+                "#16a34a";
+
+            statusBanner.innerText =
+                `STARTED (${targetBrowser})`;
+        }
+
+        if (resultTag) {
+
+            resultTag.innerText =
+                "STARTED";
+
+            resultTag.style.background =
+                "#86efac";
+        }
+
+    } catch (error) {
+
+        console.error(
+            "[Boss] Booking IPC error:",
+            error
+        );
+
+        setAutomationError(
+            statusBanner,
+            resultTag,
+            error?.message ||
+                "Unable to start booking."
+        );
+    }
+}
+
+
+/* =========================================================
+   AUTOMATION ERROR UI
+========================================================= */
+
+function setAutomationError(
+    statusBanner,
+    resultTag,
+    message
+) {
+
+    if (statusBanner) {
+
+        statusBanner.style.background =
+            "#dc2626";
+
+        statusBanner.innerText =
+            String(message || "ERROR");
+    }
+
+    if (resultTag) {
+
+        resultTag.innerText =
+            "ERROR";
+
+        resultTag.style.background =
+            "#fecaca";
+    }
+}
+
+
+/* =========================================================
+   IRCTC ACCOUNTS
+========================================================= */
+
+function addIrctcAccount() {
+    const userInput =
+        document.getElementById("profile-user");
+
+    const passInput =
+        document.getElementById("profile-pass");
+
+    const user =
+        userInput.value.trim();
+
+    const password =
+        passInput.value;
+
+    if (!user) {
+        alert("Enter username");
+        return;
+    }
+
+    if (!password) {
+        alert("Enter password");
+        return;
+    }
+
+    const exists =
+        Array.isArray(irctcAccounts) &&
+        irctcAccounts.some(account =>
+            typeof account === "string"
+                ? account === user
+                : String(account?.username || "").trim() === user
+        );
+
+    if (exists) {
+        alert("Account already exists.");
+        return;
+    }
+
+    irctcAccounts.push({
+        username: user,
+        password: password
+    });
+
+    saveStorage(
+        "Boss_irctc_accounts",
+        irctcAccounts
+    );
+
+    renderProfiles();
+
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            resizeDashboardWindow();
+        });
+    });
+
+    userInput.value = "";
+    passInput.value = "";
+}
+
+function removeIrctcAccount(btn, user) {
+    const username =
+        String(user || "").trim();
+
+    irctcAccounts =
+        Array.isArray(irctcAccounts)
+            ? irctcAccounts.filter(account => {
+                const accountUsername =
+                    typeof account === "string"
+                        ? account
+                        : String(account?.username || "").trim();
+
+                return accountUsername !== username;
+            })
+            : [];
+
+    saveStorage(
+        "Boss_irctc_accounts",
+        irctcAccounts
+    );
+
+    renderProfiles();
+}
+
+
+function renderProfiles() {
+    const listEl =
+        document.getElementById("profiles-list");
+
+    if (listEl) {
+        listEl.innerHTML =
+            irctcAccounts.map(account => {
+
+                const username =
+                    typeof account === "string"
+                        ? account
+                        : String(account?.username || "");
+
+                if (!username) {
+                    return "";
+                }
+
+                return `
+                    <div class="bg-slate-50 p-2 rounded border border-slate-200 flex justify-between items-center text-slate-800">
+                        <span>👤 ${escapeHtml(username)}</span>
+
+                        <button
+                            onclick="removeIrctcAccount(this, '${escapeAttribute(username)}')"
+                            class="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded font-semibold text-xs">
+                            Delete
+                        </button>
+                    </div>
+                `;
+            }).join("");
+    }
+
+    const dropEl =
+        document.getElementById("inp-irctc");
+
+    if (dropEl) {
+        dropEl.innerHTML =
+            irctcAccounts.map(account => {
+
+                const username =
+                    typeof account === "string"
+                        ? account
+                        : String(account?.username || "");
+
+                if (!username) {
+                    return "";
+                }
+
+                return `
+                    <option value="${escapeAttribute(username)}">
+                        ${escapeHtml(username)}
+                    </option>
+                `;
+            }).join("");
+    }
+}
+
+
+/* =========================================================
+   PAYMENT
+========================================================= */
+
+function addPaymentMethod() {
+
+    const type =
+        document.getElementById(
+            "pay-type"
+        ).value;
+
+    const upiInput =
+        document.getElementById(
+            "pay-upi"
+        );
+
+    const upi =
+        upiInput.value.trim();
+
+
+    if (!upi) {
+
+        alert(
+            "Enter UPI ID"
+        );
+
+        return;
+    }
+
+
+    paymentMethods.push(
+        `${type} - ${upi}`
+    );
+
+
+    saveStorage(
+        "Boss_payment_methods",
+        paymentMethods
+    );
+
+
+    renderPayments();
+
+requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+        resizeDashboardWindow();
+    });
+});
+
+upiInput.value = "";
+}
+
+
+function removePaymentMethod(index) {
+
+    paymentMethods.splice(
+        index,
+        1
+    );
+
+
+    saveStorage(
+        "Boss_payment_methods",
+        paymentMethods
+    );
+
+
+    renderPayments();
+}
+
+
+function renderPayments() {
+
+    const listEl =
+        document.getElementById(
+            "payments-list"
+        );
+
+
+    if (listEl) {
+
+        listEl.innerHTML =
+            paymentMethods.map(
+                (p, idx) => `
+
+                <div class="bg-slate-50 p-2 rounded border border-slate-200 flex justify-between items-center text-slate-800">
+
+                    <span>
+                        💳 ${escapeHtml(p)}
+                    </span>
+
+                    <button
+                        onclick="removePaymentMethod(${idx})"
+                        class="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded font-semibold text-xs">
+
+                        Delete
+
+                    </button>
+
+                </div>
+
+            `
+            ).join("");
+    }
+
+
+    const dropEl =
+        document.getElementById(
+            "inp-pay"
+        );
+
+
+    if (dropEl) {
+
+        dropEl.innerHTML =
+            paymentMethods.map(
+                p => `
+
+                <option value="${escapeAttribute(p)}">
+
+                    ${escapeHtml(p)}
+
+                </option>
+
+            `
+            ).join("");
+    }
+}
+
+
+/* =========================================================
+   TOKENS
+========================================================= */
+
+function addToken() {
+
+    const tokenInput =
+        document.getElementById(
+            "token-input"
+        );
+
+
+    const token =
+        tokenInput.value.trim();
+
+
+    if (!token) {
+
+        alert(
+            "Enter Token"
+        );
+
+        return;
+    }
+
+
+    tokensList.push(token);
+
+
+    saveStorage(
+        "Boss_tokens",
+        tokensList
+    );
+
+
+    tokenInput.value = "";
+
+
+    renderTokens();
+
+
+    alert(
+        "Token Saved!"
+    );
+}
+
+
+function renderTokens() {
+
+    const listEl =
+        document.getElementById(
+            "tokens-list"
+        );
+
+
+    if (!listEl) return;
+
+
+    listEl.innerHTML =
+        tokensList.map(
+            t => `
+
+            <div class="bg-slate-50 p-2 rounded border border-slate-200 font-mono text-xs text-slate-800">
+
+                🔑 ${escapeHtml(t)}
+
+            </div>
+
+        `
+        ).join("");
+}
+
+
+/* =========================================================
+   SECURITY / HTML ESCAPE
+========================================================= */
+
+function escapeHtml(value) {
+
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+
+function escapeAttribute(value) {
+
+    return String(value ?? "")
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'");
+}
+
+// ==========================================
+// BROWSER STATUS UI
+// ==========================================
+
+function updateBrowserStatusUI(browser) {
+
+    const element =
+        document.getElementById(
+            `browser-status-${browser.type}`
+        );
+
+    if (!element) {
+        return;
+    }
+
+
+    const name =
+        browser.name || browser.type;
+
+
+    if (browser.status === 'READY') {
+
+        element.textContent = 'Ready';
+
+        element.className =
+            'text-[9px] font-semibold text-emerald-600';
+
+        return;
+    }
+
+
+    if (browser.status === 'NOT_INSTALLED') {
+
+        element.textContent =
+            'Not Installed';
+
+        element.className =
+            'text-[9px] font-semibold text-slate-500';
+
+        return;
+    }
+
+
+    if (browser.status === 'STOPPED') {
+
+        element.textContent =
+            'Click to Open';
+
+        element.className =
+            'text-[9px] font-semibold text-amber-600';
+
+        return;
+    }
+
+
+    if (browser.status === 'ERROR') {
+
+        element.textContent =
+            'Error';
+
+        element.className =
+            'text-[9px] font-semibold text-red-600';
+
+        return;
+    }
+
+
+    element.textContent =
+        'Checking...';
+
+    element.className =
+        'text-[9px] font-semibold text-slate-500';
+}
+
+// ==========================================
+// CONNECT / OPEN SELECTED BROWSER
+// ==========================================
+
+async function connectBrowser(browserType) {
+
+    try {
+
+        console.log(
+            `[UI] Opening browser: ${browserType}`
+        );
+
+
+        const statusElement =
+            document.getElementById(
+                `browser-status-${browserType}`
+            );
+
+
+        if (statusElement) {
+
+            statusElement.textContent =
+                'Opening...';
+
+            statusElement.className =
+                'text-[9px] font-semibold text-amber-600';
+        }
+
+
+        if (
+            !window.electronAPI ||
+            !window.electronAPI.openBrowser
+        ) {
+
+            console.error(
+                '[UI] openBrowser API not available.'
+            );
+
+            if (statusElement) {
+                statusElement.textContent =
+                    'API Error';
+            }
+
+            return;
+        }
+
+
+        const result =
+            await window.electronAPI.openBrowser(
+                browserType
+            );
+
+
+        console.log(
+            '[UI] Browser open result:',
+            result
+        );
+
+
+        if (
+            result &&
+            result.success
+        ) {
+
+            if (statusElement) {
+
+                statusElement.textContent =
+                    'Ready';
+
+                statusElement.className =
+                    'text-[9px] font-semibold text-emerald-600';
+            }
+
+            return;
+        }
+
+
+        if (statusElement) {
+
+            statusElement.textContent =
+                'Error';
+
+            statusElement.className =
+                'text-[9px] font-semibold text-red-600';
+        }
+
+
+        console.error(
+            '[UI] Browser failed to open:',
+            result
+        );
+
+    } catch (error) {
+
+        console.error(
+            '[UI] Browser connection error:',
+            error
+        );
+
+
+        const statusElement =
+            document.getElementById(
+                `browser-status-${browserType}`
+            );
+
+
+        if (statusElement) {
+
+            statusElement.textContent =
+                'Error';
+
+            statusElement.className =
+                'text-[9px] font-semibold text-red-600';
+        }
+    }
+}
+
+
+// ==========================================
+// REFRESH BROWSER STATUS
+// ==========================================
+
+async function refreshBrowserStatuses() {
+
+    try {
+
+        if (
+            !window.electronAPI ||
+            !window.electronAPI.getBrowserStatuses
+        ) {
+            return;
+        }
+
+
+        const result =
+            await window.electronAPI.getBrowserStatuses();
+
+
+        if (
+            !result ||
+            !result.success
+        ) {
+            return;
+        }
+
+
+        for (
+            const browser of
+            result.statuses || []
+        ) {
+
+            updateBrowserStatusUI(
+                browser
+            );
+
+        }
+
+    } catch (error) {
+
+        console.error(
+            '[UI] Browser status error:',
+            error
+        );
+
+    }
+
+}
+
+
+async function prepareDashboardBrowsers() {
+    const browserTypes = ['WEB', 'WEB2', 'WEB3'];
+
+    try {
+        console.log('[UI] prepareDashboardBrowsers() started');
+        console.log('[UI] electronAPI:', window.electronAPI);
+        console.log(
+            '[UI] prepareBrowsers:',
+            window.electronAPI?.prepareBrowsers
+        );
+
+        // Show Starting...
+        for (const type of browserTypes) {
+            const element = document.getElementById(
+                `browser-status-${type}`
+            );
+
+            if (!element) {
+                console.error(
+                    `[UI] Status element missing: browser-status-${type}`
+                );
+                continue;
+            }
+
+            const name =
+                type === 'WEB'
+                    ? 'Chrome'
+                    : type === 'WEB2'
+                        ? 'Edge'
+                        : 'Brave';
+
+            element.textContent = `${name}: Starting...`;
+            element.className =
+                'px-2 py-1 rounded bg-amber-100 text-amber-700 text-[9px] font-semibold';
+        }
+
+        // Check preload API
+        if (
+            !window.electronAPI ||
+            typeof window.electronAPI.prepareBrowsers !== 'function'
+        ) {
+            console.error(
+                '[UI] prepareBrowsers API is not available.'
+            );
+
+            return;
+        }
+
+        console.log('[UI] Calling prepareBrowsers IPC...');
+
+        const result =
+            await window.electronAPI.prepareBrowsers();
+
+        console.log(
+            '[UI] prepareBrowsers result:',
+            result
+        );
+
+        if (
+            result &&
+            Array.isArray(result.statuses)
+        ) {
+            for (const browser of result.statuses) {
+                console.log(
+                    '[UI] Browser status:',
+                    browser
+                );
+
+                updateBrowserStatusUI(browser);
+            }
+
+            return;
+        }
+
+        console.error(
+            '[UI] Invalid prepareBrowsers response:',
+            result
+        );
+
+        await refreshBrowserStatuses();
+
+    } catch (error) {
+
+        console.error(
+            '[UI] Browser preparation error:',
+            error
+        );
+
+        await refreshBrowserStatuses();
+    }
+}
+
+/* =========================================================
+   INITIALIZE
+========================================================= */
+
+renderPassengerInputs();
+renderTickets();
+renderProfiles();
+renderPayments();
+renderTokens();
+
+const mainWindow = document.getElementById('mainWindow');
+
+if (mainWindow) {
+    mainWindow.classList.add('startup-collapsed');
+}
+
+toggleTab("book", false);
+
+const bookingDate =
+    document.getElementById(
+        "bookingDate"
+    );
+
+
+if (
+    bookingDate &&
+    !bookingDate.value
+) {
+
+    const now =
+        new Date();
+
+    const yyyy =
+        now.getFullYear();
+
+    const mm =
+        String(
+            now.getMonth() + 1
+        ).padStart(2, "0");
+
+    const dd =
+        String(
+            now.getDate()
+        ).padStart(2, "0");
+
+
+    bookingDate.value =
+        `${yyyy}-${mm}-${dd}`;
+}
+
+
+</script>
+<script>
+
+// ==========================================
+// START BROWSER STATUS CHECK AFTER DOM READY
+// ==========================================
+
+function startBrowserStatusCheck() {
+
+    console.log('[UI] Starting browser status check...');
+
+    if (typeof prepareDashboardBrowsers !== 'function') {
+        console.error(
+            '[UI] prepareDashboardBrowsers function not available.'
+        );
+        return;
+    }
+
+    prepareDashboardBrowsers();
+}
+
+
+if (document.readyState === 'loading') {
+
+    document.addEventListener(
+        'DOMContentLoaded',
+        startBrowserStatusCheck
+    );
+
+} else {
+
+    startBrowserStatusCheck();
+
+}
+
+// =========================================================
+// DASHBOARD TAB + WINDOW SIZE CONTROL
+// =========================================================
+
+let activeDashboardTab = null;
+let dashboardIsExpanded = false;
+
+
+function resizeDashboardWindow() {
+
+    if (!window.electronAPI) return;
+
+    const header = document.getElementById('windowHeader');
+    const mainContent = document.querySelector('#mainWindow > main');
+
+    if (!header || !mainContent) return;
+
+    const headerHeight = Math.ceil(
+        header.getBoundingClientRect().height
+    );
+
+    const contentHeight = Math.ceil(
+        mainContent.getBoundingClientRect().height
+    );
+
+    const finalHeight = headerHeight + contentHeight + 2;
+
+    console.log('[UI] Expanding Dashboard:', finalHeight);
+
+    window.electronAPI.resizeWindow({
+    width: 900,
+    height: finalHeight
+});
+
+requestAnimationFrame(() => {
+    document.body.style.transform = 'translateZ(0)';
+
+    requestAnimationFrame(() => {
+        document.body.style.transform = '';
+    });
+});
+}
+
+
+function minimizeDashboardWindow() {
+
+    if (!window.electronAPI) return;
+
+    const header = document.getElementById('windowHeader');
+
+    if (!header) return;
+
+    const headerHeight = Math.ceil(
+        header.getBoundingClientRect().height
+    );
+
+    console.log('[UI] Minimizing Dashboard:', headerHeight);
+
+    window.electronAPI.resizeWindow({
+        width: 900,
+        height: headerHeight
+    });
+}
+
+
+function toggleTab(tabName, startup = false) {
+
+    console.log(
+        '[UI] toggleTab:',
+        tabName,
+        'startup:',
+        startup
+    );
+
+    const mainContent =
+        document.querySelector('#mainWindow > main');
+
+    const allTabs =
+        document.querySelectorAll('.tab-content');
+
+    const allButtons =
+        document.querySelectorAll('.tab-btn');
+
+
+    // =====================================================
+    // STARTUP
+    // =====================================================
+
+    if (startup) {
+
+        allTabs.forEach(tab => {
+            tab.style.display = 'none';
+            tab.classList.remove('active');
+        });
+
+        if (mainContent) {
+            mainContent.style.display = 'none';
+        }
+
+        allButtons.forEach(btn => {
+            btn.classList.remove(
+                'bg-indigo-600',
+                'text-white',
+                'shadow'
+            );
+        });
+
+        const startupButton =
+            document.getElementById(tabName + '-tab');
+
+        if (startupButton) {
+            startupButton.classList.add(
+                'bg-indigo-600',
+                'text-white',
+                'shadow'
+            );
+        }
+
+        activeDashboardTab = tabName;
+        dashboardIsExpanded = false;
+
+        setTimeout(() => {
+            minimizeDashboardWindow();
+        }, 50);
+
+        return;
+    }
+
+
+    // =====================================================
+    // SAME TAB CLICKED AGAIN = MINIMIZE
+    // =====================================================
+
+    if (
+        activeDashboardTab === tabName &&
+        dashboardIsExpanded === true
+    ) {
+
+        console.log(
+            '[UI] Same tab clicked again -> MINIMIZE'
+        );
+
+        allTabs.forEach(tab => {
+            tab.style.display = 'none';
+            tab.classList.remove('active');
+        });
+
+        if (mainContent) {
+            mainContent.style.display = 'none';
+        }
+
+        dashboardIsExpanded = false;
+
+        minimizeDashboardWindow();
+
+        return;
+    }
+
+
+    // =====================================================
+    // DIFFERENT TAB / REOPEN TAB
+    // =====================================================
+
+    allTabs.forEach(tab => {
+        tab.style.display = 'none';
+        tab.classList.remove('active');
+    });
+
+
+    allButtons.forEach(btn => {
+        btn.classList.remove(
+            'bg-indigo-600',
+            'text-white',
+            'shadow'
+        );
+    });
+
+
+    const targetTab =
+        document.getElementById('tab-' + tabName);
+
+    if (!targetTab) {
+
+        console.error(
+            '[UI] Tab nahi mila:',
+            'tab-' + tabName
+        );
+
+        return;
+    }
+
+
+    const activeButton =
+        document.getElementById(tabName + '-tab');
+
+    if (activeButton) {
+
+        activeButton.classList.add(
+            'bg-indigo-600',
+            'text-white',
+            'shadow'
+        );
+    }
+
+
+    // Main content show
+    if (mainContent) {
+        mainContent.style.display = 'block';
+    }
+
+
+    // Selected tab show
+    targetTab.style.display = 'block';
+    targetTab.classList.add('active');
+
+
+    activeDashboardTab = tabName;
+    dashboardIsExpanded = true;
+
+
+    // Wait for layout, then resize
+    requestAnimationFrame(() => {
+
+        requestAnimationFrame(() => {
+
+            resizeDashboardWindow();
+
+        });
+
+    });
+}
+
+
+// =========================================================
+// INITIAL DASHBOARD STATE
+// =========================================================
+
+window.addEventListener('DOMContentLoaded', () => {
+
+    console.log('[UI] Dashboard startup');
+
+    toggleTab('book', true);
+
+});
+
+// ==========================================
+// CLOSE LICENSE WINDOW
+// ==========================================
+
+const closeLicenseBtn =
+    document.getElementById('closeLicenseBtn');
+
+closeLicenseBtn.addEventListener(
+    'click',
+    () => {
+
+        console.log(
+            '[LICENSE HTML] Close button clicked'
+        );
+
+        window.close();
+    }
+);
+
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+    const updatePopup =
+        document.getElementById('appUpdatePopup');
+
+    const updateVersion =
+        document.getElementById('appUpdateVersion');
+
+    const updateNow =
+        document.getElementById('appUpdateNow');
+
+    const updateLater =
+        document.getElementById('appUpdateLater');
+
+
+    // ==========================================
+    // NEW UPDATE AVAILABLE
+    // ==========================================
+
+    if (window.electronAPI?.onAppUpdateAvailable) {
+
+        window.electronAPI.onAppUpdateAvailable(
+            (data) => {
+
+                if (!updatePopup) return;
+
+                if (updateVersion) {
+
+                    updateVersion.textContent =
+                        'Version ' +
+                        (data?.version || 'new');
+                }
+
+                updatePopup.classList.remove('hidden');
+                updatePopup.classList.add('flex');
+            }
+        );
+    }
+
+
+    // ==========================================
+    // UPDATE NOW
+    // ==========================================
+
+    if (updateNow) {
+
+        updateNow.addEventListener(
+            'click',
+            () => {
+
+                updateNow.disabled = true;
+                updateNow.textContent =
+                    'Downloading...';
+
+                if (
+                    window.electronAPI?.installAppUpdate
+                ) {
+
+                    window.electronAPI.installAppUpdate();
+                }
+            }
+        );
+    }
+
+
+    // ==========================================
+    // LATER
+    // ==========================================
+
+    if (updateLater) {
+
+        updateLater.addEventListener(
+            'click',
+            () => {
+
+                updatePopup.classList.add('hidden');
+                updatePopup.classList.remove('flex');
+
+            }
+        );
+    }
+
+
+    // ==========================================
+    // DOWNLOAD PROGRESS
+    // ==========================================
+
+    if (window.electronAPI?.onAppUpdateProgress) {
+
+        window.electronAPI.onAppUpdateProgress(
+            (data) => {
+
+                if (!updateNow) return;
+
+                const percent =
+                    Number(data?.percent || 0);
+
+                updateNow.textContent =
+                    `Downloading ${percent}%...`;
+            }
+        );
+    }
+
+
+    // ==========================================
+    // UPDATE DOWNLOADED
+    // ==========================================
+
+    if (window.electronAPI?.onAppUpdateDownloaded) {
+
+        window.electronAPI.onAppUpdateDownloaded(
+            () => {
+
+                if (!updateNow) return;
+
+                updateNow.disabled = false;
+                updateNow.textContent =
+                    'Restart & Install';
+
+            }
+        );
+    }
+
+});
+</script>
+
+</body>
+</html>

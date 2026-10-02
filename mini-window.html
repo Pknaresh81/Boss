@@ -1,0 +1,1576 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <title>Mini Automation</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            padding: 6px;
+
+            background: #ffffff;
+            color: #1e293b;
+
+            font-family: "Segoe UI", sans-serif;
+            font-size: 11px;
+
+            overflow: hidden;
+        }
+
+        /* =========================================
+           MOVABLE CUSTOM HEADER
+        ========================================== */
+
+        .mini-window-header {
+            display: flex;
+
+            justify-content: space-between;
+            align-items: center;
+
+            border-bottom: 1px solid #cbd5e1;
+
+            padding-bottom: 3px;
+            margin-bottom: 5px;
+
+            /*
+             * Electron frameless window dragging
+             */
+            -webkit-app-region: drag;
+
+            cursor: move;
+        }
+
+        .mini-title {
+            font-weight: bold;
+
+            color: #1e293b;
+
+            font-size: 11px;
+
+            -webkit-app-region: drag;
+        }
+
+        .header-buttons {
+            display: flex;
+
+            gap: 6px;
+
+            align-items: center;
+
+            /*
+             * Buttons must remain clickable
+             */
+            -webkit-app-region: no-drag;
+        }
+
+        button {
+            cursor: pointer;
+
+            border: none;
+
+            -webkit-app-region: no-drag;
+        }
+
+        .pair-btn {
+            background: #2563eb;
+
+            color: #fff;
+
+            font-weight: bold;
+
+            padding: 2px 6px;
+
+            border-radius: 3px;
+
+            font-size: 9px;
+        }
+
+        .close-btn {
+            background: none;
+
+            color: #64748b;
+
+            font-weight: bold;
+
+            font-size: 12px;
+
+            padding: 0 3px;
+        }
+
+        .status {
+            background: #f97316;
+
+            color: white;
+
+            text-align: center;
+
+            padding: 3px;
+
+            font-weight: bold;
+
+            border-radius: 4px;
+
+            margin-bottom: 5px;
+
+            font-size: 11px;
+        }
+
+        .route-box {
+            display: grid;
+
+            grid-template-columns:
+                1fr 1fr 20px 1fr 1.2fr;
+
+            gap: 2px;
+
+            align-items: center;
+
+            background: #f8fafc;
+
+            padding: 2px 4px;
+
+            border-radius: 4px;
+
+            margin-bottom: 3px;
+
+            font-size: 10px;
+
+            border: 1px solid #e2e8f0;
+        }
+
+        .train {
+            font-weight: bold;
+
+            color: #0284c7;
+        }
+
+        .station {
+            font-weight: bold;
+        }
+
+        .from {
+            text-align: right;
+        }
+
+        .arrow {
+            text-align: center;
+
+            color: #64748b;
+        }
+
+        .date {
+            color: #1e293b;
+
+            background: #e2e8f0;
+
+            padding: 2px 3px;
+
+            border-radius: 4px;
+
+            text-align: center;
+        }
+
+        .info-row {
+            display: grid;
+
+            grid-template-columns:
+                1fr 1.2fr 2fr;
+
+            gap: 3px;
+
+            margin-bottom: 5px;
+        }
+
+        .class-box {
+            background: #0284c7;
+
+            color: #fff;
+
+            font-weight: bold;
+
+            text-align: center;
+
+            padding: 2px;
+
+            border-radius: 2px;
+
+            font-size: 10px;
+        }
+
+        .quota-box {
+            background: #db2777;
+
+            color: #fff;
+
+            font-weight: bold;
+
+            text-align: center;
+
+            padding: 2px;
+
+            border-radius: 2px;
+
+            font-size: 10px;
+        }
+
+        /* =========================================
+           IRCTC DROPDOWN
+        ========================================== */
+
+        .irctc-box {
+            width: 100%;
+
+            background: #f8fafc;
+
+            border: 1px solid #cbd5e1;
+
+            color: #1e293b;
+
+            padding: 2px 4px;
+
+            border-radius: 4px;
+
+            text-align: center;
+
+            font-size: 10px;
+
+            cursor: pointer;
+
+            outline: none;
+        }
+
+        .irctc-box:hover {
+            background: #e2e8f0;
+        }
+
+        .irctc-box:focus {
+            border-color: #2563eb;
+        }
+
+        /* =========================================
+           PAYMENT
+        ========================================== */
+
+        .payment-row {
+            display: grid;
+
+            grid-template-columns:
+                2fr 1fr;
+
+            gap: 3px;
+
+            margin-bottom: 5px;
+
+            font-size: 9px;
+        }
+
+        .field-label {
+            color: #64748b;
+
+            font-size: 8px;
+
+            margin-bottom: 2px;
+        }
+
+        .field-value {
+            width: 100%;
+
+            background: #f8fafc;
+
+            border: 1px solid #cbd5e1;
+
+            color: #1e293b;
+
+            padding: 3px;
+
+            border-radius: 3px;
+
+            font-size: 9px;
+
+            outline: none;
+        }
+
+        select.field-value {
+            cursor: pointer;
+        }
+
+        select.field-value:hover {
+            background: #e2e8f0;
+        }
+
+        select.field-value:focus {
+            border-color: #2563eb;
+        }
+
+        /* =========================================
+           BROWSER BUTTONS
+        ========================================== */
+
+        .browser-buttons {
+            display: grid;
+
+            grid-template-columns:
+                repeat(4, 1fr);
+
+            gap: 2px;
+
+            margin-bottom: 6px;
+        }
+
+        .browser-btn {
+            color: #fff;
+
+            padding: 3px 2px;
+
+            font-size: 10px;
+
+            font-weight: bold;
+
+            border-radius: 3px;
+        }
+
+        .web-btn {
+            background: #2563eb;
+        }
+
+        .web2-btn {
+            background: #0ea5e9;
+        }
+
+        .web3-btn {
+            background: #f97316;
+        }
+
+        .app-btn {
+            background: #a21caf;
+        }
+
+        /* =========================================
+           BETA
+        ========================================== */
+
+        .beta-row {
+            display: flex;
+
+            justify-content: center;
+
+            align-items: center;
+
+            gap: 4px;
+
+            margin-bottom: 6px;
+
+            font-size: 10px;
+
+            color: #64748b;
+        }
+
+        .beta-label {
+            font-weight: bold;
+
+            color: #1e293b;
+        }
+
+        /* =========================================
+           BOTTOM
+        ========================================== */
+
+        .bottom-row {
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: center;
+
+            background: #f8fafc;
+
+            padding: 1px 3px;
+
+            border-radius: 3px;
+
+            border: 1px solid #e2e8f0;
+        }
+
+        .result {
+            background: #fef08a;
+
+            color: #854d0e;
+
+            font-weight: bold;
+
+            padding: 2px 4px;
+
+            border-radius: 3px;
+
+            font-size: 9px;
+        }
+
+        .mini-clock {
+            font-family: monospace;
+
+            color: #0284c7;
+
+            font-weight: bold;
+
+            font-size: 11px;
+        }
+    </style>
+</head>
+
+
+<body>
+
+    <!-- =========================================
+         HEADER
+         DRAG THIS AREA TO MOVE WINDOW
+    ========================================== -->
+
+    <div class="mini-window-header">
+
+        <span
+            id="mini-title"
+            class="mini-title">
+            loading...
+        </span>
+
+        <div class="header-buttons">
+
+            <button
+                id="pair-btn"
+                class="pair-btn">
+
+                🔗 PAIR
+
+            </button>
+
+            <button
+                id="close-btn"
+                class="close-btn">
+
+                ✕
+
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <!-- =========================================
+         STATUS
+    ========================================== -->
+
+    <div
+        id="status"
+        class="status">
+
+        READY
+
+    </div>
+
+
+    <!-- =========================================
+         ROUTE
+    ========================================== -->
+
+    <div class="route-box">
+
+        <span
+            id="train"
+            class="train">
+            -
+        </span>
+
+        <span
+            id="from"
+            class="station from">
+            -
+        </span>
+
+        <span class="arrow">
+            →
+        </span>
+
+        <span
+            id="to"
+            class="station">
+            -
+        </span>
+
+        <span
+            id="bookingDate"
+            class="date">
+            No Date
+        </span>
+
+    </div>
+
+
+    <!-- =========================================
+         CLASS / QUOTA / IRCTC
+    ========================================== -->
+
+    <div class="info-row">
+
+        <div
+            id="class"
+            class="class-box">
+
+            SL
+
+        </div>
+
+        <div
+            id="quota"
+            class="quota-box">
+
+            GENERAL
+
+        </div>
+
+        <select
+            id="irctc"
+            class="irctc-box">
+
+            <option value="">
+                No Account
+            </option>
+
+        </select>
+
+    </div>
+
+
+    <!-- =========================================
+         PAYMENT / MOBILE
+    ========================================== -->
+
+    <div class="payment-row">
+
+        <div>
+
+            <div class="field-label">
+                PAYMENT
+            </div>
+
+            <select
+                id="payment"
+                class="field-value">
+
+                <option value="">
+                    Not selected
+                </option>
+
+            </select>
+
+        </div>
+
+        <div>
+
+            <div class="field-label">
+                MOBILE
+            </div>
+
+            <div
+                id="mobile"
+                class="field-value">
+
+                Not entered
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- =========================================
+         BROWSER BUTTONS
+    ========================================== -->
+
+    <div class="browser-buttons">
+
+        <button
+            id="web-btn"
+            class="browser-btn web-btn">
+
+            🌐 WEB
+
+        </button>
+
+        <button
+            id="web2-btn"
+            class="browser-btn web2-btn">
+
+            🌐 WEB2
+
+        </button>
+
+        <button
+            id="web3-btn"
+            class="browser-btn web3-btn">
+
+            🌐 WEB3
+
+        </button>
+
+        <button
+            id="app-btn"
+            class="browser-btn app-btn">
+
+            📱 APP
+
+        </button>
+
+    </div>
+
+
+    <!-- =========================================
+         BETA
+    ========================================== -->
+
+    <div class="beta-row">
+
+        <input
+            id="beta"
+            type="checkbox"
+            checked>
+
+        <span class="beta-label">
+            BETA
+        </span>
+
+    </div>
+
+
+    <!-- =========================================
+         RESULT / CLOCK
+    ========================================== -->
+
+    <div class="bottom-row">
+
+        <span
+            id="result"
+            class="result">
+
+            READY
+
+        </span>
+
+        <span
+            id="mini-clock"
+            class="mini-clock">
+
+            00:00:00
+
+        </span>
+
+    </div>
+
+
+    <script>
+
+        let currentTicket = null;
+
+        let currentTicketIndex = null;
+
+        let currentWindowId = null;
+
+        
+
+        // =========================================
+        // HTML ESCAPE
+        // =========================================
+
+        function escapeMiniHtml(value) {
+
+            if (
+                value === null ||
+                value === undefined
+            ) {
+
+                return "";
+
+            }
+
+            return String(value)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+
+        }
+
+
+        // =========================================
+        // SET TEXT
+        // =========================================
+
+        function setText(id, value) {
+
+            const element =
+                document.getElementById(id);
+
+            if (!element) return;
+
+            element.textContent =
+                value ?? "";
+
+        }
+
+
+        // =========================================
+        // RECEIVE DATA FROM MAIN PROCESS
+        // =========================================
+
+        if (
+            window.electronAPI &&
+            typeof window.electronAPI.onMiniWindowData ===
+            "function"
+        ) {
+
+            window.electronAPI.onMiniWindowData(
+                (data) => {
+
+                    console.log(
+                        "[MINI WINDOW] Data received:",
+                        data
+                    );
+
+                    currentWindowId =
+                        data?.windowId || null;
+
+                    currentTicket =
+    data?.ticketData || null;
+
+currentTicketIndex =
+    data?.ticketIndex ?? null;
+
+if (currentTicket) {
+    currentTicket.browserType =
+        String(
+            data?.browserType ||
+            currentTicket.browserType ||
+            currentTicket.browserChoice ||
+            "WEB"
+        )
+        .trim()
+        .toUpperCase();
+}
+
+
+                    if (!currentTicket) {
+
+                        setText(
+                            "status",
+                            "NO TICKET"
+                        );
+
+                        return;
+
+                    }
+
+
+                    renderTicket(
+                        currentTicket
+                    );
+
+                }
+            );
+
+        }
+
+
+        // =========================================
+        // RENDER TICKET
+        // =========================================
+
+        function renderTicket(ticket) {
+
+            const from =
+                ticket.from || "";
+
+            const to =
+                ticket.to || "";
+
+
+            setText(
+    "mini-title",
+
+    "BOSS: " +
+    from.toUpperCase() +
+    "_" +
+    to.toUpperCase()
+);
+
+
+            setText(
+                "train",
+                ticket.train || "-"
+            );
+
+
+            setText(
+                "from",
+                from
+            );
+
+
+            setText(
+                "to",
+                to
+            );
+
+
+            setText(
+                "bookingDate",
+
+                ticket.bookingDate ||
+                "No Date"
+
+            );
+
+
+            setText(
+                "class",
+
+                ticket.class ||
+                "SL"
+
+            );
+
+
+            setText(
+                "quota",
+
+                ticket.quota ||
+                "GENERAL"
+
+            );
+
+
+            // =========================================
+            // IRCTC DROPDOWN
+            // =========================================
+
+            const irctcSelect =
+                document.getElementById(
+                    "irctc"
+                );
+
+
+          if (irctcSelect) {
+
+    const accounts =
+        Array.isArray(ticket.miniIrctcAccounts)
+            ? ticket.miniIrctcAccounts
+            : [];
+
+    irctcSelect.innerHTML = "";
+
+    if (accounts.length === 0) {
+
+        const option =
+            document.createElement("option");
+
+        option.value = "";
+        option.textContent = "No Account";
+
+        irctcSelect.appendChild(option);
+
+    } else {
+
+        accounts.forEach((account) => {
+
+            const username =
+                typeof account === "string"
+                    ? account
+                    : String(
+                        account?.username || ""
+                    ).trim();
+
+            if (!username) {
+                return;
+            }
+
+            const option =
+                document.createElement("option");
+
+            option.value = username;
+            option.textContent = username;
+
+            irctcSelect.appendChild(option);
+        });
+
+        if (ticket.irctc) {
+            irctcSelect.value =
+                String(ticket.irctc).trim();
+        }
+
+        if (!irctcSelect.value) {
+            irctcSelect.selectedIndex = 0;
+        }
+
+        currentTicket.irctc =
+            irctcSelect.value;
+    }
+
+                const title = document.getElementById("mini-title");
+
+if (title) {
+    title.innerHTML =
+        '<span style="color:#f97316;font-weight:700;">B</span>' +
+        '<span style="color:#2563eb;font-weight:700;">O</span>' +
+        '<span style="color:#db2777;font-weight:700;">S</span>' +
+        '<span style="color:#0ea5e9;font-weight:700;">S</span>' +
+        '<span style="color:#1e293b;font-weight:700;">: ' +
+        (from + "_" + to).toUpperCase() +
+        '</span>';
+}
+            }
+
+
+            // =========================================
+            // PAYMENT DROPDOWN
+            // =========================================
+
+            const paymentSelect =
+                document.getElementById(
+                    "payment"
+                );
+
+
+            if (paymentSelect) {
+
+                const payments =
+                    Array.isArray(
+                        ticket.miniPaymentMethods
+                    )
+                        ? ticket.miniPaymentMethods
+                        : [];
+
+
+                paymentSelect.innerHTML =
+                    "";
+
+
+                if (
+                    payments.length === 0
+                ) {
+
+                    const option =
+                        document.createElement(
+                            "option"
+                        );
+
+
+                    option.value =
+                        "";
+
+
+                    option.textContent =
+                        "Not selected";
+
+
+                    paymentSelect.appendChild(
+                        option
+                    );
+
+                } else {
+
+                    payments.forEach(
+                        (payment) => {
+
+                            const option =
+                                document.createElement(
+                                    "option"
+                                );
+
+
+                            option.value =
+                                payment;
+
+
+                            option.textContent =
+                                payment;
+
+
+                            paymentSelect.appendChild(
+                                option
+                            );
+
+                        }
+                    );
+
+
+                    if (ticket.payment) {
+
+                        paymentSelect.value =
+                            ticket.payment;
+
+                    }
+
+
+                    if (
+                        !paymentSelect.value
+                    ) {
+
+                        paymentSelect.selectedIndex =
+                            0;
+
+                    }
+
+
+                    currentTicket.payment =
+                        paymentSelect.value;
+
+                }
+
+            }
+
+
+            // =========================================
+            // MOBILE
+            // =========================================
+
+            setText(
+                "mobile",
+
+                ticket.mobile ||
+                "Not entered"
+
+            );
+
+
+            setText(
+                "status",
+                "READY"
+            );
+
+
+            setText(
+                "result",
+                "READY"
+            );
+
+        }
+
+
+        // =========================================
+        // IRCTC CHANGE
+        // =========================================
+
+        document
+            .getElementById("irctc")
+            .addEventListener(
+                "change",
+                (event) => {
+
+                    if (!currentTicket) {
+                        return;
+                    }
+
+
+                    currentTicket.irctc =
+                        event.target.value;
+
+
+                    console.log(
+                        "[MINI WINDOW] IRCTC selected:",
+                        currentTicket.irctc
+                    );
+
+                }
+            );
+
+
+        // =========================================
+        // PAYMENT CHANGE
+        // =========================================
+
+        document
+            .getElementById("payment")
+            .addEventListener(
+                "change",
+                (event) => {
+
+                    if (!currentTicket) {
+                        return;
+                    }
+
+
+                    currentTicket.payment =
+                        event.target.value;
+
+
+                    console.log(
+                        "[MINI WINDOW] Payment selected:",
+                        currentTicket.payment
+                    );
+
+                }
+            );
+
+
+        // =========================================
+        // PAIR
+        // =========================================
+
+        document
+            .getElementById("pair-btn")
+            .addEventListener(
+                "click",
+                async () => {
+
+                    if (!currentTicket) {
+                        return;
+                    }
+
+
+                    try {
+
+                        const response =
+                            await window.electronAPI
+                                .openMiniAutomationWindow(
+                                    currentTicket,
+                                    currentTicketIndex
+                                );
+
+
+                        console.log(
+                            "[MINI WINDOW] Pair opened:",
+                            response
+                        );
+
+
+                    } catch (error) {
+
+                        console.error(
+                            "[MINI WINDOW] Pair error:",
+                            error
+                        );
+
+                    }
+
+                }
+            );
+
+
+        // =========================================
+        // CLOSE
+        // =========================================
+
+        document
+            .getElementById("close-btn")
+            .addEventListener(
+                "click",
+                () => {
+
+                    if (
+                        window.electronAPI &&
+                        currentWindowId
+                    ) {
+
+                        window.electronAPI
+                            .closeMiniAutomationWindow(
+                                currentWindowId
+                            );
+
+                    }
+
+                }
+            );
+
+
+        // =========================================
+        // AUTOMATION
+        // =========================================
+
+        async function runAutomation(
+            targetBrowser
+        ) {
+
+            if (!currentTicket) {
+
+                setText(
+                    "status",
+                    "NO TICKET"
+                );
+
+                return;
+
+            }
+
+
+            setText(
+                "status",
+                "STARTING..."
+            );
+
+
+            setText(
+                "result",
+                "RUNNING"
+            );
+
+
+            try {
+
+                
+// ==========================================
+// SELECTED IRCTC ACCOUNT / CREDENTIALS
+// ==========================================
+
+const selectedUsername =
+    String(
+        currentTicket.irctc || ""
+    ).trim();
+
+const account =
+    Array.isArray(
+        currentTicket.miniIrctcAccounts
+    )
+        ? currentTicket.miniIrctcAccounts.find(
+            item =>
+                typeof item === "string"
+                    ? item === selectedUsername
+                    : String(
+                        item?.username || ""
+                    ).trim() === selectedUsername
+        )
+        : null;
+
+const loginCredentials = {
+
+    username:
+        typeof account === "string"
+            ? account
+            : String(
+                account?.username || ""
+            ).trim(),
+
+    password:
+        typeof account === "string"
+            ? ""
+            : String(
+                account?.password || ""
+            )
+};
+
+                const automationData = {
+
+    ticketId:
+        String(currentTicket.id || ""),
+
+    winId:
+        String(currentWindowId || ""),
+
+        browserType:
+    String(
+        targetBrowser ||
+        currentTicket.browserType ||
+        "WEB"
+    )
+    .trim()
+    .toUpperCase(),
+
+    trainNo:
+        String(currentTicket.train || ""),
+
+    fromStation:
+        String(currentTicket.from || "")
+            .toUpperCase(),
+
+    toStation:
+        String(currentTicket.to || "")
+            .toUpperCase(),
+
+    date:
+        String(
+            currentTicket.bookingDate ||
+            currentTicket.journeyDate ||
+            ""
+        ),
+
+    classType:
+        String(
+            currentTicket.class ||
+            "SL"
+        ),
+
+    quota:
+        String(
+            currentTicket.quota || ""
+        )
+            .trim()
+            .toUpperCase(),
+
+    
+irctc:
+    String(
+        currentTicket.irctc || ""
+    ),
+
+credentials: {
+    username:
+        loginCredentials.username,
+
+    password:
+        loginCredentials.password
+},
+
+payment:
+    String(
+        currentTicket.payment || ""
+    ),
+
+
+    mobile:
+        String(
+            currentTicket.mobile || ""
+        ),
+
+    confirmedOnly:
+        currentTicket.confirmedOnly !== false,
+
+    passengers:
+        Array.isArray(
+            currentTicket.passengers
+        )
+            ? currentTicket.passengers.map(
+                passenger => ({
+
+                    name:
+                        String(
+                            passenger?.name || ""
+                        ),
+
+                    age:
+                        String(
+                            passenger?.age || ""
+                        ),
+
+                    gender:
+                        String(
+                            passenger?.gender || ""
+                        ),
+
+                    berth:
+                        String(
+                            passenger?.berth || ""
+                        ),
+
+                    food:
+                        String(
+                            passenger?.food || ""
+                        ),
+
+                    concession:
+                        String(
+                            passenger?.concession || ""
+                        )
+
+                })
+            )
+            : []
+
+};
+
+
+                console.log(
+    `[MINI ${targetBrowser}] Starting automation`
+);
+
+
+                const response =
+                    await window.electronAPI
+                        .startBooking(
+                            automationData,
+                            targetBrowser
+                        );
+
+
+                console.log(
+                    "[MINI WINDOW] Booking response:",
+                    response
+                );
+
+
+                if (
+                    response &&
+                    response.success
+                ) {
+
+                    setText(
+                        "status",
+                        "SUCCESS"
+                    );
+
+
+                    setText(
+                        "result",
+                        "DONE"
+                    );
+
+                } else {
+
+                    setText(
+                        "status",
+                        "FAILED"
+                    );
+
+
+                    setText(
+                        "result",
+
+                        response?.error ||
+                        "ERROR"
+
+                    );
+
+                }
+
+            } catch (error) {
+
+                console.error(
+                    "[MINI WINDOW] Automation error:",
+                    error
+                );
+
+
+                setText(
+                    "status",
+                    "ERROR"
+                );
+
+
+                setText(
+                    "result",
+
+                    error?.message ||
+                    "Automation error"
+
+                );
+
+            }
+
+        }
+
+
+        // =========================================
+// WEB
+// =========================================
+
+document
+    .getElementById("web-btn")
+    .addEventListener(
+        "click",
+        () => {
+
+            runAutomation("WEB");
+
+        }
+    );
+
+
+// =========================================
+// WEB2
+// =========================================
+
+document
+    .getElementById("web2-btn")
+    .addEventListener(
+        "click",
+        () => {
+
+            runAutomation("WEB2");
+
+        }
+    );
+
+
+// =========================================
+// WEB3
+// =========================================
+
+document
+    .getElementById("web3-btn")
+    .addEventListener(
+        "click",
+        () => {
+
+            runAutomation("WEB3");
+
+        }
+    );
+
+
+        // =========================================
+        // APP
+        // NO ACTION
+        // =========================================
+
+        document
+            .getElementById("app-btn")
+            .addEventListener(
+                "click",
+                () => {
+
+                    // No action
+
+                }
+            );
+
+
+                // =========================================
+        // EXACT CURRENT TIME
+        // =========================================
+
+        function updateMiniClock() {
+
+            const now = new Date();
+
+            const hrs =
+                String(now.getHours())
+                    .padStart(2, "0");
+
+            const mins =
+                String(now.getMinutes())
+                    .padStart(2, "0");
+
+            const secs =
+                String(now.getSeconds())
+                    .padStart(2, "0");
+
+            setText(
+                "mini-clock",
+                hrs + ":" + mins + ":" + secs
+            );
+        }
+
+        updateMiniClock();
+
+        setInterval(
+            updateMiniClock,
+            1000
+        );
+
+    </script>
+
+</body>
+
+</html>

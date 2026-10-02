@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="edgeGradient" x1="8" y1="50" x2="54" y2="10"
+                    gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0aa7f0"/>
+      <stop offset=".55" stop-color="#087df0"/>
+      <stop offset="1" stop-color="#0bd3a5"/>
+    </linearGradient>
+  </defs>
+
+  <path
+    fill="url(#edgeGradient)"
+    d="M56 38C55 24 45 13 31 13c-11 0-20 6-25 15 6-5 14-7 21-5 9 2 14 9 14 16h15z"/>
+
+  <path
+    fill="#0aa7f0"
+    d="M41 39c-2 7-9 10-17 10-9 0-17-4-21-11 1 12 11 22 25 22 15 0 27-9 28-22l-15 1z"/>
+
+  <path
+    fill="#087df0"
+    d="M13 43c4 4 9 6 15 6 8 0 14-3 17-10H31c-8 0-14-2-18-6-3 3-3 7 0 10z"/>
+</svg>
