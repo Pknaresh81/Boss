@@ -82,6 +82,23 @@ getRetryDelay(attempt, baseDelay = 1000, maxDelay = 5000) {
     return delayMs;
 }
 
+// ==========================================
+// HELPER: HUMAN-LIKE TYPE IN INPUT FIELD
+// ==========================================
+async typeHumanLike(selector, text, minDelay = 20, maxDelay = 60) {
+    if (!this.page || !selector || !text) return;
+    
+    await this.page.focus(selector);
+    const textStr = String(text);
+    
+    for (let i = 0; i < textStr.length; i++) {
+        await this.page.type(selector, textStr[i]);
+        // Random micro-delay between letters (20ms to 60ms)
+        const delay = Math.floor(Math.random() * (maxDelay - minDelay)) + minDelay;
+        await this.delay(delay);
+    }
+}
+
     // ==========================================
     // SAFE FETCH (ENHANCED WITH ANTI-AKAMAI HEADERS)
     // ==========================================
@@ -3370,17 +3387,31 @@ diagnosticLogs.push(
      var ageInputs = Array.from(document.querySelectorAll('input[formcontrolname="passengerAge"], input[placeholder*="Age"]'));
      var genderControls = document.querySelectorAll('select[formcontrolname="passengerGender"]');
 
-     // 2. Passenger Name
+     // 2. Passenger Name (Human-like Typing Simulation)
      var nameInput = nameInputs[i];
      if (nameInput) {
          nameInput.focus();
          var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-         nativeInputValueSetter.call(nameInput, p.name || p.passengerName || "Test Passenger");
-         nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+         var nameToType = String(p.name || p.passengerName || "Test Passenger");
+         
+         // Character by character simulation
+         var currentVal = "";
+         for (var charIndex = 0; charIndex < nameToType.length; charIndex++) {
+             currentVal += nameToType[charIndex];
+             nativeInputValueSetter.call(nameInput, currentVal);
+             nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+             
+             // Random keypress delay (20ms to 60ms per letter)
+             var randomDelay = Math.floor(Math.random() * 40) + 20;
+             await new Promise(function(r) { setTimeout(r, randomDelay); });
+         }
+
          nameInput.dispatchEvent(new Event('change', { bubbles: true }));
          nameInput.dispatchEvent(new Event('blur', { bubbles: true }));
-         diagnosticLogs.push("Filled name for passenger " + (i + 1) + ": " + (p.name || p.passengerName));
-         await new Promise(function(r) { setTimeout(r, 200); });
+         diagnosticLogs.push("Filled name for passenger " + (i + 1) + ": " + nameToType);
+         
+         // Dynamic random delay before next step (150ms to 350ms)
+         await new Promise(function(r) { setTimeout(r, Math.floor(Math.random() * 200) + 150); });
      }
 
      // 3. Passenger Age
@@ -3733,15 +3764,22 @@ try {
     
     await new Promise(function(r) { setTimeout(r, 200); });
 
-    // Ab naya mobile number set karo
-    nativeMobileSetter.call(mobileInput, String(mobileVal));
+    // Ab naya mobile number character-by-character type karo
+    var mobStr = String(mobileVal);
+    var currentMob = "";
+    for (var mIdx = 0; mIdx < mobStr.length; mIdx++) {
+        currentMob += mobStr[mIdx];
+        nativeMobileSetter.call(mobileInput, currentMob);
+        mobileInput.dispatchEvent(new Event("input", { bubbles: true }));
+        
+        // Random typing delay per digit (20ms to 50ms)
+        await new Promise(function(r) { setTimeout(r, Math.floor(Math.random() * 30) + 20); });
+    }
 
-    // Angular ke reactive forms ko trigger karne ke liye events
-    mobileInput.dispatchEvent(new Event("input", { bubbles: true }));
     mobileInput.dispatchEvent(new Event("change", { bubbles: true }));
     mobileInput.dispatchEvent(new Event("blur", { bubbles: true }));
 
-    await new Promise(function(r) { setTimeout(r, 200); });
+    await new Promise(function(r) { setTimeout(r, Math.floor(Math.random() * 200) + 150); });
 
     diagnosticLogs.push("Mobile field value after fill: " + mobileInput.value);
 

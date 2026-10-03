@@ -9,19 +9,6 @@ const {
     verifyLicense
 } = require('./licenseManager');
 
-// ==========================================
-// BOT PROTECTION / AKAMAI WAF BYPASS FIXES
-// ==========================================
-app.commandLine.appendSwitch('disable-http2');
-app.commandLine.appendSwitch('disable-site-isolation-trials');
-app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor,IsolateOrigins,site-per-process');
-app.commandLine.appendSwitch('no-sandbox');
-app.commandLine.appendSwitch('disable-setuid-sandbox');
-app.commandLine.appendSwitch('disable-web-security');
-app.commandLine.appendSwitch('ignore-certificate-errors');
-app.commandLine.appendSwitch('disable-blink-features', 'AutofillServerCommunication');
-app.commandLine.appendSwitch('disable-component-update');
-
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -663,10 +650,8 @@ async function launchBrowser(
     [
         `--remote-debugging-port=${config.port}`,
         `--user-data-dir=${config.userDataDir}`,
-        '--disable-blink-features=AutomationControlled',
         '--window-size=500,680', // <-- Specific width aur height force karein
         '--window-position=400,30', // <-- Screen position set karein
-        '--excludeSwitches=enable-automation', // <-- ISSE BANNER HATEGA
         '--no-default-browser-check',
         config.type === 'WEB2' ? '--inprivate' : '--incognito',
         targetUrl
@@ -1615,63 +1600,6 @@ win.webContents.on('did-navigate', async (event, url) => {
     const realUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
     win.webContents.setUserAgent(realUserAgent);
 
-    // ==========================================
-    // ADVANCED AKAMAI / BOT FINGERPRINT BYPASS
-    // ==========================================
-    win.webContents.on('did-finish-load', () => {
-        win.webContents.executeJavaScript(`
-            // 1. Hide Webdriver flags completely
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined
-            });
-
-            // 2. Mock Languages & Plugins to match real Windows Chrome
-            Object.defineProperty(navigator, 'languages', {
-                get: () => ['en-US', 'en', 'hi']
-            });
-
-            Object.defineProperty(navigator, 'plugins', {
-                get: () => [
-                    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-plugin', description: 'Portable Document Format' },
-                    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
-                    { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' }
-                ]
-            });
-
-            // 3. Mock window.chrome runtime object to prevent bot detection
-            window.chrome = {
-                runtime: {
-                    connect: function() {},
-                    sendMessage: function() {}
-                },
-                loadTimes: function() {},
-                csi: function() {},
-                app: {}
-            };
-
-            // 4. Override permissions query
-            const originalQuery = window.navigator.permissions.query;
-            window.navigator.permissions.query = (parameters) => (
-                parameters.name === 'notifications' ?
-                    Promise.resolve({ state: 'denied' }) :
-                    originalQuery(parameters)
-            );
-
-            // 5. Spoof connection properties (Hardware concurrency & memory)
-            Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
-            Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
-        `).catch(() => {});
-    });
-
-    // Intercept and inject essential headers to bypass WAF header filtering checks
-    win.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
-        details.requestHeaders['User-Agent'] = realUserAgent;
-        details.requestHeaders['Sec-Ch-Ua'] = '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"';
-        details.requestHeaders['Sec-Ch-Ua-Mobile'] = '?0';
-        details.requestHeaders['Sec-Ch-Ua-Platform'] = '"Windows"';
-        callback({ requestHeaders: details.requestHeaders });
-    });
-
     win.loadFile(
         path.join(
             __dirname,
@@ -1860,17 +1788,6 @@ async function saveUserSession(
 // ==========================================
 
 app.whenReady().then(() => {
-
-    session.defaultSession.webRequest.onBeforeRequest(
-        {
-            urls: [
-                '*://*.irctc.co.in/ngsw-worker.js'
-            ]
-        },
-        (details, callback) => {
-            callback({ cancel: true });
-        }
-    );
 
     /*
      * IMPORTANT:
@@ -2398,42 +2315,57 @@ ipcMain.handle(
                 }
             }
 
-            let page = null;
+let page = null;
 
 try {
 
     console.log(
-        `[${config.type}] Creating isolated browser context for Tatkal...`
+        `[${config.type}] Using existing browser page for Tatkal...`
     );
 
-    const context =
-        await browser.createBrowserContext();
+    const pages = await browser.pages();
 
     page =
-        await context.newPage();
+        pages.find(
+            p => {
+                const url = p.url() || '';
+                return url.includes('irctc.co.in');
+            }
+        ) || pages[0];
+
+    if (!page) {
+        throw new Error(
+            `${config.name} mein koi browser page available nahi hai.`
+        );
+    }
 
     console.log(
-        `[${config.type}] Tatkal isolated context page created.`
+        `[${config.type}] Existing page selected: ${await page.url()}`
     );
 
-    await page.goto(
-        targetUrl,
-        {
-            waitUntil: 'domcontentloaded',
-            timeout: 30000
-        }
-    );
+    if (
+        !page.url() ||
+        page.url() === 'about:blank'
+    ) {
+        await page.goto(
+            targetUrl,
+            {
+                waitUntil: 'domcontentloaded',
+                timeout: 30000
+            }
+        );
+    }
 
-} catch (contextError) {
+} catch (pageError) {
 
     console.error(
-        `[${config.type}] Tatkal isolated context failed:`,
-        contextError.message
+        `[${config.type}] Tatkal page selection failed:`,
+        pageError.message
     );
 
     throw new Error(
-        `${config.name} Tatkal isolated browser context create nahi ho saka: ` +
-        contextError.message
+        `${config.name} existing page use nahi ho saka: ` +
+        pageError.message
     );
 }
 
