@@ -1604,49 +1604,79 @@ const base64Payload = Buffer.from(rawPayload).toString('base64');
                 await new Promise(function(r) { setTimeout(r, 500); });
             }
 
-            // 1. Fill Stations
-            diagnosticLogs.push("Filling From/To station details...");
-            var stationInputs = Array.from(document.querySelectorAll('p-autocomplete input'));
-            if (stationInputs.length < 2) {
-                stationInputs = Array.from(document.querySelectorAll('input')).filter(function(input) {
-                    var ph = (input.getAttribute('placeholder') || '').toUpperCase();
-                    var ar = (input.getAttribute('aria-label') || '').toUpperCase();
-                    return ph.indexOf('FROM') !== -1 || ph.indexOf('TO') !== -1 || ar.indexOf('FROM') !== -1 || ar.indexOf('TO') !== -1;
-                });
-            }
+// 1. Fill Stations 
+diagnosticLogs.push("Filling From/To station details..."); 
+var stationInputs = Array.from(document.querySelectorAll('p-autocomplete input')); 
+if (stationInputs.length < 2) { 
+    stationInputs = Array.from(document.querySelectorAll('input')).filter(function(input) { 
+        var ph = (input.getAttribute('placeholder') || '').toUpperCase(); 
+        var ar = (input.getAttribute('aria-label') || '').toUpperCase(); 
+        return ph.indexOf('FROM') !== -1 || ph.indexOf('TO') !== -1 || ar.indexOf('FROM') !== -1 || ar.indexOf('TO') !== -1; 
+    }); 
+} 
 
-            if (stationInputs[0] && payload.fromStation) {
-                stationInputs[0].click();
-                stationInputs[0].focus();
-                stationInputs[0].value = payload.fromStation;
-                stationInputs[0].dispatchEvent(new Event('input', { bubbles: true }));
-                stationInputs[0].dispatchEvent(new Event('keyup', { bubbles: true }));
-                await new Promise(function(r) { setTimeout(r, 300); });
-                
-                var panel = document.querySelector('ul.ui-autocomplete-items, ul.p-autocomplete-items, .ui-autocomplete-panel, .p-autocomplete-panel');
-                if (panel) {
-                    var firstItem = panel.querySelector('li');
-                    if (firstItem) firstItem.click();
-                }
-                await new Promise(function(r) { setTimeout(r, 300); });
-            }
+if (stationInputs[0] && payload.fromStation) { 
+    stationInputs[0].click(); 
+    stationInputs[0].focus(); 
+    stationInputs[0].value = '';
 
-            var targetToInput = stationInputs[1] || stationInputs[0];
-            if (targetToInput && payload.toStation) {
-                targetToInput.click();
-                targetToInput.focus();
-                targetToInput.value = payload.toStation;
-                targetToInput.dispatchEvent(new Event('input', { bubbles: true }));
-                targetToInput.dispatchEvent(new Event('keyup', { bubbles: true }));
-                await new Promise(function(r) { setTimeout(r, 300); });
+    for (var i = 0; i < payload.fromStation.length; i++) {
+        stationInputs[0].value += payload.fromStation.charAt(i);
 
-                var panel2 = document.querySelector('ul.ui-autocomplete-items, ul.p-autocomplete-items, .ui-autocomplete-panel, .p-autocomplete-panel');
-                if (panel2) {
-                    var firstItem2 = panel2.querySelector('li');
-                    if (firstItem2) firstItem2.click();
-                }
-                await new Promise(function(r) { setTimeout(r, 300); });
-            }
+        stationInputs[0].dispatchEvent(
+            new Event('input', { bubbles: true })
+        );
+
+        stationInputs[0].dispatchEvent(
+            new Event('keyup', { bubbles: true })
+        );
+
+        await new Promise(function(r) { 
+            setTimeout(r, 80); 
+        });
+    }
+
+    await new Promise(function(r) { setTimeout(r, 300); }); 
+     
+    var panel = document.querySelector('ul.ui-autocomplete-items, ul.p-autocomplete-items, .ui-autocomplete-panel, .p-autocomplete-panel'); 
+    if (panel) { 
+        var firstItem = panel.querySelector('li'); 
+        if (firstItem) firstItem.click(); 
+    } 
+    await new Promise(function(r) { setTimeout(r, 300); }); 
+} 
+
+var targetToInput = stationInputs[1] || stationInputs[0]; 
+if (targetToInput && payload.toStation) { 
+    targetToInput.click(); 
+    targetToInput.focus(); 
+    targetToInput.value = '';
+
+    for (var j = 0; j < payload.toStation.length; j++) {
+        targetToInput.value += payload.toStation.charAt(j);
+
+        targetToInput.dispatchEvent(
+            new Event('input', { bubbles: true })
+        );
+
+        targetToInput.dispatchEvent(
+            new Event('keyup', { bubbles: true })
+        );
+
+        await new Promise(function(r) { 
+            setTimeout(r, 80); 
+        });
+    }
+
+    await new Promise(function(r) { setTimeout(r, 300); }); 
+
+    var panel2 = document.querySelector('ul.ui-autocomplete-items, ul.p-autocomplete-items, .ui-autocomplete-panel, .p-autocomplete-panel'); 
+    if (panel2) { 
+        var firstItem2 = panel2.querySelector('li'); 
+        if (firstItem2) firstItem2.click(); 
+    } 
+    await new Promise(function(r) { setTimeout(r, 300); }); 
+}
 
             // 2. Journey Date - Smart Month Navigation & Popup Clicker
             if (payload.journeyDate) {
@@ -1767,7 +1797,7 @@ try {
     if (!quotaDropdown) throw new Error("Quota dropdown nahi mila.");
 
     (quotaDropdown.querySelector('.p-dropdown, .ui-dropdown') || quotaDropdown).click();
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 300));
 
     var items = Array.from(document.querySelectorAll(
         '.p-dropdown-panel li, .ui-dropdown-panel li, .p-dropdown-item, .ui-dropdown-item'
@@ -1783,7 +1813,7 @@ try {
     target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
     target.click();
 
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 300));
 
     var selected =
         (quotaDropdown.querySelector('.p-dropdown-label, .ui-dropdown-label')?.innerText || "")

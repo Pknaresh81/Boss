@@ -52,20 +52,23 @@ ipcMain.handle(
                 .toUpperCase();
 
             const miniWin =
-                new BrowserWindow({
+    new BrowserWindow({
 
-                    width: 340,
-                    height: 230,
+        width: 340,
+        height: 240,
 
-                    parent: null,
-                    modal: false,
+        parent: null,
+        modal: false,
 
-                    frame: false,
-                    movable: true,
-                    resizable: false,
+        frame: false,
+        movable: true,
 
-                    alwaysOnTop: false,
-                    show: true,
+        resizable: false,
+        maximizable: false,
+        fullscreenable: false,
+
+        alwaysOnTop: false,
+        show: true,
 
                     webPreferences: {
                         preload: path.join(
