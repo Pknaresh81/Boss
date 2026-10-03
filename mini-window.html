@@ -21,8 +21,8 @@
             margin: 0;
             padding: 6px;
 
-            background: #ffffff;
-            color: #1e293b;
+            background: #07111f;
+            color: #e8f3ff;
 
             font-family: "Segoe UI", sans-serif;
             font-size: 11px;
@@ -40,7 +40,7 @@
             justify-content: space-between;
             align-items: center;
 
-            border-bottom: 1px solid #cbd5e1;
+            border-bottom: 1px solid rgba(90, 170, 255, 0.24);
 
             padding-bottom: 3px;
             margin-bottom: 5px;
@@ -56,7 +56,7 @@
         .mini-title {
             font-weight: bold;
 
-            color: #1e293b;
+            color: #e8f3ff;
 
             font-size: 11px;
 
@@ -99,9 +99,9 @@
         }
 
         .close-btn {
-            background: none;
+             background: none;
 
-            color: #64748b;
+             color: #8fa8c2;
 
             font-weight: bold;
 
@@ -138,7 +138,7 @@
 
             align-items: center;
 
-            background: #f8fafc;
+            background: rgba(13, 27, 47, 0.95);
 
             padding: 2px 4px;
 
@@ -148,17 +148,22 @@
 
             font-size: 10px;
 
-            border: 1px solid #e2e8f0;
+            border: 1px solid rgba(90, 170, 255, 0.24);
         }
 
         .train {
+   
             font-weight: bold;
-
-            color: #0284c7;
-        }
+   
+            color: #38bdf8;
+}
 
         .station {
+   
             font-weight: bold;
+   
+            color: #e8f3ff;
+
         }
 
         .from {
@@ -166,15 +171,18 @@
         }
 
         .arrow {
+    
             text-align: center;
+    
+            color: #8fa8c2;
 
-            color: #64748b;
         }
 
         .date {
-            color: #1e293b;
+   
+            color: #e8f3ff;
 
-            background: #e2e8f0;
+            background: #101f35;
 
             padding: 2px 3px;
 
@@ -231,13 +239,14 @@
         ========================================== */
 
         .irctc-box {
+   
             width: 100%;
+   
+            background: #091626;
 
-            background: #f8fafc;
-
-            border: 1px solid #cbd5e1;
-
-            color: #1e293b;
+            border: 1px solid rgba(90, 170, 255, 0.24);
+ 
+            color: #e8f3ff;
 
             padding: 2px 4px;
 
@@ -253,7 +262,7 @@
         }
 
         .irctc-box:hover {
-            background: #e2e8f0;
+           background: #0d1b2f;
         }
 
         .irctc-box:focus {
@@ -277,8 +286,9 @@
             font-size: 9px;
         }
 
-        .field-label {
-            color: #64748b;
+        .irctc-box:hover {
+            background: #0d1b2f;
+
 
             font-size: 8px;
 
@@ -288,11 +298,11 @@
         .field-value {
             width: 100%;
 
-            background: #f8fafc;
+            background: #091626;
+ 
+            border: 1px solid rgba(90, 170, 255, 0.24);
 
-            border: 1px solid #cbd5e1;
-
-            color: #1e293b;
+            color: #e8f3ff;
 
             padding: 3px;
 
@@ -308,7 +318,7 @@
         }
 
         select.field-value:hover {
-            background: #e2e8f0;
+            background: #0d1b2f;
         }
 
         select.field-value:focus {
@@ -375,13 +385,13 @@
 
             font-size: 10px;
 
-            color: #64748b;
+            color: #8fa8c2;
         }
 
         .beta-label {
             font-weight: bold;
 
-            color: #1e293b;
+            color: #e8f3ff;
         }
 
         /* =========================================
@@ -395,13 +405,13 @@
 
             align-items: center;
 
-            background: #f8fafc;
+            background: #0d1b2f;
 
             padding: 1px 3px;
 
             border-radius: 3px;
 
-            border: 1px solid #e2e8f0;
+            border: 1px solid rgba(90, 170, 255, 0.24);
         }
 
         .result {
@@ -421,7 +431,7 @@
         .mini-clock {
             font-family: monospace;
 
-            color: #0284c7;
+            color: #38bdf8;
 
             font-weight: bold;
 
@@ -562,10 +572,6 @@
 
         <div>
 
-            <div class="field-label">
-                PAYMENT
-            </div>
-
             <select
                 id="payment"
                 class="field-value">
@@ -579,10 +585,6 @@
         </div>
 
         <div>
-
-            <div class="field-label">
-                MOBILE
-            </div>
 
             <div
                 id="mobile"
@@ -937,7 +939,7 @@ if (title) {
         '<span style="color:#2563eb;font-weight:700;">O</span>' +
         '<span style="color:#db2777;font-weight:700;">S</span>' +
         '<span style="color:#0ea5e9;font-weight:700;">S</span>' +
-        '<span style="color:#1e293b;font-weight:700;">: ' +
+        '<span style="color:#ffffff;font-weight:700;">: ' +
         (from + "_" + to).toUpperCase() +
         '</span>';
 }

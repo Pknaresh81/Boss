@@ -82,6 +82,507 @@ body {
             pointer-events: auto;
         }
 
+  /* =========================================================
+   BOSS PRO DARK COMPACT UI
+   UI ONLY - EXISTING JS/IPC/IDs UNCHANGED
+========================================================= */
+
+:root {
+    --boss-bg: #07111f;
+    --boss-bg-2: #0b1930;
+    --boss-panel: #0d1b2f;
+    --boss-panel-2: #101f35;
+    --boss-field: #091626;
+    --boss-border: rgba(90, 170, 255, 0.24);
+    --boss-border-hover: rgba(80, 190, 255, 0.55);
+    --boss-text: #e8f3ff;
+    --boss-muted: #8fa8c2;
+    --boss-blue: #38bdf8;
+    --boss-blue-2: #2563eb;
+}
+
+/* MAIN WINDOW */
+.main-container {
+    background:
+        radial-gradient(
+            circle at 15% 0%,
+            rgba(0, 180, 255, 0.12),
+            transparent 32%
+        ),
+        radial-gradient(
+            circle at 90% 15%,
+            rgba(37, 99, 235, 0.13),
+            transparent 30%
+        ),
+        linear-gradient(
+            145deg,
+            #06101d 0%,
+            #0a1729 48%,
+            #07111f 100%
+        ) !important;
+
+    border: 1px solid rgba(65, 170, 255, 0.30) !important;
+    border-radius: 10px !important;
+
+    box-shadow:
+        0 0 28px rgba(0, 153, 255, 0.10),
+        0 18px 45px rgba(0, 0, 0, 0.55),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+
+    color: var(--boss-text) !important;
+}
+
+/* HEADER */
+#windowHeader {
+    background:
+        linear-gradient(
+            180deg,
+            rgba(14, 31, 52, 0.98),
+            rgba(8, 20, 35, 0.98)
+        ) !important;
+
+    border-bottom: 1px solid rgba(65, 170, 255, 0.22) !important;
+
+    padding: 8px 10px !important;
+
+    min-height: 42px;
+}
+
+/* HEADER TAB BUTTONS */
+.tab-btn {
+    background: rgba(19, 42, 69, 0.75) !important;
+    color: #9fc4e8 !important;
+
+    border: 1px solid rgba(90, 170, 255, 0.16) !important;
+
+    border-radius: 6px !important;
+
+    padding: 5px 10px !important;
+
+    font-size: 10px !important;
+
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        color 0.15s ease !important;
+}
+
+.tab-btn:hover {
+    background: rgba(31, 76, 119, 0.85) !important;
+    border-color: rgba(70, 180, 255, 0.40) !important;
+    color: #e8f7ff !important;
+}
+
+/* ACTIVE TAB */
+.tab-btn.bg-indigo-600 {
+    background:
+        linear-gradient(
+            135deg,
+            #1474b8,
+            #2563eb
+        ) !important;
+
+    color: #ffffff !important;
+
+    border-color: rgba(91, 200, 255, 0.70) !important;
+
+    box-shadow:
+        0 0 10px rgba(37, 150, 255, 0.28),
+        inset 0 1px 0 rgba(255,255,255,0.12) !important;
+}
+
+/* MAIN CONTENT */
+#mainWindow > main {
+    background:
+        radial-gradient(
+            circle at 50% 0%,
+            rgba(21, 105, 180, 0.08),
+            transparent 45%
+        ),
+        #07111f !important;
+}
+
+/* COMPACT SCROLL AREA */
+#scrollableContainer {
+    padding: 10px !important;
+    max-height: 580px !important;
+}
+
+/* ALL TABS */
+.tab-content {
+    color: var(--boss-text) !important;
+}
+
+/* TAB HEADINGS */
+.tab-content h2 {
+    color: #55c7ff !important;
+
+    font-size: 11px !important;
+
+    letter-spacing: 0.08em;
+
+    margin-bottom: 7px !important;
+}
+
+/* REMOVE BIG WHITE CONTAINER BOXES */
+.main-container .bg-white {
+    background: transparent !important;
+
+    border-color: transparent !important;
+
+    box-shadow: none !important;
+}
+
+/* BOOK MAIN PANEL */
+#tab-book > div > div.bg-white {
+    padding: 4px !important;
+}
+
+/* GRID SPACING */
+#tab-book .grid {
+    gap: 6px !important;
+}
+
+/* FIELD WRAPPERS */
+#tab-book .grid > div {
+    min-width: 0;
+}
+
+/* HIDE OUTER FIELD LABELS
+   Passenger heading / checkbox label are NOT affected */
+#tab-book > div > div > div.grid > div > label,
+#tab-book > div > div > div.border-t > div > label {
+    display: none !important;
+}
+
+/* ALL INPUTS / SELECTS */
+.main-container input,
+.main-container select {
+    box-sizing: border-box !important;
+
+    height: 29px !important;
+
+    min-height: 29px !important;
+
+    padding: 4px 8px !important;
+
+    border-radius: 5px !important;
+
+    border: 1px solid var(--boss-border) !important;
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(13, 30, 50, 0.98),
+            rgba(7, 20, 34, 0.98)
+        ) !important;
+
+    color: #e7f4ff !important;
+ 
+    font-size: 12px !important;
+
+    outline: none !important;
+
+    box-shadow:
+        inset 0 1px 2px rgba(0,0,0,0.25) !important;
+}
+
+/* PLACEHOLDER */
+.main-container input::placeholder {
+    color: #7791aa !important;
+    opacity: 1 !important;
+}
+
+/* FOCUS */
+.main-container input:focus,
+.main-container select:focus {
+    border-color: var(--boss-border-hover) !important;
+
+    box-shadow:
+        0 0 0 1px rgba(56,189,248,0.15),
+        0 0 8px rgba(56,189,248,0.10) !important;
+}
+
+/* SELECT OPTIONS */
+.main-container select option {
+    background: #0b192b !important;
+    color: #e8f3ff !important;
+}
+
+/* PASSENGER SECTION */
+#tab-book .border-t {
+    border-color: rgba(90, 170, 255, 0.14) !important;
+
+    padding-top: 6px !important;
+
+    margin-top: 5px !important;
+}
+
+/* PASSENGER HEADING */
+#tab-book #passengers-rows-container + * {
+    margin-top: 0;
+}
+
+#tab-book .border-t > label {
+    color: #4fc3ff !important;
+
+    font-size: 10px !important;
+
+    margin-bottom: 5px !important;
+}
+
+/* PASSENGER ROWS */
+#passengers-rows-container {
+    display: flex !important;
+
+    flex-direction: column !important;
+
+    gap: 3px !important;
+}
+
+/* REMOVE PASSENGER BACKGROUND BOX */
+#passengers-rows-container > div {
+    background: transparent !important;
+
+    border: 0 !important;
+
+    border-radius: 0 !important;
+
+    padding: 0 !important;
+
+    box-shadow: none !important;
+}
+
+/* PASSENGER GRID */
+#passengers-rows-container > div {
+    grid-template-columns:
+        1.7fr
+        0.75fr
+        0.9fr
+        1.05fr !important;
+
+    gap: 5px !important;
+}
+
+/* PASSENGER FIELDS */
+#passengers-rows-container input,
+#passengers-rows-container select {
+    height: 28px !important;
+    min-height: 28px !important;
+
+    padding: 3px 7px !important;
+
+    font-size: 12px !important;
+}
+
+/* ACCOUNT / PAYMENT / MOBILE */
+#tab-book .border-t.grid {
+    padding-top: 6px !important;
+
+    margin-top: 5px !important;
+
+    gap: 6px !important;
+}
+
+/* BOOK BOTTOM AREA */
+#tab-book .flex.justify-between {
+    padding-top: 6px !important;
+
+    font-size: 10px !important;
+}
+
+/* CHECKBOX */
+.main-container input[type="checkbox"] {
+    width: 13px !important;
+    height: 13px !important;
+
+    min-height: 13px !important;
+
+    accent-color: #22aaff;
+}
+
+/* ALL BUTTONS INSIDE DASHBOARD */
+.main-container button {
+    min-height: 28px;
+
+    border-radius: 5px !important;
+
+    font-size: 10px !important;
+
+    transition:
+        transform 0.12s ease,
+        box-shadow 0.12s ease,
+        filter 0.12s ease !important;
+}
+
+/* BUTTON HOVER */
+.main-container button:hover {
+    filter: brightness(1.10);
+
+    box-shadow:
+        0 0 9px rgba(56, 189, 248, 0.13);
+}
+
+/* BLUE BUTTONS */
+.main-container .bg-indigo-600,
+.main-container .bg-blue-600 {
+    background:
+        linear-gradient(
+            135deg,
+            #1478bb,
+            #2563eb
+        ) !important;
+
+    border: 1px solid rgba(87, 190, 255, 0.28) !important;
+}
+
+/* GREEN BUTTONS */
+.main-container .bg-emerald-600 {
+    background:
+        linear-gradient(
+            135deg,
+            #087f68,
+            #059669
+        ) !important;
+}
+
+/* RED BUTTONS */
+.main-container .bg-red-600 {
+    background:
+        linear-gradient(
+            135deg,
+            #a61b2b,
+            #dc2626
+        ) !important;
+}
+
+/* TICKET / TOKEN / PROFILE / PAYMENT LIST ITEMS */
+#tickets-container > div,
+#tokens-list > div,
+#profiles-list > div,
+#payments-list > div {
+    background:
+        rgba(12, 29, 48, 0.72) !important;
+
+    border: 1px solid rgba(80, 160, 220, 0.15) !important;
+
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.025) !important;
+
+    border-radius: 5px !important;
+
+    padding: 5px 7px !important;
+}
+
+/* LIST TEXT */
+#tickets-container,
+#tokens-list,
+#profiles-list,
+#payments-list {
+    color: #b8cce0 !important;
+
+    font-size: 10px !important;
+}
+
+/* TOKEN INPUT ROW */
+#tab-tokens .flex.gap-3 {
+    gap: 5px !important;
+}
+
+/* SETTINGS */
+#tab-settings .space-y-4 {
+    gap: 7px !important;
+}
+
+/* SETTINGS TEXT */
+#tab-settings label {
+    color: #b9cce0 !important;
+
+    font-size: 10px !important;
+}
+
+/* PROFILE / PAYMENT GRIDS */
+#tab-profile .grid,
+#tab-payment .grid {
+    gap: 5px !important;
+}
+
+/* PROFILE / PAYMENT BUTTONS */
+#tab-profile button,
+#tab-payment button {
+    padding: 4px 8px !important;
+}
+
+/* CLOCK */
+#live-clock {
+    color: #72c7f7 !important;
+
+    font-size: 9px !important;
+
+    font-weight: 600;
+}
+
+/* BROWSER BUTTONS */
+#browser-status-panel button {
+    background: rgba(12, 29, 48, 0.85) !important;
+
+    border-color: rgba(80, 160, 220, 0.20) !important;
+
+    padding: 3px 6px !important;
+
+    border-radius: 5px !important;
+}
+
+#browser-status-panel img {
+    width: 17px !important;
+    height: 17px !important;
+}
+
+/* SMALLER OUTER SPACING ON ALL TABS */
+#tab-tickets,
+#tab-tokens,
+#tab-settings,
+#tab-profile,
+#tab-payment {
+    padding: 0 !important;
+}
+
+/* TOKEN / PROFILE / PAYMENT MAIN PANEL */
+#tab-tokens .bg-white,
+#tab-settings .bg-white,
+#tab-profile .bg-white,
+#tab-payment .bg-white {
+    padding: 5px !important;
+}
+
+/* REMOVE LARGE SECTION SHADOWS */
+#tab-tickets > div,
+#tab-tokens > div,
+#tab-settings > div,
+#tab-profile > div,
+#tab-payment > div {
+    box-shadow: none !important;
+}
+
+/* DARK SCROLLBAR */
+#scrollableContainer::-webkit-scrollbar {
+    width: 6px;
+}
+
+#scrollableContainer::-webkit-scrollbar-track {
+    background: #07111f;
+}
+
+#scrollableContainer::-webkit-scrollbar-thumb {
+    background: #1b4f75;
+    border-radius: 10px;
+}
+
+#scrollableContainer::-webkit-scrollbar-thumb:hover {
+    background: #287aa8;
+}
+
     </style>
 </head>
 
@@ -317,10 +818,11 @@ body {
                                     Train Number
                                 </label>
 
-                                <input type="text"
-                                       id="inp-train"
-                                       value=" "
-                                       class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+<input type="text"
+       id="inp-train"
+       value=""
+       placeholder="Train No. or Name"
+       class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
                             </div>
 
                             <div>
@@ -328,11 +830,12 @@ body {
                                     From Station
                                 </label>
 
-                               <input type="text"
-                                        id="inp-from"
-                                     value=" "
-                                   oninput="this.value = this.value.toUpperCase()"
-                                     class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+<input type="text"
+       id="inp-from"
+       value=""
+       placeholder="From Station"
+       oninput="this.value = this.value.toUpperCase()"
+       class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
                                 </div>
 
                             <div>
@@ -340,11 +843,12 @@ body {
                                     To Station
                                 </label>
 
-                                <input type="text"
-                                         id="inp-to"
-                                      value=" "
-                                    oninput="this.value = this.value.toUpperCase()"
-                                      class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+<input type="text"
+       id="inp-to"
+       value=""
+       placeholder="To Station"
+       oninput="this.value = this.value.toUpperCase()"
+       class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
                              </div>
 
                         </div>
@@ -960,7 +1464,8 @@ let editingTicketIndex = -1;
 
 
 /* =========================================================
-   PASSENGER INPUTS
+   PASSENGER INPUTS - COMPACT DARK UI
+   IDs and functionality remain unchanged
 ========================================================= */
 
 function renderPassengerInputs() {
@@ -978,69 +1483,40 @@ function renderPassengerInputs() {
 
         html += `
 
-        <div class="grid grid-cols-4 gap-2 bg-slate-50 p-2 rounded border border-slate-200">
+        <div class="grid grid-cols-4 gap-2">
 
-            <div>
-                <label class="text-slate-600 block mb-1 text-[10px]">
-                    Name ${i}
-                </label>
+            <input
+                type="text"
+                id="p-name-${i}"
+                placeholder="Enter full name"
+                autocomplete="off"
+            >
 
-                <input
-                    type="text"
-                    id="p-name-${i}"
-                    placeholder="Name"
-                    class="w-full bg-white border border-slate-300 rounded p-1 text-slate-800"
-                >
-            </div>
+            <input
+                type="number"
+                id="p-age-${i}"
+                placeholder="Age"
+                min="1"
+                max="120"
+            >
 
+            <select
+                id="p-gender-${i}"
+            >
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+            </select>
 
-            <div>
-                <label class="text-slate-600 block mb-1 text-[10px]">
-                    Age ${i}
-                </label>
+            <select
+                id="p-berth-${i}"
+            >
+                <option value="No Preference">No Preference</option>
+                <option value="Lower">Lower</option>
+                <option value="Middle">Middle</option>
+                <option value="Upper">Upper</option>
+                <option value="Side Lower">Side Lower</option>
+            </select>
 
-                <input
-                    type="number"
-                    id="p-age-${i}"
-                    placeholder="Age"
-                    class="w-full bg-white border border-slate-300 rounded p-1 text-slate-800"
-                >
-            </div>
-
-
-            <div>
-                <label class="text-slate-600 block mb-1 text-[10px]">
-                    Gender ${i}
-                </label>
-
-                <select
-                    id="p-gender-${i}"
-                    class="w-full bg-white border border-slate-300 rounded p-1 text-slate-800">
-
-                    <option>Male</option>
-                    <option>Female</option>
-
-                </select>
-            </div>
-
-
-            <div>
-                <label class="text-slate-600 block mb-1 text-[10px]">
-                    Berth ${i}
-                </label>
-
-                <select
-                    id="p-berth-${i}"
-                    class="w-full bg-white border border-slate-300 rounded p-1 text-slate-800">
-
-                    <option>No Preference</option>
-                    <option>Lower</option>
-                    <option>Middle</option>
-                    <option>Upper</option>
-                    <option>Side Lower</option>
-
-                </select>
-            </div>
         </div>
 
         `;
@@ -1048,7 +1524,6 @@ function renderPassengerInputs() {
 
     container.innerHTML = html;
 }
-
 
 /* =========================================================
    SAVE TICKET
@@ -1204,11 +1679,11 @@ function renderTickets() {
 
                     <div class="flex items-center gap-2 flex-wrap">
 
-                        <span class="font-bold text-slate-800">
+                        <span class="font-bold text-slate-white">
                             ${escapeHtml(t.train)}
                         </span>
 
-                        <span class="text-slate-600">
+                        <span class="text-slate-white">
                             ${escapeHtml(t.from)}
                             →
                             ${escapeHtml(t.to)}
@@ -2110,7 +2585,7 @@ function renderProfiles() {
                 }
 
                 return `
-                    <div class="bg-slate-50 p-2 rounded border border-slate-200 flex justify-between items-center text-slate-800">
+                    <div class="bg-slate-50 p-2 rounded border border-slate-200 flex justify-between items-center text-slate-white">
                         <span>👤 ${escapeHtml(username)}</span>
 
                         <button
@@ -2234,7 +2709,7 @@ function renderPayments() {
             paymentMethods.map(
                 (p, idx) => `
 
-                <div class="bg-slate-50 p-2 rounded border border-slate-200 flex justify-between items-center text-slate-800">
+                <div class="bg-slate-50 p-2 rounded border border-slate-200 flex justify-between items-center text-white">
 
                     <span>
                         💳 ${escapeHtml(p)}
@@ -2341,7 +2816,7 @@ function renderTokens() {
         tokensList.map(
             t => `
 
-            <div class="bg-slate-50 p-2 rounded border border-slate-200 font-mono text-xs text-slate-800">
+            <div class="bg-slate-50 p-2 rounded border border-slate-200 font-mono text-xs text-slate-white">
 
                 🔑 ${escapeHtml(t)}
 

@@ -55,7 +55,7 @@ ipcMain.handle(
     new BrowserWindow({
 
         width: 340,
-        height: 240,
+        height: 220,
 
         parent: null,
         modal: false,
