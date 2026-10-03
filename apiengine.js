@@ -327,6 +327,9 @@ async autoLogin(username, password) {
         `[AUTO LOGIN ${this.browserType}] Opening IRCTC page...`
     );
 
+    const currentUrl = this.page.url();
+
+if (!currentUrl.includes('/nget/train-search')) {
     await this.page.goto(
         'https://www.irctc.co.in/nget/train-search',
         {
@@ -334,6 +337,11 @@ async autoLogin(username, password) {
             timeout: 30000
         }
     );
+} else {
+    console.log(
+        `[AUTO LOGIN ${this.browserType}] Train-search page already open. Skipping reload.`
+    );
+}
 
     console.log(
         `[AUTO LOGIN ${this.browserType}] IRCTC page loaded.`
@@ -365,7 +373,7 @@ try {
 
         },
         {
-            timeout: 5000
+            timeout: 2500
         }
     );
 
@@ -400,7 +408,7 @@ try {
         );
 
         await new Promise(resolve =>
-            setTimeout(resolve, 1000)
+            setTimeout(resolve, 300)
         );
 
     } else {
@@ -421,7 +429,7 @@ try {
     // WAIT FOR PAGE TO SETTLE
     // ------------------------------------------
     await new Promise(resolve =>
-        setTimeout(resolve, 1500)
+        setTimeout(resolve, 500)
     );
 
     // ==========================================
@@ -503,7 +511,7 @@ if (menuButton) {
     }
 
     await new Promise(resolve =>
-        setTimeout(resolve, 1000)
+        setTimeout(resolve, 500)
     );
 
 } else {
@@ -615,9 +623,6 @@ if (menuButton) {
     await this.page.type(
         usernameSelector,
         username,
-        {
-            delay: 30
-        }
     );
 
     console.log(
@@ -672,9 +677,6 @@ if (menuButton) {
     await this.page.type(
         passwordSelector,
         password,
-        {
-            delay: 30
-        }
     );
 
     console.log(
@@ -1520,7 +1522,7 @@ result = await this.page.evaluate(script);
     
     async finalFareAndPassengerEnquiry(bookingData) {
     this.sendProgress('Step 4', 'Executing full automated booking flow...', 65);
-    await this.delay(2000);
+    await this.delay(1500);
 
     const passengers = Array.isArray(bookingData.passengers) ? bookingData.passengers : [];
     if (!passengers.length) throw new Error('Passenger list empty hai.');
@@ -1619,14 +1621,14 @@ const base64Payload = Buffer.from(rawPayload).toString('base64');
                 stationInputs[0].value = payload.fromStation;
                 stationInputs[0].dispatchEvent(new Event('input', { bubbles: true }));
                 stationInputs[0].dispatchEvent(new Event('keyup', { bubbles: true }));
-                await new Promise(function(r) { setTimeout(r, 500); });
+                await new Promise(function(r) { setTimeout(r, 300); });
                 
                 var panel = document.querySelector('ul.ui-autocomplete-items, ul.p-autocomplete-items, .ui-autocomplete-panel, .p-autocomplete-panel');
                 if (panel) {
                     var firstItem = panel.querySelector('li');
                     if (firstItem) firstItem.click();
                 }
-                await new Promise(function(r) { setTimeout(r, 500); });
+                await new Promise(function(r) { setTimeout(r, 300); });
             }
 
             var targetToInput = stationInputs[1] || stationInputs[0];
@@ -1636,14 +1638,14 @@ const base64Payload = Buffer.from(rawPayload).toString('base64');
                 targetToInput.value = payload.toStation;
                 targetToInput.dispatchEvent(new Event('input', { bubbles: true }));
                 targetToInput.dispatchEvent(new Event('keyup', { bubbles: true }));
-                await new Promise(function(r) { setTimeout(r, 500); });
+                await new Promise(function(r) { setTimeout(r, 300); });
 
                 var panel2 = document.querySelector('ul.ui-autocomplete-items, ul.p-autocomplete-items, .ui-autocomplete-panel, .p-autocomplete-panel');
                 if (panel2) {
                     var firstItem2 = panel2.querySelector('li');
                     if (firstItem2) firstItem2.click();
                 }
-                await new Promise(function(r) { setTimeout(r, 500); });
+                await new Promise(function(r) { setTimeout(r, 300); });
             }
 
             // 2. Journey Date - Smart Month Navigation & Popup Clicker
@@ -1726,7 +1728,7 @@ const base64Payload = Buffer.from(rawPayload).toString('base64');
                         if (targetCell) {
                             targetCell.click();
                             diagnosticLogs.push("Journey Date successfully selected from calendar: " + targetDay + " " + targetMonthName + " " + targetYear);
-                            await new Promise(function(r) { setTimeout(r, 500); });
+                            await new Promise(function(r) { setTimeout(r, 300); });
                         } else {
                             diagnosticLogs.push("WARNING: Specific day cell nahi mila, fallback input use kar rahe hain.");
                             var dateInput = document.querySelector('p-calendar input');
@@ -3376,7 +3378,7 @@ diagnosticLogs.push(
          if (addBtn) {
              addBtn.click();
              diagnosticLogs.push("Clicked 'Add Passenger' for row " + (i + 1));
-             await new Promise(function(r) { setTimeout(r, 500); }); // Naye row ke load hone ka wait
+             await new Promise(function(r) { setTimeout(r, 300); }); // Naye row ke load hone ka wait
          } else {
              diagnosticLogs.push("Warning: 'Add Passenger' button nahi mila, checking existing inputs...");
          }
@@ -3424,7 +3426,7 @@ diagnosticLogs.push(
          ageInput.dispatchEvent(new Event('change', { bubbles: true }));
          ageInput.dispatchEvent(new Event('blur', { bubbles: true }));
          diagnosticLogs.push("Filled age for passenger " + (i + 1));
-         await new Promise(function(r) { setTimeout(r, 200); });
+         await new Promise(function(r) { setTimeout(r, 100); });
      }
 
                 // 3. Gender Select - Native HTML SELECT + Angular
@@ -3688,7 +3690,7 @@ try {
             );
 
             await new Promise(function (resolve) {
-                setTimeout(resolve, 200);
+                setTimeout(resolve, 100);
             });
 
             diagnosticLogs.push(
@@ -3762,7 +3764,7 @@ try {
     mobileInput.dispatchEvent(new Event("input", { bubbles: true }));
     mobileInput.dispatchEvent(new Event("change", { bubbles: true }));
     
-    await new Promise(function(r) { setTimeout(r, 200); });
+    await new Promise(function(r) { setTimeout(r, 100); });
 
     // Ab naya mobile number character-by-character type karo
     var mobStr = String(mobileVal);
@@ -3795,7 +3797,7 @@ try {
 }
 
 await new Promise(function(r) {
-    setTimeout(r, 200);
+    setTimeout(r, 100);
 });
 
 // =========================================================
@@ -4074,7 +4076,7 @@ if (!upiSelected) {
     diagnosticLogs.push("WARNING: BHIM/UPI option could not be selected!");
 }
 
-await new Promise(function(r) { setTimeout(r, 500); });
+await new Promise(function(r) { setTimeout(r, 300); });
 
         
 // =================================================
@@ -4537,14 +4539,50 @@ if (paymentIsIPay) {
 
     diagnosticLogs.push("STEP: IRCTC iPay select kar rahe hain.");
 
-    var ipay = Array.from(document.querySelectorAll('div.bank-type'))
-    .find(function(el) {
-        return (el.innerText || el.textContent || '')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .toUpperCase()
-            .includes('IRCTC IPAY');
+var ipay = null;
+
+for (var ipayTry = 0; ipayTry < 30; ipayTry++) {
+
+    try {
+
+        ipay = Array.from(
+            document.querySelectorAll('div.bank-type')
+        ).find(function(el) {
+
+            if (
+                !el ||
+                !el.isConnected ||
+                el.offsetParent === null
+            ) {
+                return false;
+            }
+
+            var txt =
+                String(
+                    el.innerText ||
+                    el.textContent ||
+                    ''
+                )
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toUpperCase();
+
+            return txt.indexOf('IRCTC IPAY') !== -1;
+        });
+
+        if (ipay) {
+            diagnosticLogs.push(
+                "SUCCESS: IRCTC iPay option found."
+            );
+            break;
+        }
+
+    } catch (e) {}
+
+    await new Promise(function(resolve) {
+        setTimeout(resolve, 100);
     });
+}
 
 if (!ipay) {
     return {
@@ -5505,7 +5543,7 @@ return {
     // ==========================================
     async bookingInitPayment(bookingData, clientTransactionId, totalAmount = null, bankId = 113) {
         this.sendProgress('Step 5', 'Payment gateway and QR code ready.', 100);
-        await this.delay(1000);
+        await this.delay(300);
 
         return {
             status: 200,
@@ -5719,7 +5757,7 @@ if (String(bookingData.payment || bookingData.paymentType || bookingData.payment
 
     console.log('[IPAY] Waiting for iPay QR page...');
 
-    await new Promise(r => setTimeout(r, 2500));
+    await new Promise(r => setTimeout(r, 1500));
 
     for (let i = 0; i < 30; i++) {
         try {
@@ -5741,7 +5779,7 @@ if (upi) {
     throw new Error('iPay UPI button nahi mila.');
 }
 
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 300));
 
     const qrPay = await this.page.$('label[for="qr-click"]');
 
@@ -5768,7 +5806,7 @@ for (let i = 0; i < 30; i++) {
 
         }
 await new Promise(function(r) {
-    setTimeout(r, 2500);
+    setTimeout(r, 1500);
 });
 
 console.log('[QR] Waiting for payment page to load...');
