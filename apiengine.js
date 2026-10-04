@@ -621,9 +621,12 @@ if (menuButton) {
     );
 
     await this.page.type(
-        usernameSelector,
-        username,
-    );
+    usernameSelector,
+    username,
+    {
+        delay: 100
+    }
+);
 
     console.log(
         `[AUTO LOGIN ${this.browserType}] Username filled.`
@@ -675,9 +678,12 @@ if (menuButton) {
     );
 
     await this.page.type(
-        passwordSelector,
-        password,
-    );
+    passwordSelector,
+    password,
+    {
+        delay: 100
+    }
+);
 
     console.log(
         `[AUTO LOGIN ${this.browserType}] Password filled.`
@@ -764,6 +770,8 @@ this.sendProgress(
     20
 );
 }
+
+
 
     // ==========================================
     // LOAD SESSION
@@ -3827,7 +3835,7 @@ try {
 }
 
 await new Promise(function(r) {
-    setTimeout(r, 100);
+    setTimeout(r, 500);
 });
 
 // =========================================================
@@ -4137,7 +4145,42 @@ if (!continueBtn1) {
     };
 }
 
+// Passenger + confirmation + payment selection ke baad
+// Angular form state ko settle hone ka short wait.
+await new Promise(function(r) {
+    setTimeout(r, 500);
+});
+
+// Button ko fresh DOM se dobara locate karo.
+continueBtn1 = Array.from(
+    document.querySelectorAll('button')
+).find(function(b) {
+
+    var t = (b.innerText || '')
+        .trim()
+        .toLowerCase();
+
+    return (
+        t.indexOf('continue') !== -1 &&
+        b.offsetParent !== null &&
+        !b.disabled
+    );
+});
+
+if (!continueBtn1) {
+
+    return {
+        success: false,
+        error: 'First continue button 500ms state wait ke baad nahi mila.',
+        logs: diagnosticLogs
+    };
+}
+
 continueBtn1.click();
+
+diagnosticLogs.push(
+    "First Continue button clicked after 500ms state-settling wait."
+);
 
 diagnosticLogs.push(
     "First Continue button clicked."
@@ -4149,7 +4192,7 @@ diagnosticLogs.push(
 // =================================================
 
 var firstRetry = 0;
-var firstRetryLimit = 60;
+var firstRetryLimit = 10;
 var firstWaitCycles = 0;
 var firstWaitCycleLimit = 120;
 
@@ -4165,7 +4208,7 @@ for (;;) {
     }
 
     await new Promise(function(r) {
-        setTimeout(r, 500);
+        setTimeout(r, 1500);
     });
 
     var txt =
@@ -4211,7 +4254,7 @@ if (close) {
             return {
                 success: false,
                 error:
-                    'First Continue failed after 60 retries.',
+                    'First Continue failed after 10 retries.',
                 logs: diagnosticLogs
             };
         }
@@ -4236,12 +4279,25 @@ if (close) {
 
         if (continueBtn1) {
 
-            continueBtn1.click();
+    await new Promise(function(r) {
+        setTimeout(r, 1500);
+    });
 
-            diagnosticLogs.push(
-                "First Continue retry clicked."
-            );
-        }
+    if (
+        continueBtn1.offsetParent !== null &&
+        !continueBtn1.disabled
+    ) {
+        continueBtn1.click();
+
+        diagnosticLogs.push(
+            "First Continue retry clicked after 1500ms wait."
+        );
+    } else {
+        diagnosticLogs.push(
+            "First Continue button not ready yet. Waiting for next cycle."
+        );
+    }
+}
 
         continue;
     }
@@ -4383,7 +4439,7 @@ diagnosticLogs.push(
 // =================================================
 
 var secondRetry = 0;
-var secondRetryLimit = 60;
+var secondRetryLimit = 10;
 var secondWaitCycles = 0;
 var secondWaitCycleLimit = 120;
 
@@ -4436,7 +4492,7 @@ if (close3) {
     } catch (e) {}
 
     await new Promise(function(r) {
-        setTimeout(r, 300);
+        setTimeout(r, 1500);
     });
 }
 
@@ -4445,7 +4501,7 @@ if (close3) {
             return {
                 success: false,
                 error:
-                    'Second Continue failed after 60 retries.',
+                    'Second Continue failed after 10 retries.',
                 logs: diagnosticLogs
             };
         }

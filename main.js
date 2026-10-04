@@ -2230,9 +2230,8 @@ ipcMain.handle(
             );
 
             console.log(
-                '[DEBUG PAYLOAD]',
-                JSON.stringify(payload)
-            );
+    '[DEBUG] Tatkal booking payload received.'
+);
 
             const targetBrowser =
                 payload.browserType ||
