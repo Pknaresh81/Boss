@@ -1025,12 +1025,29 @@ this.sendProgress(
         }
     }
 
-    const headers = {
+    let browserUserAgent =
+    'Mozilla/5.0';
 
-        'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+if (this.page && !this.page.isClosed()) {
+    try {
+        browserUserAgent =
+            await this.page.evaluate(
+                () => navigator.userAgent
+            );
+    } catch (e) {
+        console.warn(
+            `[HEADERS ${this.browserType}] User-Agent read failed:`,
+            e.message
+        );
+    }
+}
 
-        'Accept':
+const headers = {
+
+    'User-Agent':
+        browserUserAgent,
+
+    'Accept':
             'application/json, text/plain, */*',
 
         'Accept-Language':
@@ -1093,9 +1110,17 @@ this.sendProgress(
             }
 
             if (rawText.trim().startsWith('<')) {
-                console.error('[API] Error: Received HTML instead of JSON. Possible Akamai block or redirect:', rawText.substring(0, 150));
-                return null;
-            }
+    console.error(
+        '[API] Expected JSON but received HTML/error content.',
+        {
+            status: response.status,
+            statusText: response.statusText || '',
+            responseLength: rawText.length
+        }
+    );
+
+    return null;
+}
 
             return JSON.parse(rawText);
         } catch (err) {
@@ -1299,32 +1324,31 @@ this.validateResponse(
                         trainNumber: "${trainNo}"
                     };
 
-const stealthHeaders = {
-                        "Accept": "application/json, text/plain, */*",
-                        "Accept-Language": "en-US,en;q=0.9",
-                        "Cache-Control": "no-cache",
-                        "Pragma": "no-cache",
-                        "Sec-Ch-Ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
-                        "Sec-Ch-Ua-Mobile": "?0",
-                        "Sec-Ch-Ua-Platform": '"Windows"',
-                        "Sec-Fetch-Site": "same-origin",
-                        "Sec-Fetch-Mode": "cors",
-                        "Sec-Fetch-Dest": "empty",
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-                    };
+const requestHeaders = {
+    "Accept":
+        "application/json, text/plain, */*",
+
+    "Accept-Language":
+        "en-US,en;q=0.9",
+
+    "Content-Type":
+        "application/json; charset=UTF-8",
+
+    "Client-Device-Id":
+        "WEB"
+};
 
                     const response = await fetch(url, {
                         method: "POST",
-                        headers: {
-                        ...stealthHeaders,    
-                        "Content-Type": "application/json; charset=UTF-8",
-                            "Accept": "application/json, text/plain, */*",
-                            "Accept-Language": "en-US,en;q=0.9",
-                            "Client-Device-Id": "WEB",
-                            "Greq": String(new Date().getTime()),
-                            "Authorization": token,
-                            "jwttoken": token.replace('Bearer ', '')
-                        },
+                       headers: {
+    ...requestHeaders,
+    "Greq":
+        String(new Date().getTime()),
+    "Authorization":
+        token,
+    "jwttoken":
+        token.replace('Bearer ', '')
+},
                         credentials: "include",
                         body: JSON.stringify(payload)
                     });
@@ -1522,10 +1546,17 @@ result = await this.page.evaluate(script);
                 if (Array.isArray(parsed)) return parsed;
                 if (parsed && Array.isArray(parsed.masterPassengerList)) return parsed.masterPassengerList;
             }
-        } catch (error) {}
+        } catch (error) {
+    console.warn(
+        `[MasterPassengerList ${this.browserType}] Request failed:`,
+        error && error.message
+            ? error.message
+            : String(error)
+    );
+}
 
-        return null;
-    }
+return null;
+ }
 
     
     async finalFareAndPassengerEnquiry(bookingData) {
@@ -1603,10 +1634,39 @@ const base64Payload = Buffer.from(rawPayload).toString('base64');
             // Agar browser IRCTC par nahi hai, toh pehle wahan jayein aur wait karein
             if (window.location.href.indexOf('irctc.co.in') === -1) {
                 diagnosticLogs.push("Navigating to IRCTC train search page...");
-                window.location.href = "https://www.irctc.co.in/nget/train-search";
-                
-                // Page load hone ke liye 5-6 second ka proper wait karein
-                await new Promise(function(r) { setTimeout(r, 2000); });
+                window.location.href =
+    "https://www.irctc.co.in/nget/train-search";
+
+// Browser navigation ke baad actual DOM ready hone ka wait.
+var navigationWaitStart = Date.now();
+
+while (
+    Date.now() - navigationWaitStart < 10000
+) {
+    var currentHref =
+        window.location.href || '';
+
+    var readyState =
+        document.readyState;
+
+    if (
+        currentHref.indexOf('irctc.co.in') !== -1 &&
+        (
+            readyState === 'interactive' ||
+            readyState === 'complete'
+        )
+    ) {
+        break;
+    }
+
+    await new Promise(function(r) {
+        setTimeout(r, 250);
+    });
+}
+
+await new Promise(function(r) {
+    setTimeout(r, 500);
+});
             } else {
                 // Agar pehle se IRCTC par hai, tab bhi thoda sthir hone ka wait dein
                 await new Promise(function(r) { setTimeout(r, 500); });
@@ -3894,7 +3954,9 @@ try {
 
         confirmCheckbox.click();
 
-        await automationWait(150);
+        await new Promise(function(r) {
+    setTimeout(r, 150);
+});
 
 
         if (confirmCheckbox.checked) {
@@ -3959,7 +4021,9 @@ try {
 
                 confirmLabel.click();
 
-                await automationWait(150);
+                await new Promise(function(r) {
+    setTimeout(r, 150);
+});
 
 
                 var verifiedCheckbox =
@@ -4180,10 +4244,6 @@ continueBtn1.click();
 
 diagnosticLogs.push(
     "First Continue button clicked after 500ms state-settling wait."
-);
-
-diagnosticLogs.push(
-    "First Continue button clicked."
 );
 
 
@@ -5472,7 +5532,7 @@ for (;;) {
 
 
             await new Promise(function(resolve) {
-                setTimeout(resolve, 300);
+                setTimeout(resolve, 1000);
             });
 
             diagnosticLogs.push(
@@ -5487,17 +5547,25 @@ for (;;) {
         // PAYMENT / QR PAGE REACHED
         // ---------------------------------------------
 
-        if (
-            payText.includes('qr') ||
-            payText.includes('payment') ||
-            payText.includes('paytm') ||
-            payText.includes('phonepe') ||
-            payText.includes('ipay')
-        ) {
+        var currentPaymentUrl = '';
 
-            payBookSuccess = true;
-            break;
-        }
+try {
+    currentPaymentUrl =
+        String(window.location.href || '').toLowerCase();
+} catch (e) {}
+
+var paymentPageReached =
+    currentPaymentUrl.includes('payment') ||
+    currentPaymentUrl.includes('bank') ||
+    currentPaymentUrl.includes('pay') ||
+    payText.includes('qr code') ||
+    payText.includes('scan qr');
+
+if (paymentPageReached) {
+
+    payBookSuccess = true;
+    break;
+}
     }
 
 
@@ -5547,7 +5615,7 @@ if (!payBookRetryAlreadyCounted) {
     }
 
     await new Promise(function(resolve) {
-        setTimeout(resolve, 300);
+        setTimeout(resolve, 1000);
     });
 }
 
