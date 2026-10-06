@@ -656,7 +656,6 @@ async function launchBrowser(
         '--window-size=500,680', // <-- Specific width aur height force karein
         '--window-position=400,30', // <-- Screen position set karein
         '--no-default-browser-check',
-        config.type === 'WEB2' ? '--inprivate' : '--incognito',
         targetUrl
     ],
     {
@@ -1112,6 +1111,8 @@ ipcMain.handle(
     }
 );
 
+const activeBookingBrowsers = new Set();
+
 // ==========================================
 // START BOOKING HANDLER
 // ==========================================
@@ -1119,10 +1120,51 @@ ipcMain.handle(
 ipcMain.handle(
     'start-booking',
     async (
-        event,
-        bookingData,
-        targetBrowser
-    ) => {
+    event,
+    bookingData,
+    targetBrowser,
+    windowId
+) => {
+
+        const bookingBrowser =
+            String(
+                targetBrowser || 'WEB'
+            )
+            .trim()
+            .toUpperCase();
+
+
+        // ==========================================
+        // DUPLICATE BOOKING PROTECTION
+        // ==========================================
+
+        if (
+            activeBookingBrowsers.has(
+                bookingBrowser
+            )
+        ) {
+
+            console.warn(
+                `[MAIN] Booking already running for ${bookingBrowser}. Duplicate request blocked.`
+            );
+
+            return {
+                success: false,
+                error:
+                    `Booking already running for ${bookingBrowser}.`
+            };
+        }
+
+
+        // Lock BEFORE starting browser/API work
+        activeBookingBrowsers.add(
+            bookingBrowser
+        );
+
+        console.log(
+            `[MAIN] Booking lock acquired: ${bookingBrowser}`
+        );
+
 
         try {
 
@@ -1288,13 +1330,17 @@ try {
                 `[${config.type}] Connected to page: ${await page.url()}`
             );
 
-            const apiEngine =
-    new APIEngine(
-        page,
-        win,
-        null,
-        config.type
-    );
+            const miniWin =
+    windowId
+        ? miniAutomationWindows.get(windowId)
+        : null;
+
+        const apiEngine = new APIEngine(
+    page,
+    miniWin,
+    null,
+    config.type
+);
 
 // ==========================================
 // NORMALIZE IRCTC CREDENTIALS
@@ -1329,7 +1375,7 @@ const result =
 
             return result;
 
-        } catch (error) {
+                } catch (error) {
 
             console.error(
                 '[MAIN] Error during booking flow:',
@@ -1341,6 +1387,21 @@ const result =
                 error:
                     error.message
             };
+
+        } finally {
+
+            // ==========================================
+            // RELEASE BOOKING LOCK
+            // Runs on success, error, or exception
+            // ==========================================
+
+            activeBookingBrowsers.delete(
+                bookingBrowser
+            );
+
+            console.log(
+                `[MAIN] Booking lock released: ${bookingBrowser}`
+            );
         }
     }
 );

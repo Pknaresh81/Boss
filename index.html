@@ -1231,19 +1231,62 @@ if (ipcRenderer) {
             const resultTag = document.getElementById(data.winId + '-result');
             
             if (statusBanner) {
-                if (data.step && data.step.toLowerCase() === 'error') {
-                    statusBanner.style.background = '#dc2626';
-                    statusBanner.innerText = String(data.message || 'ERROR').toUpperCase();
-                } else {
-                    statusBanner.style.background = '#2563eb';
-                    statusBanner.innerText = String(data.step || 'PROCESSING').toUpperCase();
-                }
-            }
+
+    const stepName =
+        String(data.step || '').trim().toLowerCase();
+
+    const statusMessage =
+        String(
+            data.message ||
+            data.step ||
+            'PROCESSING'
+        );
+
+    if (
+        stepName === 'error' ||
+        stepName === 'high load' ||
+        statusMessage.toLowerCase().includes('unable to process request')
+    ) {
+
+        statusBanner.style.background = '#dc2626';
+
+    } else {
+
+        statusBanner.style.background = '#2563eb';
+
+    }
+
+    statusBanner.innerText =
+        statusMessage;
+}
 
             if (resultTag) {
-                resultTag.innerText = String(data.message || data.step || 'RUNNING');
-                resultTag.style.background = data.step && data.step.toLowerCase() === 'error' ? '#fecaca' : '#fef08a';
-            }
+
+    const stepName =
+        String(data.step || '').trim().toLowerCase();
+
+    const statusMessage =
+        String(
+            data.message ||
+            data.step ||
+            'RUNNING'
+        );
+
+    const isErrorStatus =
+        stepName === 'error' ||
+        stepName === 'high load' ||
+        statusMessage
+            .toLowerCase()
+            .includes('unable to process request');
+
+    resultTag.innerText =
+        statusMessage;
+
+    resultTag.style.background =
+        isErrorStatus
+            ? '#fecaca'
+            : '#fef08a';
+}
         }
     });
 }

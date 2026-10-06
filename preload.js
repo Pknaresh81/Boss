@@ -28,14 +28,19 @@ prepareBrowsers: () =>
         // ==========================================
 
         startBooking: (
-            bookingData,
-            targetBrowser
-        ) =>
-            ipcRenderer.invoke(
-                'start-booking',
-                bookingData,
-                targetBrowser
-            ),
+    bookingData,
+    targetBrowser,
+    windowId
+) =>
+
+    ipcRenderer.invoke(
+
+        'start-booking',
+        bookingData,
+        targetBrowser,
+        windowId
+
+    ),
 
         // ==========================================
         // TATKAL BOOKING
@@ -194,7 +199,15 @@ onAppUpdateDownloaded: (callback) =>
                     event,
                     data
                 ) => callback(data)
-            )
+            ),
 
+        onBookingProgress: (callback) =>
+            ipcRenderer.on(
+                'booking-progress',
+                (
+                    event,
+                    data
+                ) => callback(data)
+            )            
     }
 );

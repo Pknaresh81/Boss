@@ -54,6 +54,23 @@ class APIEngine {
     }
 
     // ==========================================
+// HELPER: LIVE BOOKING STATUS
+// Browser-side diagnostic log ko UI progress mein convert karta hai
+// ==========================================
+sendBookingStatus(message, stepName = 'BOOKING', percentage = 0) {
+
+    console.log(
+        `[BOOKING STATUS] ${message} (${percentage}%)`
+    );
+
+    this.sendProgress(
+        stepName,
+        message,
+        percentage
+    );
+}
+
+    // ==========================================
 // HELPER: CONTROLLED DELAY (MS)
 // ==========================================
 delay(ms) {
@@ -80,6 +97,83 @@ getRetryDelay(attempt, baseDelay = 1000, maxDelay = 5000) {
     );
 
     return delayMs;
+}
+
+// ==========================================
+// HELPER: DETECT HIGH LOAD / RETRY PAGE
+// ==========================================
+async detectRetryPageStatus() {
+
+    if (!this.page || this.page.isClosed()) {
+        return null;
+    }
+
+    try {
+
+        const pageStatus = await this.page.evaluate(() => {
+
+            const bodyText =
+                document.body
+                    ? document.body.innerText || ''
+                    : '';
+
+            const text =
+                bodyText
+                    .replace(/\s+/g, ' ')
+                    .trim();
+
+            const lowerText =
+                text.toLowerCase();
+
+            const highLoad =
+                lowerText.includes('high load');
+
+            const unableProcess =
+                lowerText.includes('unable to process request') ||
+                lowerText.includes('unable to process the request');
+
+            if (highLoad) {
+                return {
+                    type: 'HIGH LOAD',
+                    message: text
+                };
+            }
+
+            if (unableProcess) {
+                return {
+                    type: 'UNABLE TO PROCESS REQUEST',
+                    message: text
+                };
+            }
+
+            return null;
+        });
+
+        if (pageStatus) {
+
+            this.sendProgress(
+                'HIGH LOAD',
+                `${pageStatus.type}..... ${pageStatus.message}`,
+                20
+            );
+
+            console.warn(
+                `[RETRY PAGE ${this.browserType}] ${pageStatus.type}:`,
+                pageStatus.message
+            );
+
+            return pageStatus;
+        }
+
+    } catch (error) {
+
+        console.warn(
+            `[RETRY PAGE ${this.browserType}] Page status detection failed:`,
+            error.message
+        );
+    }
+
+    return null;
 }
 
 // ==========================================
@@ -764,10 +858,10 @@ try {
     );
 }
 
-this.sendProgress(
-    'Login',
-    'Username/password filled. SIGN IN clicked. Please complete CAPTCHA/OTP manually if required.',
-    20
+this.sendBookingStatus(
+    'USER LOGIN.....',
+    'USER LOGIN',
+    10
 );
 }
 
@@ -1025,29 +1119,12 @@ this.sendProgress(
         }
     }
 
-    let browserUserAgent =
-    'Mozilla/5.0';
+    const headers = {
 
-if (this.page && !this.page.isClosed()) {
-    try {
-        browserUserAgent =
-            await this.page.evaluate(
-                () => navigator.userAgent
-            );
-    } catch (e) {
-        console.warn(
-            `[HEADERS ${this.browserType}] User-Agent read failed:`,
-            e.message
-        );
-    }
-}
+        'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
 
-const headers = {
-
-    'User-Agent':
-        browserUserAgent,
-
-    'Accept':
+        'Accept':
             'application/json, text/plain, */*',
 
         'Accept-Language':
@@ -1110,17 +1187,9 @@ const headers = {
             }
 
             if (rawText.trim().startsWith('<')) {
-    console.error(
-        '[API] Expected JSON but received HTML/error content.',
-        {
-            status: response.status,
-            statusText: response.statusText || '',
-            responseLength: rawText.length
-        }
-    );
-
-    return null;
-}
+                console.error('[API] Error: Received HTML instead of JSON. Possible Akamai block or redirect:', rawText.substring(0, 150));
+                return null;
+            }
 
             return JSON.parse(rawText);
         } catch (err) {
@@ -1150,7 +1219,14 @@ const headers = {
     // TRAIN SEARCH
     // ==========================================
     async searchTrains(enquiryData) {
-        if (!enquiryData || typeof enquiryData !== 'object') {
+
+    this.sendProgress(
+        'SEARCH TRAIN',
+        'SEARCH TRAIN.....',
+        20
+    );
+
+    if (!enquiryData || typeof enquiryData !== 'object') {
             throw new Error('Train search data invalid hai.');
         }
 
@@ -1208,19 +1284,21 @@ for (let attempt = 1; attempt <= maxAttempts; attempt++) {
 
         if (attempt < maxAttempts) {
 
-            const retryDelay =
-                this.getRetryDelay(
-                    attempt,
-                    1000,
-                    5000
-                );
+    await this.detectRetryPageStatus();
 
-            console.warn(
-                `[API] Temporary failure. Retrying after ${retryDelay}ms...`
-            );
+    const retryDelay =
+        this.getRetryDelay(
+            attempt,
+            1000,
+            5000
+        );
 
-            await this.delay(retryDelay);
-        }
+    console.warn(
+        `[API] Temporary failure. Retrying after ${retryDelay}ms...`
+    );
+
+    await this.delay(retryDelay);
+}
 
     } catch (error) {
 
@@ -1230,19 +1308,21 @@ for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             break;
         }
 
-        const retryDelay =
-            this.getRetryDelay(
-                attempt,
-                1000,
-                5000
-            );
+        await this.detectRetryPageStatus();
 
-        console.warn(
-            `[API] Request error. Retry after ${retryDelay}ms:`,
-            error.message
-        );
+const retryDelay =
+    this.getRetryDelay(
+        attempt,
+        1000,
+        5000
+    );
 
-        await this.delay(retryDelay);
+console.warn(
+    `[API] Request error. Retry after ${retryDelay}ms:`,
+    error.message
+);
+
+await this.delay(retryDelay);
     }
 }
 
@@ -1259,18 +1339,18 @@ this.validateResponse(
 );
         const responseData = await this.parseResponse(response);
 
-        if (responseData === null) {
-            throw new Error('Train search response empty hai.');
-        }
+if (responseData === null) {
+    throw new Error('Train search response empty hai.');
+}
 
-        return responseData;
+return responseData;
     }
 
     // ==========================================
     // 1. CHECK AVAILABILITY AND FARE (BROWSER CONTEXT)
     // ==========================================
     async checkAvailabilityAndFare(bookingData) {
-        this.sendProgress('Step 1', 'Checking train availability & fare...', 15);
+       
         await this.delay(2000);
 
         const jDate = bookingData.journeyDate || bookingData.date;
@@ -1324,31 +1404,32 @@ this.validateResponse(
                         trainNumber: "${trainNo}"
                     };
 
-const requestHeaders = {
-    "Accept":
-        "application/json, text/plain, */*",
-
-    "Accept-Language":
-        "en-US,en;q=0.9",
-
-    "Content-Type":
-        "application/json; charset=UTF-8",
-
-    "Client-Device-Id":
-        "WEB"
-};
+const stealthHeaders = {
+                        "Accept": "application/json, text/plain, */*",
+                        "Accept-Language": "en-US,en;q=0.9",
+                        "Cache-Control": "no-cache",
+                        "Pragma": "no-cache",
+                        "Sec-Ch-Ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+                        "Sec-Ch-Ua-Mobile": "?0",
+                        "Sec-Ch-Ua-Platform": '"Windows"',
+                        "Sec-Fetch-Site": "same-origin",
+                        "Sec-Fetch-Mode": "cors",
+                        "Sec-Fetch-Dest": "empty",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+                    };
 
                     const response = await fetch(url, {
                         method: "POST",
-                       headers: {
-    ...requestHeaders,
-    "Greq":
-        String(new Date().getTime()),
-    "Authorization":
-        token,
-    "jwttoken":
-        token.replace('Bearer ', '')
-},
+                        headers: {
+                        ...stealthHeaders,    
+                        "Content-Type": "application/json; charset=UTF-8",
+                            "Accept": "application/json, text/plain, */*",
+                            "Accept-Language": "en-US,en;q=0.9",
+                            "Client-Device-Id": "WEB",
+                            "Greq": String(new Date().getTime()),
+                            "Authorization": token,
+                            "jwttoken": token.replace('Bearer ', '')
+                        },
                         credentials: "include",
                         body: JSON.stringify(payload)
                     });
@@ -1379,18 +1460,28 @@ result = await this.page.evaluate(script);
                 console.log(`1. Browser POST avlFarenquiry status (Attempt ${attempt}):`, result ? result.status : 0);
 
                 if (!result || result.status !== 200 || !result.body) {
-                    if (attempt < maxRetries) {
-                        await this.delay(2000);
-                        continue;
-                    }
+
+    if (attempt < maxRetries) {
+
+        await this.detectRetryPageStatus();
+
+        await this.delay(2000);
+        continue;
+    }
                     throw new Error('avlFarenquiry browser POST response empty ya invalid hai.');
                 }
 
                 return JSON.parse(result.body);
             } catch (error) {
-                if (attempt >= maxRetries) throw error;
-                await this.delay(2000);
-            }
+
+    if (attempt >= maxRetries) {
+        throw error;
+    }
+
+    await this.detectRetryPageStatus();
+
+    await this.delay(2000);
+}
         }
 
         throw new Error('avlFarenquiry POST failed after maximum retries.');
@@ -1400,7 +1491,7 @@ result = await this.page.evaluate(script);
     // 2. ALTERNATE AVAILABILITY ENQUIRY
     // ==========================================
     async checkAlternateAvailability(bookingData) {
-        this.sendProgress('Step 2', 'Checking alternate train availability...', 30);
+  
         await this.delay(2000);
 
         if (!this.page || this.page.isClosed()) {
@@ -1466,17 +1557,27 @@ if (!this.page || this.page.isClosed()) {
 result = await this.page.evaluate(script);
 
                 if (!result || result.status !== 200 || !result.body) {
-                    if (attempt < maxRetries) {
-                        await this.delay(2000);
-                        continue;
-                    }
+
+    if (attempt < maxRetries) {
+
+        await this.detectRetryPageStatus();
+
+        await this.delay(2000);
+        continue;
+    }
                     throw new Error('altAvlEnq browser response empty ya invalid hai.');
                 }
                 return JSON.parse(result.body);
             } catch (error) {
-                if (attempt >= maxRetries) throw error;
-                await this.delay(2000);
-            }
+
+    if (attempt >= maxRetries) {
+        throw error;
+    }
+
+    await this.detectRetryPageStatus();
+
+    await this.delay(2000);
+}
         }
 
         throw new Error('altAvlEnq failed after maximum retries.');
@@ -1486,7 +1587,7 @@ result = await this.page.evaluate(script);
     // 3. MASTER PASSENGER LIST ENQUIRY
     // ==========================================
     async getMasterPassengerList() {
-        this.sendProgress('Step 3', 'Loading master passenger list...', 45);
+
         await this.delay(2000);
 
         if (!this.page || this.page.isClosed()) return null;
@@ -1546,21 +1647,14 @@ result = await this.page.evaluate(script);
                 if (Array.isArray(parsed)) return parsed;
                 if (parsed && Array.isArray(parsed.masterPassengerList)) return parsed.masterPassengerList;
             }
-        } catch (error) {
-    console.warn(
-        `[MasterPassengerList ${this.browserType}] Request failed:`,
-        error && error.message
-            ? error.message
-            : String(error)
-    );
-}
+        } catch (error) {}
 
-return null;
- }
+        return null;
+    }
 
     
     async finalFareAndPassengerEnquiry(bookingData) {
-    this.sendProgress('Step 4', 'Executing full automated booking flow...', 65);
+
     await this.delay(1500);
 
     const passengers = Array.isArray(bookingData.passengers) ? bookingData.passengers : [];
@@ -1624,8 +1718,42 @@ console.log(
 const base64Payload = Buffer.from(rawPayload).toString('base64');
 
     const browserSideAutomationTask = async function(base64Data) {
-        var payload = JSON.parse(atob(base64Data));
-        var diagnosticLogs = [];
+    var payload = JSON.parse(atob(base64Data));
+    var diagnosticLogs = [];
+
+    // =====================================================
+    // LIVE BOOKING STATUS -> NODE -> ELECTRON UI
+    // =====================================================
+    async function liveProgress(step, message, percentage) {
+
+        diagnosticLogs.push(message);
+
+        try {
+
+            if (
+                typeof window.__bossSendProgress === 'function'
+            ) {
+
+                await window.__bossSendProgress(
+                    step,
+                    message,
+                    percentage
+                );
+
+            }
+
+        } catch (progressError) {
+
+            console.warn(
+                '[LIVE PROGRESS] Bridge error:',
+                progressError &&
+                progressError.message
+                    ? progressError.message
+                    : progressError
+            );
+
+        }
+    }
         try {
             var currentUrl = window.location.href;
             diagnosticLogs.push("Current Browser URL: " + currentUrl);
@@ -1634,39 +1762,10 @@ const base64Payload = Buffer.from(rawPayload).toString('base64');
             // Agar browser IRCTC par nahi hai, toh pehle wahan jayein aur wait karein
             if (window.location.href.indexOf('irctc.co.in') === -1) {
                 diagnosticLogs.push("Navigating to IRCTC train search page...");
-                window.location.href =
-    "https://www.irctc.co.in/nget/train-search";
-
-// Browser navigation ke baad actual DOM ready hone ka wait.
-var navigationWaitStart = Date.now();
-
-while (
-    Date.now() - navigationWaitStart < 10000
-) {
-    var currentHref =
-        window.location.href || '';
-
-    var readyState =
-        document.readyState;
-
-    if (
-        currentHref.indexOf('irctc.co.in') !== -1 &&
-        (
-            readyState === 'interactive' ||
-            readyState === 'complete'
-        )
-    ) {
-        break;
-    }
-
-    await new Promise(function(r) {
-        setTimeout(r, 250);
-    });
-}
-
-await new Promise(function(r) {
-    setTimeout(r, 500);
-});
+                window.location.href = "https://www.irctc.co.in/nget/train-search";
+                
+                // Page load hone ke liye 5-6 second ka proper wait karein
+                await new Promise(function(r) { setTimeout(r, 2000); });
             } else {
                 // Agar pehle se IRCTC par hai, tab bhi thoda sthir hone ka wait dein
                 await new Promise(function(r) { setTimeout(r, 500); });
@@ -2076,6 +2175,16 @@ while (attempts < 60 && !bookNowClicked) {
             payload.targetTrainNo
         );
 
+         diagnosticLogs.push(
+        "FIND TRAIN: Exact target train found."
+    );
+
+await liveProgress(
+    'TRAIN FOUND',
+    'TRAIN FOUND......',
+    30
+);
+
         // =========================================================
 // TATKAL OPENING-TIME WAIT
 // =========================================================
@@ -2172,26 +2281,24 @@ if (isTatkalQuota) {
 
         // Log only once per 10 seconds
         // so console spam na ho.
-        if (
-            remaining <= 10 ||
-            remaining % 10 === 0
-        ) {
+        if (remaining <= 10 || remaining % 10 === 0) {
 
-            var mins = Math.floor(
-                remaining / 60
-            );
+    var mins = Math.floor(remaining / 60);
+    var secs = remaining % 60;
 
-            var secs =
-                remaining % 60;
+    var timerText =
+        'waiting for tatkal window openig.... ' +
+        String(mins).padStart(2, '0') +
+        'm ' +
+        String(secs).padStart(2, '0') +
+        's';
 
-            diagnosticLogs.push(
-                "Waiting for Tatkal opening: " +
-                mins +
-                "m " +
-                secs +
-                "s"
-            );
-        }
+    await liveProgress(
+        'TATKAL WAIT',
+        timerText,
+        35
+    );
+}
 
 
         // Last 5 seconds:
@@ -2211,10 +2318,11 @@ if (isTatkalQuota) {
     }
 
 
-    diagnosticLogs.push(
-        "Tatkal opening time reached. " +
-        "Now selecting journey date card..."
-    );
+    await liveProgress(
+    'TATKAL OPEN',
+    'Tatkal window open. Selecting journey date card...',
+    40
+);
 }
 
   // =========================================================
@@ -3070,37 +3178,101 @@ if (bTry > 0 && targetCard) {
     }
 
 retryClassEl.click();
-await new Promise(function(r) { setTimeout(r, 300); });
+await new Promise(function(r) { setTimeout(r, 500); });
 
 targetCard = Array.from(
-    document.querySelectorAll('p-accordionTab, div.train-avl-col, div.form-group')
+    document.querySelectorAll(
+        'p-accordionTab, div.train-avl-col, div.form-group'
+    )
 ).find(function(el) {
-    return (el.innerText || '').indexOf(String(payload.targetTrainNo)) !== -1 &&
-           el.querySelectorAll('p-accordionTab, div.train-avl-col').length === 0;
-});
+
+    if (!el || !el.isConnected) {
+        return false;
+    }
+
+    var text = (
+        el.innerText ||
+        el.textContent ||
+        ''
+    );
+
+    if (
+        text.indexOf(
+            String(payload.targetTrainNo)
+        ) === -1
+    ) {
+        return false;
+    }
+
+    var nestedCards = el.querySelectorAll(
+        'p-accordionTab, div.train-avl-col'
+    );
+
+    return nestedCards.length === 0;
+}) || null;
+
+
+// =================================================
+// SAFETY CHECK - RETRY TARGET CARD
+// =================================================
+
+if (!targetCard) {
+
+    diagnosticLogs.push(
+        "Retry: Target train card DOM mein temporarily available nahi hai. Waiting before next retry..."
+    );
+
+    await new Promise(function(r) {
+        setTimeout(r, 300);
+    });
+
+    continue;
+}
+
 
 // JOURNEY DATE
 
-    // JOURNEY DATE
-    var retryDateEl = Array.from(
-    targetCard.querySelectorAll('div,td,span,button,a')
-).sort(function(a,b) {
-    return a.querySelectorAll('*').length - b.querySelectorAll('*').length;
-}).find(function(el) {
-        var t = (el.innerText || el.textContent || '')
-            .replace(/\s+/g,' ').trim().toUpperCase();
+var retryDateEl = Array.from(
+    targetCard.querySelectorAll(
+        'div,td,span,button,a'
+    )
+)
+.sort(function(a, b) {
 
-        return t.indexOf(
-            (targetDay + ' ' + targetMonth).toUpperCase()
-        ) !== -1 &&
-        (
-            t.indexOf('AVL') !== -1 ||
-            t.indexOf('WL') !== -1 ||
-            t.indexOf('AVAILABLE') !== -1 ||
-            t.indexOf('RAC') !== -1
-        ) &&
-        t.length < 80;
-    });
+    return (
+        a.querySelectorAll('*').length -
+        b.querySelectorAll('*').length
+    );
+
+})
+.find(function(el) {
+
+    var t = (
+        el.innerText ||
+        el.textContent ||
+        ''
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+
+    return (
+        t.indexOf(
+            (
+                targetDay +
+                ' ' +
+                targetMonth
+            ).toUpperCase()
+        ) !== -1
+    ) &&
+    (
+        t.indexOf('AVL') !== -1 ||
+        t.indexOf('WL') !== -1 ||
+        t.indexOf('AVAILABLE') !== -1 ||
+        t.indexOf('RAC') !== -1
+    ) &&
+    t.length < 80;
+});
 
     if (!retryDateEl) {
         diagnosticLogs.push("Retry: journey date nahi mila.");
@@ -3246,6 +3418,12 @@ if (passengerPageReached) {
         diagnosticLogs.push(
             "High Load / Unable to Process popup detected."
         );
+
+await liveProgress(
+    'HIGH LOAD',
+    'HIGH LOAD',
+    20
+);
 
         var closeRetry =
     document.querySelector(
@@ -3448,7 +3626,16 @@ diagnosticLogs.push(
     "Passenger page + form ready."
 );
 
-            diagnosticLogs.push("Filling passenger details using native setters & PrimeNG handlers...");
+await liveProgress(
+    'PASSENGER DETAILS',
+    'filling PASSENGER DETAILS....',
+    60
+);
+
+
+diagnosticLogs.push(
+    "Filling passenger details using native setters & PrimeNG handlers..."
+);
  var passengers = payload.passengers || [];
  
  if (passengers.length === 0) {
@@ -3824,7 +4011,8 @@ try {
 await new Promise(function (resolve) {
     setTimeout(resolve, 200);
 });
- }
+ 
+}
             
 // 4. Mobile Number Entry (Using Angular Native Setter)
 var mobileVal = payload.mobile || '';
@@ -4110,7 +4298,8 @@ try {
 }
             
             // 6. UPI Payment Selection & Booking (Strictly BHIM/UPI Lower Option)
-diagnosticLogs.push("Selecting BHIM/UPI payment option precisely...");
+
+            diagnosticLogs.push("Selecting BHIM/UPI payment option precisely...");
 var upiSelected = false;
 
 try {
@@ -4146,7 +4335,8 @@ try {
             radioInput.dispatchEvent(new Event('input', { bubbles: true }));
             
             upiSelected = true;
-            diagnosticLogs.push("Successfully selected the lower BHIM/UPI payment option.");
+            diagnosticLogs.push("Successfully selected the lower BHIM/UPI payment option.");   
+       
         }
     }
 
@@ -4166,6 +4356,7 @@ try {
                 upiRadio.dispatchEvent(new Event('change', { bubbles: true }));
                 upiSelected = true;
                 diagnosticLogs.push("BHIM/UPI selected using radio fallback.");
+            
             }
         }
     }
@@ -4246,6 +4437,10 @@ diagnosticLogs.push(
     "First Continue button clicked after 500ms state-settling wait."
 );
 
+diagnosticLogs.push(
+    "First Continue button clicked."
+);
+
 
 // =================================================
 // FIRST CONTINUE RETRY
@@ -4289,6 +4484,12 @@ for (;;) {
             "/" +
             firstRetryLimit
         );
+
+await liveProgress(
+    'HIGH LOAD',
+    'unable to process request',
+    20
+);
 
         var close =
     document.querySelector(
@@ -4432,6 +4633,12 @@ for (;;) {
             secondFindLimit
         );
 
+await liveProgress(
+    'HIGH LOAD',
+    'unable to process request',
+    20
+);
+
         var close2 =
     document.querySelector(
         'a.ui-toast-close-icon.pi.pi-times'
@@ -4537,6 +4744,12 @@ for (;;) {
             secondRetryLimit
         );
 
+await liveProgress(
+    'HIGH LOAD',
+    'unable to process request',
+    20
+);
+
         var close3 =
     document.querySelector(
         'a.ui-toast-close-icon.pi.pi-times'
@@ -4604,6 +4817,11 @@ if (close3) {
     }
 }
 
+await liveProgress(
+    'PAYMENT',
+    'initilize PAYMENT.....',
+    70
+);
 
 // =================================================
 // FINAL PAYMENT PAGE LOADER COMPLETE
@@ -5493,6 +5711,11 @@ for (;;) {
                 payBookRetryLimit
             );
 
+            await liveProgress(
+    'HIGH LOAD',
+    'unable to process request',
+    20
+);
 
             // -----------------------------------------
             // EXACT IRCTC TOAST CLOSE BUTTON
@@ -5532,7 +5755,7 @@ for (;;) {
 
 
             await new Promise(function(resolve) {
-                setTimeout(resolve, 1000);
+                setTimeout(resolve, 300);
             });
 
             diagnosticLogs.push(
@@ -5547,25 +5770,17 @@ for (;;) {
         // PAYMENT / QR PAGE REACHED
         // ---------------------------------------------
 
-        var currentPaymentUrl = '';
+        if (
+            payText.includes('qr') ||
+            payText.includes('payment') ||
+            payText.includes('paytm') ||
+            payText.includes('phonepe') ||
+            payText.includes('ipay')
+        ) {
 
-try {
-    currentPaymentUrl =
-        String(window.location.href || '').toLowerCase();
-} catch (e) {}
-
-var paymentPageReached =
-    currentPaymentUrl.includes('payment') ||
-    currentPaymentUrl.includes('bank') ||
-    currentPaymentUrl.includes('pay') ||
-    payText.includes('qr code') ||
-    payText.includes('scan qr');
-
-if (paymentPageReached) {
-
-    payBookSuccess = true;
-    break;
-}
+            payBookSuccess = true;
+            break;
+        }
     }
 
 
@@ -5576,6 +5791,12 @@ if (paymentPageReached) {
             providerName +
             " QR payment page..."
         );
+
+          await liveProgress(
+        'QR DETECTING',
+        'QR detecting...',
+        78
+    );
 
         return {
             success: true,
@@ -5615,7 +5836,7 @@ if (!payBookRetryAlreadyCounted) {
     }
 
     await new Promise(function(resolve) {
-        setTimeout(resolve, 1000);
+        setTimeout(resolve, 300);
     });
 }
 
@@ -5659,6 +5880,33 @@ if (!this.page || this.page.isClosed()) {
     );
 }
 
+// =====================================================
+// LIVE BOOKING PROGRESS BRIDGE
+// NODE -> BROWSER PAGE
+// =====================================================
+
+if (this._bookingProgressBridgePage !== this.page) {
+
+    await this.page.exposeFunction(
+        '__bossSendProgress',
+        (step, message, percentage) => {
+
+            this.sendBookingStatus(
+                message,
+                step,
+                percentage
+            );
+
+        }
+    );
+
+    this._bookingProgressBridgePage = this.page;
+
+    console.log(
+        `[PROGRESS BRIDGE] Live booking progress bridge ready for ${this.browserType}.`
+    );
+}
+
 result = await this.page.evaluate(script);
 
 console.log('\n================ AUTOMATION LOGS ===============');
@@ -5696,15 +5944,15 @@ return {
     // 5. BOOKING PAYMENT INITIALIZATION (SKIPPED/HANDLED IN STEP 4)
     // ==========================================
     async bookingInitPayment(bookingData, clientTransactionId, totalAmount = null, bankId = 113) {
-        this.sendProgress('Step 5', 'Payment gateway and QR code ready.', 100);
-        await this.delay(300);
 
-        return {
-            status: 200,
-            success: true,
-            message: 'Payment page and QR code successfully triggered.'
-        };
-    }
+    await this.delay(300);
+
+    return {
+        status: 200,
+        success: true,
+        message: 'Payment page and QR code successfully triggered.'
+    };
+}
 
     // ==========================================
     // VERIFY PAYMENT
@@ -5732,13 +5980,20 @@ return {
             totalFare: String(totalAmount)
         };
 
-        const response = await this.safeFetch(url, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(payload)
-        });
+        console.log('[PAYMENT VERIFY] Request URL:', url);
+console.log('[PAYMENT VERIFY] Transaction ID:', txId);
+console.log('[PAYMENT VERIFY] Payload:', JSON.stringify(payload));
 
-        this.validateResponse(response, 'Payment verification');
+const response = await this.safeFetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload)
+});
+
+console.log('[PAYMENT VERIFY] Response status:', response.status);
+console.log('[PAYMENT VERIFY] Response statusText:', response.statusText);
+
+this.validateResponse(response, 'Payment verification');
         const data = await this.parseResponse(response);
 
         if (data === null) {
@@ -5845,12 +6100,6 @@ try {
 
         console.log(
             '[API] Starting complete booking sequence flow...'
-        );
-
-        this.sendProgress(
-            'Initializing',
-            'Starting secure ticket booking sequence...',
-            10
         );
 
         const dynamicTxnId =
@@ -6011,17 +6260,262 @@ console.log(
     ' QR detected successfully.'
 );
 
-console.log('[API] Booking flow successfully completed.');
+this.sendBookingStatus(
+    'SCAN & PAY',
+    'SCAN & PAY',
+    80
+);
 
-            return {
-                success: true,
-                supported: true,
-                data: stepResult
-            };
+console.log(
+    '[PAYMENT] QR detected. Waiting for actual payment confirmation.'
+);
+
+// ==========================================
+// WAIT FOR PAYMENT BEFORE VERIFICATION
+// ==========================================
+
+this.sendBookingStatus(
+    'SCAN & PAY',
+    'SCAN & PAY',
+    85
+);
+
+console.log(
+    '[PAYMENT] QR detected. User payment complete karein.'
+);
+
+// Payment verification ko QR detect hote hi immediately call nahi karna.
+// Pehle payment page ko success/confirmation state mein aane denge.
+
+let paymentCompleted = false;
+let paymentFailed = false;
+
+for (let i = 0; i < 120; i++) {
+
+    try {
+        const paymentState =
+            await this.page.evaluate(() => {
+
+                const body =
+                    String(
+                        document.body?.innerText || ''
+                    ).toLowerCase();
+
+                const success =
+                    body.includes('payment successful') ||
+                    body.includes('payment success') ||
+                    body.includes('payment completed') ||
+                    body.includes('transaction successful') ||
+                    body.includes('transaction completed');
+
+                const failed =
+                    body.includes('payment failed') ||
+                    body.includes('transaction failed') ||
+                    body.includes('payment failure');
+
+                return {
+                    success,
+                    failed
+                };
+            });
+
+        if (paymentState.success) {
+            paymentCompleted = true;
+            break;
+        }
+
+        if (paymentState.failed) {
+            paymentFailed = true;
+            break;
+        }
+
+    } catch (e) {
+        console.warn(
+            '[PAYMENT] Payment status read failed:',
+            e.message
+        );
+    }
+
+    await new Promise(function(resolve) {
+        setTimeout(resolve, 1000);
+    });
+}
+
+if (paymentFailed) {
+
+    this.sendProgress(
+        'PAYMENT FAILED',
+        'Payment failed.',
+        0
+    );
+
+    throw new Error(
+        'Payment failed. Confirmation page ne failure indicate kiya.'
+    );
+}
+
+if (!paymentCompleted) {
+
+    this.sendProgress(
+        'PAYMENT FAILED',
+        'Payment confirmation timeout. Payment success confirm nahi hui.',
+        0
+    );
+
+    throw new Error(
+        'Payment confirmation timeout. Payment success confirm nahi hui.'
+    );
+}
+
+console.log(
+    '[PAYMENT] Payment success state detected.'
+);
+
+this.sendBookingStatus(
+    'PAYMENT RECEIVED',
+    'PAYMENT RECEIVED',
+    90
+);
+
+// ==========================================
+// VERIFY PAYMENT / GET PNR
+// ==========================================
+
+const clientTransactionId =
+    stepResult.clientTransactionId ||
+    stepResult.data?.clientTransactionId ||
+    bookingData.clientTransactionId;
+
+const totalAmount =
+    bookingData.realFare ||
+    stepResult.totalFare ||
+    stepResult.data?.totalFare;
+
+if (!clientTransactionId) {
+    throw new Error(
+        'Payment verification ke liye client transaction ID nahi mili.'
+    );
+}
+
+if (
+    totalAmount === null ||
+    totalAmount === undefined ||
+    String(totalAmount).trim() === ''
+) {
+    throw new Error(
+        'Payment verification ke liye total fare nahi mila.'
+    );
+}
+
+console.log(
+    '[PAYMENT] Verifying transaction:',
+    clientTransactionId
+);
+
+const paymentResult =
+    await this.verifyPaymentAndGetPNR(
+        clientTransactionId,
+        totalAmount
+    );
+
+console.log(
+    '[PAYMENT] Verification response received.'
+);
+
+const paymentText =
+    JSON.stringify(
+        paymentResult || {}
+    ).toLowerCase();
+
+
+
+// ==========================================
+// EXTRACT FINAL PNR
+// ==========================================
+
+let finalPNR = null;
+
+try {
+
+    const pnrMatch =
+        paymentText.match(
+            /\bpnr\b[\s"'=:_-]*([0-9]{10})/i
+        );
+
+    if (pnrMatch && pnrMatch[1]) {
+        finalPNR = pnrMatch[1];
+    }
+
+} catch (pnrError) {
+
+    console.warn(
+        '[PNR] Extraction error:',
+        pnrError.message
+    );
+
+}
+
+const bookingConfirmed =
+    !!finalPNR ||
+    paymentText.includes('booked') ||
+    paymentText.includes('confirmed');
+
+if (!bookingConfirmed) {
+
+    this.sendProgress(
+        'HIGH LOAD',
+        'unable to process request',
+        20
+    );
+
+    throw new Error(
+        'Payment verify hua, lekin booking confirmation/PNR nahi mila.'
+    );
+}
+
+if (!finalPNR) {
+
+    this.sendProgress(
+        'HIGH LOAD',
+        'unable to process request',
+        20
+    );
+
+    throw new Error(
+        'Booking confirmation mil gayi, lekin final PNR nahi mila.'
+    );
+}
+
+this.sendBookingStatus(
+    'final PNR ...... ' + finalPNR,
+    'FINAL PNR',
+    95
+);
+
+this.sendBookingStatus(
+    'booking sucessful by BOSS...',
+    'BOOKING SUCCESS',
+    100
+);
+
+console.log(
+    '[BOOKING] Booking successfully confirmed.'
+);
+
+return {
+    success: true,
+    supported: true,
+    data: stepResult,
+    payment: paymentResult
+};
 
         } catch (error) {
             console.error('[API] Sequence execution failed:', error.message);
-            this.sendProgress('Error', error.message, 0);
+            this.sendProgress(
+    'HIGH LOAD',
+    'unable to process request',
+    20
+);
             throw error;
         }
     

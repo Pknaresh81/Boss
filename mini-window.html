@@ -687,11 +687,19 @@
 
         let currentTicket = null;
 
-        let currentTicketIndex = null;
+let currentTicketIndex = null;
 
-        let currentWindowId = null;
+let currentWindowId = null;
 
-        
+// =========================================
+// BOOKING EXECUTION LOCK
+// Prevents accidental double-start from
+// the same Mini Automation window.
+// =========================================
+let automationRunning = false;
+let automationTargetBrowser = null;
+
+    
 
         // =========================================
         // HTML ESCAPE
@@ -796,6 +804,56 @@ if (currentTicket) {
 
         }
 
+        // =========================================
+// LIVE BOOKING PROGRESS
+// =========================================
+
+if (
+    window.electronAPI &&
+    typeof window.electronAPI.onBookingProgress ===
+    "function"
+) {
+
+    window.electronAPI.onBookingProgress(
+        (progressData) => {
+
+            console.log(
+                "[MINI WINDOW] Booking progress:",
+                progressData
+            );
+
+            if (!progressData) {
+                return;
+            }
+
+            const step =
+                String(
+                    progressData.step || ""
+                ).trim();
+
+            const message =
+                String(
+                    progressData.message || ""
+                ).trim();
+
+            // TOP STATUS AREA
+            if (step) {
+                setText(
+                    "status",
+                    step.toUpperCase()
+                );
+            }
+
+            // BOTTOM RESULT AREA
+            if (message) {
+                setText(
+                    "result",
+                    message
+                );
+            }
+        }
+    );
+}
 
         // =========================================
         // RENDER TICKET
@@ -1203,31 +1261,76 @@ if (title) {
         // =========================================
 
         async function runAutomation(
-            targetBrowser
-        ) {
+    targetBrowser
+) {
 
-            if (!currentTicket) {
+    // =========================================
+    // DUPLICATE START PROTECTION
+    // =========================================
 
-                setText(
-                    "status",
-                    "NO TICKET"
-                );
+    if (automationRunning) {
 
-                return;
+        console.warn(
+            `[MINI WINDOW] Booking already running on ${automationTargetBrowser || "browser"}. Ignoring duplicate start.`
+        );
 
-            }
+        setText(
+            "status",
+            "ALREADY RUNNING"
+        );
+
+        setText(
+            "result",
+            "BUSY"
+        );
+
+        return;
+    }
 
 
-            setText(
-                "status",
-                "STARTING..."
-            );
+    if (!currentTicket) {
+
+        setText(
+            "status",
+            "NO TICKET"
+        );
+
+        return;
+
+    }
 
 
-            setText(
-                "result",
-                "RUNNING"
-            );
+    // Lock BEFORE IPC call
+    automationRunning = true;
+
+    automationTargetBrowser =
+        String(
+            targetBrowser || "WEB"
+        )
+        .trim()
+        .toUpperCase();
+
+        const activeButton =
+    document.getElementById(
+        `${automationTargetBrowser.toLowerCase()}-btn`
+    );
+
+if (activeButton) {
+    activeButton.disabled = true;
+    activeButton.style.opacity = "0.55";
+    activeButton.style.cursor = "not-allowed";
+}
+
+    setText(
+        "status",
+        "STARTING..."
+    );
+
+
+    setText(
+        "result",
+        "RUNNING"
+    );
 
 
             try {
@@ -1399,11 +1502,12 @@ payment:
 
 
                 const response =
-                    await window.electronAPI
-                        .startBooking(
-                            automationData,
-                            targetBrowser
-                        );
+    await window.electronAPI
+        .startBooking(
+    automationData,
+    targetBrowser,
+    currentWindowId
+);
 
 
                 console.log(
@@ -1446,7 +1550,7 @@ payment:
 
                 }
 
-            } catch (error) {
+                        } catch (error) {
 
                 console.error(
                     "[MINI WINDOW] Automation error:",
@@ -1466,6 +1570,31 @@ payment:
                     error?.message ||
                     "Automation error"
 
+                );
+
+            } finally {
+
+                // =========================================
+                // RELEASE BOOKING LOCK
+                // =========================================
+
+                automationRunning = false;
+
+                automationTargetBrowser = null;
+
+                const activeButton =
+    document.getElementById(
+        `${automationTargetBrowser.toLowerCase()}-btn`
+    );
+
+if (activeButton) {
+    activeButton.disabled = false;
+    activeButton.style.opacity = "";
+    activeButton.style.cursor = "";
+}
+
+                console.log(
+                    "[MINI WINDOW] Booking execution lock released."
                 );
 
             }
