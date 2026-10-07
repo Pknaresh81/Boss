@@ -572,11 +572,12 @@ async function isBrowserDebugReady(config) {
     try {
 
         const browser =
-            await puppeteer.connect({
-                browserURL:
-                    `http://127.0.0.1:${config.port}`,
-                defaultViewport: null
-            });
+    await puppeteer.connect({
+        browserURL:
+            `http://127.0.0.1:${config.port}`,
+        defaultViewport: null,
+        protocolTimeout: 10 * 60 * 1000
+    });
 
         await browser.disconnect();
 
@@ -1263,11 +1264,12 @@ while (retries > 0) {
                 try {
 
                     browser =
-                        await puppeteer.connect({
-                            browserURL:
-                                `http://localhost:${port}`,
-                            defaultViewport: null
-                        });
+    await puppeteer.connect({
+        browserURL:
+            `http://localhost:${port}`,
+        defaultViewport: null,
+        protocolTimeout: 10 * 60 * 1000
+    });
 
                     break;
 
@@ -2400,11 +2402,12 @@ ipcMain.handle(
                 try {
 
                     browser =
-                        await puppeteer.connect({
-                            browserURL:
-                                `http://localhost:${port}`,
-                            defaultViewport: null
-                        });
+    await puppeteer.connect({
+        browserURL:
+            `http://localhost:${port}`,
+        defaultViewport: null,
+        protocolTimeout: 10 * 60 * 1000
+    });
 
                     break;
 

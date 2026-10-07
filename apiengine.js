@@ -76,10 +76,8 @@ sendBookingStatus(message, stepName = 'BOOKING', percentage = 0) {
 sendAvailabilityFare(availability, fare) {
 
     console.log(
-        '[MINI WINDOW] Sending Availability/Fare:',
-        availability,
-        fare
-    );
+    '[MINI WINDOW] Sending Availability/Fare sent.'
+);
 
     if (
         !this.win ||
@@ -1304,7 +1302,9 @@ try {
             }
 
             if (rawText.trim().startsWith('<')) {
-                console.error('[API] Error: Received HTML instead of JSON. Possible Akamai block or redirect:', rawText.substring(0, 150));
+                console.error(
+    '[API] Error: Received HTML instead of JSON. Possible Akamai block or redirect.'
+);
                 return null;
             }
 
@@ -1869,36 +1869,36 @@ const base64Payload = Buffer.from(rawPayload).toString('base64');
     // =====================================================
     // LIVE BOOKING STATUS -> NODE -> ELECTRON UI
     // =====================================================
-    async function liveProgress(step, message, percentage) {
+   async function liveProgress(step, message, percentage) {
 
-        diagnosticLogs.push(message);
+    diagnosticLogs.push(message);
 
-        try {
+    try {
 
-            if (
-                typeof window.__bossSendProgress === 'function'
-            ) {
+        if (
+            typeof window.__bossSendProgress === 'function'
+        ) {
 
-                await window.__bossSendProgress(
-                    step,
-                    message,
-                    percentage
-                );
-
-            }
-
-        } catch (progressError) {
-
-            console.warn(
-                '[LIVE PROGRESS] Bridge error:',
-                progressError &&
-                progressError.message
-                    ? progressError.message
-                    : progressError
+            await window.__bossSendProgress(
+                step,
+                message,
+                percentage
             );
 
         }
+
+    } catch (progressError) {
+
+        console.warn(
+            '[LIVE PROGRESS] Bridge error:',
+            progressError &&
+            progressError.message
+                ? progressError.message
+                : progressError
+        );
+
     }
+}
         try {
             var currentUrl = window.location.href;
             diagnosticLogs.push("Current Browser URL: " + currentUrl);
@@ -2099,8 +2099,6 @@ if (targetToInput && payload.toStation) {
                     }
                 }
             }
-
-            console.log("CHECK PAYLOAD:", typeof payload !== 'undefined' ? payload : "payload is undefined!");
 
 
 // 2.5. Select Quota
@@ -2416,8 +2414,8 @@ if (isTatkalQuota) {
     var isACClass =
         acClasses.indexOf(classForTiming) !== -1;
 
-    var tatkalHour =
-        isACClass ? 10 : 11;
+    var tatkalHour = isACClass ? 10 : 11;
+   
 
     var tatkalMinute = 0;
     var tatkalSecond = 1;
@@ -2436,7 +2434,7 @@ if (isTatkalQuota) {
         (
             tatkalHour === 10
                 ? "10:00:01 AM"
-                : "11:00:01 AM"
+                : "10:00:01 AM"
         )
     );
 
@@ -2470,23 +2468,43 @@ if (isTatkalQuota) {
 
         // Log only once per 10 seconds
         // so console spam na ho.
-        if (remaining <= 10 || remaining % 10 === 0) {
+        // -----------------------------------------------------
+// LIVE COUNTDOWN - UI UPDATE ONCE PER SECOND
+// -----------------------------------------------------
 
-    var mins = Math.floor(remaining / 60);
-    var secs = remaining % 60;
+var mins = Math.floor(remaining / 60);
+var secs = remaining % 60;
 
-    var timerText =
-        'waiting for tatkal window openig.... ' +
-        String(mins).padStart(2, '0') +
-        'm ' +
-        String(secs).padStart(2, '0') +
-        's';
+var timerText =
+    'waiting for tatkal window opening.... ' +
+    String(mins).padStart(2, '0') +
+    'm ' +
+    String(secs).padStart(2, '0') +
+    's';
 
-    await liveProgress(
-        'TATKAL WAIT',
-        timerText,
-        35
-    );
+// Sirf jab displayed second change ho tab UI update karo
+if (typeof window.__bossTatkalLastSecond === 'undefined') {
+    window.__bossTatkalLastSecond = -1;
+}
+
+if (secs !== window.__bossTatkalLastSecond) {
+
+    window.__bossTatkalLastSecond = secs;
+
+    // Progress bridge ko await nahi karenge.
+    // Isse Tatkal countdown ke waqt long-running
+    // Runtime.evaluate par unnecessary CDP load nahi padega.
+    try {
+        if (
+            typeof window.__bossSendProgress === 'function'
+        ) {
+            window.__bossSendProgress(
+                'TATKAL WAIT',
+                timerText,
+                35
+            ).catch(function() {});
+        }
+    } catch (e) {}
 }
 
 
@@ -2494,16 +2512,18 @@ if (isTatkalQuota) {
         // much shorter polling
         if (remaining <= 5) {
 
-            await new Promise(function(r) {
-                setTimeout(r, 100);
-            });
+    // Last 5 seconds: accurate but unnecessary
+    // 100ms CDP/browser loop avoid karna hai.
+    await new Promise(function(r) {
+        setTimeout(r, 250);
+    });
 
-        } else {
+} else {
 
-            await new Promise(function(r) {
-                setTimeout(r, 500);
-            });
-        }
+    await new Promise(function(r) {
+        setTimeout(r, 500);
+    });
+}
     }
 
 
@@ -4288,14 +4308,12 @@ try {
 
     await new Promise(function(r) { setTimeout(r, Math.floor(Math.random() * 200) + 150); });
 
-    diagnosticLogs.push("Mobile field value after fill: " + mobileInput.value);
-
     if (mobileInput.value.length > 0) {
-        mobileFilled = true;
-        diagnosticLogs.push("Mobile number filled successfully: " + mobileInput.value);
-    } else {
-        diagnosticLogs.push("Mobile number set nahi hua.");
-    }
+    mobileFilled = true;
+    diagnosticLogs.push("Mobile number filled successfully.");
+} else {
+    diagnosticLogs.push("Mobile number set nahi hua.");
+}
 
 } catch (mErr) {
     diagnosticLogs.push("Mobile error: " + mErr.message);
@@ -6110,11 +6128,18 @@ if (this._bookingProgressBridgePage !== this.page) {
         '__bossSendProgress',
         (step, message, percentage) => {
 
-            this.sendBookingStatus(
-                message,
-                step,
-                percentage
-            );
+            try {
+    this.sendBookingStatus(
+        message,
+        step,
+        percentage
+    );
+} catch (error) {
+    console.warn(
+        '[PROGRESS BRIDGE] Status send failed:',
+        error.message
+    );
+}
 
         }
     );
@@ -6199,18 +6224,11 @@ return {
             totalFare: String(totalAmount)
         };
 
-        console.log('[PAYMENT VERIFY] Request URL:', url);
-console.log('[PAYMENT VERIFY] Transaction ID:', txId);
-console.log('[PAYMENT VERIFY] Payload:', JSON.stringify(payload));
-
 const response = await this.safeFetch(url, {
     method: 'POST',
     headers,
     body: JSON.stringify(payload)
 });
-
-console.log('[PAYMENT VERIFY] Response status:', response.status);
-console.log('[PAYMENT VERIFY] Response statusText:', response.statusText);
 
 this.validateResponse(response, 'Payment verification');
         const data = await this.parseResponse(response);
@@ -6346,10 +6364,6 @@ const availabilityResponse =
 
 if (availabilityResponse) {
 
-    console.log(
-    '[AVAILABILITY RESPONSE] FULL RESPONSE:',
-    JSON.stringify(availabilityResponse, null, 2)
-);
 
     let extractedRealFare =
         availabilityResponse.totalFare ||
@@ -6593,8 +6607,18 @@ let paymentFailed = false;
 
 for (let i = 0; i < 120; i++) {
 
+    let paymentState = {
+        success: false,
+        failed: false
+    };
+
     try {
-        const paymentState =
+
+        if (!this.page || this.page.isClosed()) {
+            throw new Error('Payment page closed.');
+        }
+
+        paymentState =
             await this.page.evaluate(() => {
 
                 const body =
@@ -6615,26 +6639,46 @@ for (let i = 0; i < 120; i++) {
                     body.includes('payment failure');
 
                 return {
-                    success,
-                    failed
+                    success: success,
+                    failed: failed
                 };
             });
 
-        if (paymentState.success) {
-            paymentCompleted = true;
-            break;
-        }
-
-        if (paymentState.failed) {
-            paymentFailed = true;
-            break;
-        }
-
     } catch (e) {
+
+        if (
+            e &&
+            e.message &&
+            e.message.includes(
+                'Execution context was destroyed'
+            )
+        ) {
+
+            console.log(
+                '[PAYMENT] Page navigation detected. Continuing payment check...'
+            );
+
+            await new Promise(function(resolve) {
+                setTimeout(resolve, 500);
+            });
+
+            continue;
+        }
+
         console.warn(
             '[PAYMENT] Payment status read failed:',
             e.message
         );
+    }
+
+    if (paymentState.success) {
+        paymentCompleted = true;
+        break;
+    }
+
+    if (paymentState.failed) {
+        paymentFailed = true;
+        break;
     }
 
     await new Promise(function(resolve) {
@@ -6707,11 +6751,6 @@ if (
         'Payment verification ke liye total fare nahi mila.'
     );
 }
-
-console.log(
-    '[PAYMENT] Verifying transaction:',
-    clientTransactionId
-);
 
 const paymentResult =
     await this.verifyPaymentAndGetPNR(
