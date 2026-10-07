@@ -70,6 +70,49 @@ sendBookingStatus(message, stepName = 'BOOKING', percentage = 0) {
     );
 }
 
+// ==========================================
+// HELPER: UPDATE MINI WINDOW AVAILABILITY/FARE
+// ==========================================
+sendAvailabilityFare(availability, fare) {
+
+    console.log(
+        '[MINI WINDOW] Sending Availability/Fare:',
+        availability,
+        fare
+    );
+
+    if (
+        !this.win ||
+        this.win.isDestroyed()
+    ) {
+        console.warn(
+            '[MINI WINDOW] Cannot update Availability/Fare. Window unavailable.'
+        );
+        return;
+    }
+
+    try {
+
+        this.win.webContents.send(
+            'mini-window-data-update',
+            {
+                availability:
+                    availability || '--',
+
+                fare:
+                    fare || '--'
+            }
+        );
+
+    } catch (error) {
+
+        console.warn(
+            '[MINI WINDOW] Availability/Fare update failed:',
+            error.message
+        );
+    }
+}
+
     // ==========================================
 // HELPER: CONTROLLED DELAY (MS)
 // ==========================================
@@ -669,6 +712,12 @@ if (menuButton) {
         }
     }
 
+this.sendBookingStatus(
+    'IRCTC par login ho rahe hai...',
+    'IRCTC LOGIN',
+    10
+);
+
     // ==========================================
     // USERNAME FIELD
     // ==========================================
@@ -718,7 +767,7 @@ if (menuButton) {
     usernameSelector,
     username,
     {
-        delay: 100
+        delay: 80
     }
 );
 
@@ -775,7 +824,7 @@ if (menuButton) {
     passwordSelector,
     password,
     {
-        delay: 100
+        delay: 90
     }
 );
 
@@ -846,6 +895,45 @@ try {
         `[AUTO LOGIN ${this.browserType}] SIGN IN clicked.`
     );
 
+// ==========================================
+// WAIT FOR IRCTC LOGIN TO COMPLETE
+// ==========================================
+
+try {
+
+    await this.page.waitForFunction(
+        () => {
+            const loginInput =
+                document.querySelector(
+                    'input[formcontrolname="userid"]'
+                );
+
+            return !loginInput;
+        },
+        {
+            timeout: 30000
+        }
+    );
+
+    console.log(
+        `[AUTO LOGIN ${this.browserType}] IRCTC login completed.`
+    );
+
+    this.sendBookingStatus(
+        'IRCTC login successful.',
+        'LOGIN SUCCESS',
+        15
+    );
+
+} catch (loginWaitError) {
+
+    console.warn(
+        `[AUTO LOGIN ${this.browserType}] Login completion wait timeout:`,
+        loginWaitError.message
+    );
+
+}
+
 } catch (signInError) {
 
     console.error(
@@ -858,11 +946,6 @@ try {
     );
 }
 
-this.sendBookingStatus(
-    'USER LOGIN.....',
-    'USER LOGIN',
-    10
-);
 }
 
 
@@ -1220,9 +1303,9 @@ this.sendBookingStatus(
     // ==========================================
     async searchTrains(enquiryData) {
 
-    this.sendProgress(
+     this.sendProgress(
         'SEARCH TRAIN',
-        'SEARCH TRAIN.....',
+        'TRAIN SEARCHING...',
         20
     );
 
@@ -1230,7 +1313,35 @@ this.sendBookingStatus(
             throw new Error('Train search data invalid hai.');
         }
 
+        this.sendBookingStatus(
+    'From / To / Date ke basis par train search ho raha hai...',
+    'SEARCH TRAIN',
+    20
+);
+
         const cookies = await this.loadCookies();
+
+const fromStation =
+    enquiryData.fromStation ||
+    enquiryData.from ||
+    '--';
+
+const toStation =
+    enquiryData.toStation ||
+    enquiryData.to ||
+    '--';
+
+const journeyDate =
+    enquiryData.journeyDate ||
+    enquiryData.date ||
+    '--';
+
+this.sendBookingStatus(
+    `Train search: ${fromStation} → ${toStation} | Date: ${journeyDate}`,
+    'SEARCH REQUEST',
+    22
+);
+        
         const url = 'https://www.irctc.co.in/eticketing/protected/rcs/trainlitchk';
         const headers = await this.getHeaders(
     cookies,
@@ -1771,6 +1882,12 @@ const base64Payload = Buffer.from(rawPayload).toString('base64');
                 await new Promise(function(r) { setTimeout(r, 500); });
             }
 
+await liveProgress(
+    'TRAIN SEARCH',
+    'From aur To station select ho rahe hain...',
+    22
+);
+
 // 1. Fill Stations 
 diagnosticLogs.push("Filling From/To station details..."); 
 var stationInputs = Array.from(document.querySelectorAll('p-autocomplete input')); 
@@ -1845,7 +1962,15 @@ if (targetToInput && payload.toStation) {
     await new Promise(function(r) { setTimeout(r, 300); }); 
 }
 
+            await liveProgress(
+    'JOURNEY DATE',
+    'Journey date select ho rahi hai...',
+    24
+);
+
+
             // 2. Journey Date - Smart Month Navigation & Popup Clicker
+
             if (payload.journeyDate) {
                 var rawDate = String(payload.journeyDate).trim();
                 diagnosticLogs.push("Processing Journey Date: " + rawDate);
@@ -1943,6 +2068,7 @@ if (targetToInput && payload.toStation) {
 
             console.log("CHECK PAYLOAD:", typeof payload !== 'undefined' ? payload : "payload is undefined!");
 
+
 // 2.5. Select Quota
 var wanted = String(payload.quota || "").trim().toUpperCase();
 
@@ -2002,6 +2128,12 @@ try {
     };
 }
 
+await liveProgress(
+    'SEARCH BUTTON',
+    'Search Trains button click kiya ja raha hai...',
+    26
+);
+
             // 3. Click Search Trains
 diagnosticLogs.push("Clicking 'Search Trains' button...");
 
@@ -2052,6 +2184,12 @@ if (searchBtn && !searchBtn.disabled) {
 
     searchBtn.click();
 
+    await liveProgress(
+    'SEARCH STARTED',
+    'Search Trains click ho gaya, results load ho rahe hain...',
+    40
+);
+
     diagnosticLogs.push(
         "Search Trains clicked successfully."
     );
@@ -2065,6 +2203,11 @@ if (searchBtn && !searchBtn.disabled) {
     };
 }
 
+await liveProgress(
+    'SEARCH RESULTS',
+    'Train search results aa rahe hain...',
+    28
+);
 
 // =========================================================
 // 4. WAIT FOR TRAIN LIST + EXACT TRAIN
@@ -2073,6 +2216,12 @@ if (searchBtn && !searchBtn.disabled) {
 diagnosticLogs.push(
     "Waiting for train list and searching for exact train number: " +
     payload.targetTrainNo
+);
+
+await liveProgress(
+    'TRAIN SEARCH',
+    'Train list load ho rahi hai, target train search ki ja rahi hai...',
+    42
 );
 
 var bookNowClicked = false;
@@ -2170,6 +2319,12 @@ while (attempts < 60 && !bookNowClicked) {
 
     if (targetCard) {
 
+        await liveProgress(
+    'TRAIN FOUND',
+    'Target train mil gayi hai...',
+    30
+);
+
         diagnosticLogs.push(
             "Exact target train card found for number: " +
             payload.targetTrainNo
@@ -2179,10 +2334,10 @@ while (attempts < 60 && !bookNowClicked) {
         "FIND TRAIN: Exact target train found."
     );
 
-await liveProgress(
-    'TRAIN FOUND',
-    'TRAIN FOUND......',
-    30
+    await liveProgress(
+    'TATKAL WAIT',
+    'Tatkal opening time check ho raha hai...',
+    32
 );
 
         // =========================================================
@@ -2205,8 +2360,8 @@ var isTatkalQuota =
 
 if (isTatkalQuota) {
 
-    // AC Tatkal = 10:00 AM
-    // Non-AC Tatkal = 11:00 AM
+    // AC Tatkal = 10:00:01 AM
+    // Non-AC Tatkal = 11:00:01 AM
     //
     // AC classes:
     // 1A, 2A, 3A, 3E, CC, EC, EA
@@ -2231,7 +2386,7 @@ if (isTatkalQuota) {
         isACClass ? 10 : 11;
 
     var tatkalMinute = 0;
-    var tatkalSecond = 0;
+    var tatkalSecond = 1;
 
     diagnosticLogs.push(
         "Tatkal timing detected."
@@ -2246,8 +2401,8 @@ if (isTatkalQuota) {
         "Tatkal opening time: " +
         (
             tatkalHour === 10
-                ? "10:00:00 AM"
-                : "11:00:00 AM"
+                ? "10:00:01 AM"
+                : "11:00:01 AM"
         )
     );
 
@@ -2731,6 +2886,12 @@ matchedClassBox.dispatchEvent(
             targetClass +
             " -> Book Now may continue."
         );
+        
+        await liveProgress(
+    'CLASS CONFIRMED',
+    'Class ' + targetClass + ' successfully select ho gayi hai...',
+    34
+);
 
         await new Promise(function(r) {
             setTimeout(r, 500);
@@ -2744,6 +2905,12 @@ matchedClassBox.dispatchEvent(
 var journeyDateSelected = false;
 
 try {
+
+await liveProgress(
+    'JOURNEY DATE',
+    'Journey date card select ho raha hai...',
+    36
+);
 
     diagnosticLogs.push(
         "Targeting journey date card..."
@@ -2985,6 +3152,12 @@ try {
             );
 
             journeyDateSelected = true;
+
+            await liveProgress(
+    'DATE CONFIRMED',
+    'Journey date successfully select ho gayi hai.',
+    38
+);
 
             diagnosticLogs.push(
                 "Journey date selected successfully: " +
@@ -3370,6 +3543,12 @@ var retryDateEl = Array.from(
 
 bookBtn.click();
 
+await liveProgress(
+    'BOOK NOW',
+    'Book Now click kiya ja raha hai...',
+    45
+);
+
 diagnosticLogs.push(
     "Book Now click sent. Passenger page load hone ka wait..."
 );
@@ -3397,6 +3576,12 @@ for (var waitTry = 0; waitTry < 60; waitTry++) {
 
 if (passengerPageReached) {
     bookNowClicked = true;
+
+    await liveProgress(
+    'PASSENGER PAGE',
+    'Passenger details page open ho gaya hai...',
+    50
+);
 
     diagnosticLogs.push(
         "Passenger page reached after Book Now click."
@@ -3455,7 +3640,7 @@ if (closeRetry) {
 }
 
         await new Promise(function(r) {
-            setTimeout(r, 1000);
+            setTimeout(r, 500);
         });
 
         diagnosticLogs.push(
@@ -3505,11 +3690,11 @@ if (closeRetry) {
 
             // -------------------------------------------------
             // IMPORTANT:
-            // 1 second wait between retries
+            // 500ms wait between retries
             // -------------------------------------------------
 
             await new Promise(function(r) {
-                setTimeout(r, 1000);
+                setTimeout(r, 500);
             });
         }
 
@@ -3689,7 +3874,7 @@ diagnosticLogs.push(
              nameInput.dispatchEvent(new Event('input', { bubbles: true }));
              
              // Random keypress delay (20ms to 60ms per letter)
-             var randomDelay = Math.floor(Math.random() * 40) + 20;
+             var randomDelay = Math.floor(Math.random() * 35) + 25;
              await new Promise(function(r) { setTimeout(r, randomDelay); });
          }
 
@@ -3698,7 +3883,7 @@ diagnosticLogs.push(
          diagnosticLogs.push("Filled name for passenger " + (i + 1) + ": " + nameToType);
          
          // Dynamic random delay before next step (150ms to 350ms)
-         await new Promise(function(r) { setTimeout(r, Math.floor(Math.random() * 200) + 150); });
+         await new Promise(function(r) { setTimeout(r, Math.floor(Math.random() * 120) + 120); });
      }
 
      // 3. Passenger Age
@@ -3711,7 +3896,7 @@ diagnosticLogs.push(
          ageInput.dispatchEvent(new Event('change', { bubbles: true }));
          ageInput.dispatchEvent(new Event('blur', { bubbles: true }));
          diagnosticLogs.push("Filled age for passenger " + (i + 1));
-         await new Promise(function(r) { setTimeout(r, 100); });
+         await new Promise(function(r) { setTimeout(r, 80); });
      }
 
                 // 3. Gender Select - Native HTML SELECT + Angular
@@ -3846,7 +4031,7 @@ try {
         });
 
         await new Promise(function (resolve) {
-            setTimeout(resolve, 200);
+            setTimeout(resolve, 150);
         });
 
         // -----------------------------------------------------
@@ -4009,7 +4194,7 @@ try {
 }
 
 await new Promise(function (resolve) {
-    setTimeout(resolve, 200);
+    setTimeout(resolve, 100);
 });
  
 }
@@ -4143,7 +4328,7 @@ try {
         confirmCheckbox.click();
 
         await new Promise(function(r) {
-    setTimeout(r, 150);
+    setTimeout(r, 100);
 });
 
 
@@ -4318,7 +4503,7 @@ try {
         
         if (radioInput) {
             radioInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            await new Promise(function(r) { setTimeout(r, 200); });
+            await new Promise(function(r) { setTimeout(r, 100); });
             
             // Mouse events aur click trigger karo taaki Angular form update ho jaye
             ['mousedown', 'mouseup', 'click'].forEach(function(eventType) {
@@ -4369,7 +4554,7 @@ if (!upiSelected) {
     diagnosticLogs.push("WARNING: BHIM/UPI option could not be selected!");
 }
 
-await new Promise(function(r) { setTimeout(r, 300); });
+await new Promise(function(r) { setTimeout(r, 100); });
 
         
 // =================================================
@@ -4463,7 +4648,7 @@ for (;;) {
     }
 
     await new Promise(function(r) {
-        setTimeout(r, 1500);
+        setTimeout(r, 500);
     });
 
     var txt =
@@ -4541,7 +4726,7 @@ if (close) {
         if (continueBtn1) {
 
     await new Promise(function(r) {
-        setTimeout(r, 1500);
+        setTimeout(r, 500);
     });
 
     if (
@@ -4611,7 +4796,7 @@ for (;;) {
     }
 
     await new Promise(function(r) {
-        setTimeout(r, 500);
+        setTimeout(r, 200);
     });
 
     var txt2 =
@@ -4765,7 +4950,7 @@ if (close3) {
     } catch (e) {}
 
     await new Promise(function(r) {
-        setTimeout(r, 1500);
+        setTimeout(r, 500);
     });
 }
 
@@ -4819,7 +5004,7 @@ if (close3) {
 
 await liveProgress(
     'PAYMENT',
-    'initilize PAYMENT.....',
+    'INITILIZE PAYMENT.....',
     70
 );
 
@@ -6109,25 +6294,107 @@ try {
             dynamicTxnId;
 
             // STEP 1: Check Availability & Real Fare
-           const quotaUpper = String(bookingData.quota || '').toUpperCase();
-const isTatkalOrPremium = quotaUpper === 'TQ' || quotaUpper === 'TATKAL' || quotaUpper === 'PT' || quotaUpper === 'PREMIUM TATKAL';
+         const quotaUpper = String(bookingData.quota || '').toUpperCase();
 
-if (!isTatkalOrPremium) {
-    // Purana code yahan aayega [cite: 1]
-    const availabilityResponse = await this.checkAvailabilityAndFare(bookingData);
+const isTatkalOrPremium =
+    quotaUpper === 'TQ' ||
+    quotaUpper === 'TATKAL' ||
+    quotaUpper === 'PT' ||
+    quotaUpper === 'PREMIUM TATKAL';
+
+
+// =========================================================
+// STEP 1: CHECK AVAILABILITY & REAL FARE
+// =========================================================
+
+const availabilityResponse =
+    await this.checkAvailabilityAndFare(bookingData);
+
+if (availabilityResponse) {
+
+    console.log(
+    '[AVAILABILITY RESPONSE] FULL RESPONSE:',
+    JSON.stringify(availabilityResponse, null, 2)
+);
+
+    let extractedRealFare =
+        availabilityResponse.totalFare ||
+        (
+            availabilityResponse.avlFareResponseDTO &&
+            availabilityResponse.avlFareResponseDTO[0] &&
+            availabilityResponse.avlFareResponseDTO[0].totalFare
+        ) ||
+        (
+            availabilityResponse.lapFareDetails &&
+            availabilityResponse.lapFareDetails[0] &&
+            availabilityResponse.lapFareDetails[0].totalFare
+        );
+
     if (availabilityResponse) {
-        let extractedRealFare = availabilityResponse.totalFare || 
-                               (availabilityResponse.avlFareResponseDTO && availabilityResponse.avlFareResponseDTO[0]?.totalFare) ||
-                               (availabilityResponse.lapFareDetails && availabilityResponse.lapFareDetails[0]?.totalFare);
-        if (extractedRealFare) {
-            bookingData.realFare = String(extractedRealFare);
-        }
+
+    const extractedAvailability =
+        availabilityResponse.avlDayList &&
+        availabilityResponse.avlDayList[0] &&
+        availabilityResponse.avlDayList[0].availablityStatus
+            ? String(
+                availabilityResponse.avlDayList[0].availablityStatus
+            )
+            : '';
+
+    if (extractedAvailability) {
+        bookingData.realAvailability = extractedAvailability;
+
+        console.log(
+            '[AVAILABILITY] Real availability found:',
+            bookingData.realAvailability
+        );
     }
 
-    // STEP 2: Alternate Availability [cite: 1]
+    let extractedRealFare =
+        availabilityResponse.totalFare ||
+        (
+            availabilityResponse.avlFareResponseDTO &&
+            availabilityResponse.avlFareResponseDTO[0] &&
+            availabilityResponse.avlFareResponseDTO[0].totalFare
+        ) ||
+        (
+            availabilityResponse.lapFareDetails &&
+            availabilityResponse.lapFareDetails[0] &&
+            availabilityResponse.lapFareDetails[0].totalFare
+        );
+
+    if (extractedRealFare) {
+        bookingData.realFare = String(extractedRealFare);
+
+        console.log(
+            '[AVAILABILITY] Real fare found:',
+            bookingData.realFare
+        );
+    }
+
+this.sendAvailabilityFare(
+    bookingData.realAvailability || '--',
+    bookingData.realFare || '--'
+);
+
+}
+}
+
+
+// =========================================================
+// STEP 2: ALTERNATE AVAILABILITY
+// =========================================================
+
+if (!isTatkalOrPremium) {
+
     await this.checkAlternateAvailability(bookingData);
+
 } else {
-    console.log('[TATKAL / PREMIUM TATKAL MODE] Skipping avlFarenquiry and altAvlEnq API calls to prevent 406/blocking.');
+
+    console.log(
+        '[TATKAL / PREMIUM TATKAL MODE] ' +
+        'Alternate availability skipped.'
+    );
 }
 
             // STEP 3: Master Passengers List
@@ -6160,7 +6427,7 @@ if (String(bookingData.payment || bookingData.paymentType || bookingData.payment
 
     console.log('[IPAY] Waiting for iPay QR page...');
 
-    await new Promise(r => setTimeout(r, 1500));
+    await new Promise(r => setTimeout(r, 500));
 
     for (let i = 0; i < 30; i++) {
         try {
@@ -6209,7 +6476,7 @@ for (let i = 0; i < 30; i++) {
 
         }
 await new Promise(function(r) {
-    setTimeout(r, 1500);
+    setTimeout(r, 500);
 });
 
 console.log('[QR] Waiting for payment page to load...');

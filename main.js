@@ -173,6 +173,48 @@ ipcMain.on(
     }
 );
 
+ipcMain.on(
+    'update-mini-automation-data',
+    (event, data) => {
+
+        const windowId =
+            data?.windowId;
+
+        const miniWin =
+            miniAutomationWindows.get(
+                windowId
+            );
+
+        if (
+            !miniWin ||
+            miniWin.isDestroyed()
+        ) {
+            console.log(
+                '[MINI WINDOW] Update skipped. Window not found:',
+                windowId
+            );
+            return;
+        }
+
+        miniWin.webContents.send(
+            'mini-window-data-update',
+            {
+                windowId,
+                availability:
+                    data?.availability || '--',
+                fare:
+                    data?.fare || '--'
+            }
+        );
+
+        console.log(
+            '[MINI WINDOW] Availability/Fare updated:',
+            data?.availability,
+            data?.fare
+        );
+    }
+);
+
 // ==========================================
 // MULTI-BROWSER CONFIG
 // ==========================================
@@ -1166,11 +1208,13 @@ ipcMain.handle(
         );
 
 
-        try {
+        let miniWin = null;
 
-            console.log(
-                `[MAIN] Starting booking for browser: ${targetBrowser}`
-            );
+try {
+
+    console.log(
+        `[MAIN] Starting booking for browser: ${targetBrowser}`
+    );
 
             const config =
                 getBrowserConfig(targetBrowser);
@@ -1330,7 +1374,7 @@ try {
                 `[${config.type}] Connected to page: ${await page.url()}`
             );
 
-            const miniWin =
+            miniWin =
     windowId
         ? miniAutomationWindows.get(windowId)
         : null;
@@ -1388,22 +1432,51 @@ const result =
                     error.message
             };
 
-        } finally {
+       } finally {
 
-            // ==========================================
-            // RELEASE BOOKING LOCK
-            // Runs on success, error, or exception
-            // ==========================================
+    // ==========================================
+    // RELEASE BOOKING LOCK
+    // Runs on success, error, or exception
+    // ==========================================
 
-            activeBookingBrowsers.delete(
-                bookingBrowser
-            );
+    activeBookingBrowsers.delete(
+        bookingBrowser
+    );
 
-            console.log(
-                `[MAIN] Booking lock released: ${bookingBrowser}`
-            );
+    console.log(
+        `[MAIN] Booking lock released: ${bookingBrowser}`
+    );
+
+    // ==========================================
+    // MINI WINDOW BOOKING BUTTON UNLOCK
+    // ==========================================
+
+    if (
+    miniWin &&
+    !miniWin.isDestroyed()
+) {
+
+    console.log(
+        `[MAIN] Sending booking unlock to mini window: ${bookingBrowser}`
+    );
+
+    miniWin.webContents.send(
+        'booking-lock-update',
+        {
+            browserType: bookingBrowser,
+            locked: false
         }
-    }
+    );
+
+} else {
+
+    console.warn(
+        `[MAIN] Mini window unavailable for unlock: ${bookingBrowser}`
+    );
+}
+
+}
+}
 );
 
 

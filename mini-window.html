@@ -662,25 +662,25 @@
          RESULT / CLOCK
     ========================================== -->
 
-    <div class="bottom-row">
+   <div class="bottom-row">
 
-        <span
-            id="result"
-            class="result">
+    <span
+        id="result"
+        class="result">
 
-            READY
+        Availability: -- | Fare: ₹--
 
-        </span>
+    </span>
 
-        <span
-            id="mini-clock"
-            class="mini-clock">
+    <span
+        id="mini-clock"
+        class="mini-clock">
 
-            00:00:00
+        00:00:00
 
-        </span>
+    </span>
 
-    </div>
+</div>
 
 
     <script>
@@ -804,6 +804,37 @@ if (currentTicket) {
 
         }
 
+if (
+    window.electronAPI &&
+    typeof window.electronAPI.onMiniWindowDataUpdate ===
+    "function"
+) {
+
+    window.electronAPI.onMiniWindowDataUpdate(
+        (data) => {
+
+            console.log(
+                "[MINI WINDOW] Availability/Fare update:",
+                data
+            );
+
+            const availability =
+                data?.availability || "--";
+
+            const fare =
+                data?.fare || "--";
+
+            setText(
+                "result",
+                "Availability: " +
+                availability +
+                " | Fare: ₹" +
+                fare
+            );
+        }
+    );
+}
+
         // =========================================
 // LIVE BOOKING PROGRESS
 // =========================================
@@ -836,21 +867,25 @@ if (
                     progressData.message || ""
                 ).trim();
 
-            // TOP STATUS AREA
-            if (step) {
-                setText(
-                    "status",
-                    step.toUpperCase()
-                );
-            }
+           // =========================================
+// TOP ORANGE AREA = LIVE BOOKING TRACKING
+// =========================================
 
-            // BOTTOM RESULT AREA
-            if (message) {
-                setText(
-                    "result",
-                    message
-                );
-            }
+if (message) {
+
+    setText(
+        "status",
+        message
+    );
+
+} else if (step) {
+
+    setText(
+        "status",
+        step.toUpperCase()
+    );
+
+}
         }
     );
 }
@@ -1117,15 +1152,14 @@ if (title) {
 
 
             setText(
-                "status",
-                "READY"
-            );
+    "status",
+    "READY"
+);
 
-
-            setText(
-                "result",
-                "READY"
-            );
+setText(
+    "result",
+    "Availability: -- | Fare: ₹--"
+);
 
         }
 
@@ -1574,30 +1608,42 @@ payment:
 
             } finally {
 
-                // =========================================
-                // RELEASE BOOKING LOCK
-                // =========================================
+    // =========================================
+    // RELEASE BOOKING LOCK
+    // =========================================
 
-                automationRunning = false;
+    const releasedBrowser =
+        automationTargetBrowser;
 
-                automationTargetBrowser = null;
+    const activeButton =
+        releasedBrowser
+            ? document.getElementById(
+                `${releasedBrowser.toLowerCase()}-btn`
+            )
+            : null;
 
-                const activeButton =
-    document.getElementById(
-        `${automationTargetBrowser.toLowerCase()}-btn`
+    if (activeButton) {
+
+        activeButton.disabled = false;
+
+        activeButton.style.opacity = "";
+
+        activeButton.style.cursor =
+            "pointer";
+
+        activeButton.style.pointerEvents =
+            "auto";
+    }
+
+    automationRunning = false;
+
+    automationTargetBrowser = null;
+
+    console.log(
+        `[MINI WINDOW] Booking execution lock released: ${releasedBrowser || "browser"}`
     );
 
-if (activeButton) {
-    activeButton.disabled = false;
-    activeButton.style.opacity = "";
-    activeButton.style.cursor = "";
 }
-
-                console.log(
-                    "[MINI WINDOW] Booking execution lock released."
-                );
-
-            }
 
         }
 

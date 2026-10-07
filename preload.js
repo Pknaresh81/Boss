@@ -201,6 +201,25 @@ onAppUpdateDownloaded: (callback) =>
                 ) => callback(data)
             ),
 
+            onMiniWindowDataUpdate: (callback) =>
+    ipcRenderer.on(
+        'mini-window-data-update',
+        (
+            event,
+            data
+        ) => callback(data)
+    ),
+
+          
+        onBookingLockUpdate: (callback) =>
+            ipcRenderer.on(
+                'booking-lock-update',
+                (
+                    event,
+                    data
+                ) => callback(data)
+            ),
+
         onBookingProgress: (callback) =>
             ipcRenderer.on(
                 'booking-progress',
