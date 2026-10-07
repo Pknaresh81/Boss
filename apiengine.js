@@ -718,119 +718,153 @@ this.sendBookingStatus(
     10
 );
 
-    // ==========================================
-    // USERNAME FIELD
-    // ==========================================
-    const usernameSelector =
-        'input[formcontrolname="userid"]';
+// ==========================================
+// CLEAR OLD LOGIN CREDENTIALS
+// THEN FILL SELECTED USERNAME + PASSWORD
+// ==========================================
 
-    await this.page.waitForSelector(
-        usernameSelector,
-        {
-            visible: true,
-            timeout: 15000
-        }
-    );
+const usernameSelector =
+    'input[formcontrolname="userid"]';
 
-    await this.page.click(
-        usernameSelector
-    );
+const passwordSelector =
+    'input[formcontrolname="password"]';
 
-    await this.page.evaluate(
-        (selector) => {
+// ==========================================
+// USERNAME
+// ==========================================
 
-            const input =
-                document.querySelector(selector);
-
-            if (input) {
-
-                input.value = '';
-
-                input.dispatchEvent(
-                    new Event('input', {
-                        bubbles: true
-                    })
-                );
-
-                input.dispatchEvent(
-                    new Event('change', {
-                        bubbles: true
-                    })
-                );
-            }
-
-        },
-        usernameSelector
-    );
-
-    await this.page.type(
+await this.page.waitForSelector(
     usernameSelector,
-    username,
+    {
+        visible: true,
+        timeout: 15000
+    }
+);
+
+const usernameInput =
+    await this.page.$(usernameSelector);
+
+if (!usernameInput) {
+    throw new Error(
+        `[${this.browserType}] Username field nahi mila.`
+    );
+}
+
+// OLD USERNAME CLEAR
+await usernameInput.click();
+
+await this.page.evaluate(
+    (selector) => {
+
+        const input =
+            document.querySelector(selector);
+
+        if (!input) return;
+
+        input.focus();
+
+        input.value = '';
+
+        input.dispatchEvent(
+            new Event('input', {
+                bubbles: true
+            })
+        );
+
+        input.dispatchEvent(
+            new Event('change', {
+                bubbles: true
+            })
+        );
+
+        input.blur();
+    },
+    usernameSelector
+);
+
+// SELECTED USERNAME FILL
+await this.page.click(usernameSelector);
+
+await this.page.type(
+    usernameSelector,
+    String(username || ''),
     {
         delay: 80
     }
 );
 
-    console.log(
-        `[AUTO LOGIN ${this.browserType}] Username filled.`
-    );
+console.log(
+    `[AUTO LOGIN ${this.browserType}] Selected username filled.`
+);
 
-    // ==========================================
-    // PASSWORD FIELD
-    // ==========================================
-    const passwordSelector =
-        'input[formcontrolname="password"]';
 
-    await this.page.waitForSelector(
-        passwordSelector,
-        {
-            visible: true,
-            timeout: 15000
-        }
-    );
+// ==========================================
+// PASSWORD
+// ==========================================
 
-    await this.page.click(
-        passwordSelector
-    );
-
-    await this.page.evaluate(
-        (selector) => {
-
-            const input =
-                document.querySelector(selector);
-
-            if (input) {
-
-                input.value = '';
-
-                input.dispatchEvent(
-                    new Event('input', {
-                        bubbles: true
-                    })
-                );
-
-                input.dispatchEvent(
-                    new Event('change', {
-                        bubbles: true
-                    })
-                );
-            }
-
-        },
-        passwordSelector
-    );
-
-    await this.page.type(
+await this.page.waitForSelector(
     passwordSelector,
-    password,
+    {
+        visible: true,
+        timeout: 15000
+    }
+);
+
+const passwordInput =
+    await this.page.$(passwordSelector);
+
+if (!passwordInput) {
+    throw new Error(
+        `[${this.browserType}] Password field nahi mila.`
+    );
+}
+
+// OLD PASSWORD CLEAR
+await passwordInput.click();
+
+await this.page.evaluate(
+    (selector) => {
+
+        const input =
+            document.querySelector(selector);
+
+        if (!input) return;
+
+        input.focus();
+
+        input.value = '';
+
+        input.dispatchEvent(
+            new Event('input', {
+                bubbles: true
+            })
+        );
+
+        input.dispatchEvent(
+            new Event('change', {
+                bubbles: true
+            })
+        );
+
+        input.blur();
+    },
+    passwordSelector
+);
+
+// SELECTED PASSWORD FILL
+await this.page.click(passwordSelector);
+
+await this.page.type(
+    passwordSelector,
+    String(password || ''),
     {
         delay: 90
     }
 );
 
-    console.log(
-        `[AUTO LOGIN ${this.browserType}] Password filled.`
-    );
+console.log(
+    `[AUTO LOGIN ${this.browserType}] Selected password filled.`
+);
 
     // ==========================================
     // CAPTCHA / SIGN IN MANUAL
