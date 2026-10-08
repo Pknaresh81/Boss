@@ -20,9 +20,144 @@ const { startManualLogin } = require('./loginManager');
 
 let win = null;
 let licenseWindow = null;
+const qrPaymentWindows = new Map();
 let miniAutomationWindows = new Map();
+let miniAutomationWindowsByBrowser = new Map();
+
 
 let licenseVerified = false;
+
+function createQRPaymentWindow(browserType = 'WEB') {
+
+    const type =
+        String(browserType || 'WEB')
+            .trim()
+            .toUpperCase();
+
+            console.log(
+    '[QR WINDOW DEBUG] browserType:',
+    browserType,
+    '| normalized type:',
+    type
+);
+
+    const existingWindow =
+        qrPaymentWindows.get(type);
+
+    if (
+    existingWindow &&
+    !existingWindow.isDestroyed()
+) {
+
+    if (
+        typeof miniAutomationWindows !== 'undefined'
+    ) {
+        const miniWin =
+    miniAutomationWindowsByBrowser.get(type);
+
+        if (
+            miniWin &&
+            !miniWin.isDestroyed()
+        ) {
+            const [miniX, miniY] =
+                miniWin.getPosition();
+
+            existingWindow.setPosition(
+                miniX,
+                miniY
+            );
+        }
+    }
+
+    existingWindow.show();
+    existingWindow.focus();
+
+    return existingWindow;
+}
+
+    const qrWindow =
+        new BrowserWindow({
+            width: 350,
+            height: 375,
+            minWidth: 350,
+            minHeight: 375,
+            resizable: true,
+            movable: true,
+            alwaysOnTop: true,
+            autoHideMenuBar: true,
+            backgroundColor: '#00000000',
+            transparent: true,
+
+            webPreferences: {
+                preload: path.join(
+                    __dirname,
+                    'preload.js'
+                ),
+                contextIsolation: true,
+                nodeIntegration: false
+            }
+        });
+
+    qrPaymentWindows.set(
+        type,
+        qrWindow
+    );
+
+    qrWindow.loadFile(
+        path.join(
+            __dirname,
+            'qr-payment.html'
+        )
+    );
+
+    qrWindow.webContents.once(
+        'did-finish-load',
+        () => {
+            console.log(
+                `[QR WINDOW ${type}] qr-payment.html loaded.`
+            );
+        }
+    );
+
+    qrWindow.on(
+        'closed',
+        () => {
+
+            if (
+                qrPaymentWindows.get(type) ===
+                qrWindow
+            ) {
+                qrPaymentWindows.delete(type);
+            }
+        }
+    );
+
+    if (
+    typeof miniAutomationWindows !== 'undefined'
+) {
+    const miniWin =
+    miniAutomationWindowsByBrowser.get(type);
+
+    if (
+        miniWin &&
+        !miniWin.isDestroyed()
+    ) {
+        const [miniX, miniY] =
+            miniWin.getPosition();
+
+        qrWindow.setPosition(
+            miniX,
+            miniY
+        );
+    }
+}
+
+qrWindow.show();
+qrWindow.focus();
+
+return qrWindow;
+}
+
 
 ipcMain.handle(
     'open-mini-automation-window',
@@ -85,6 +220,24 @@ ipcMain.handle(
                 windowId,
                 miniWin
             );
+
+            miniAutomationWindowsByBrowser.set(
+    String(browserType || 'WEB')
+        .trim()
+        .toUpperCase(),
+    miniWin
+);
+
+console.log(
+    '[MINI MAP DEBUG]',
+    Array.from(
+        miniAutomationWindowsByBrowser.entries()
+    ).map(([key, value]) => ({
+        key,
+        destroyed: value.isDestroyed(),
+        position: value.getPosition()
+    }))
+);
 
             await miniWin.loadFile(
                 path.join(
@@ -1381,11 +1534,112 @@ try {
         ? miniAutomationWindows.get(windowId)
         : null;
 
-        const apiEngine = new APIEngine(
+if (
+    miniWin &&
+    !miniWin.isDestroyed()
+) {
+    miniAutomationWindowsByBrowser.set(
+        config.type,
+        miniWin
+    );
+
+    console.log(
+        `[MINI MAP] ${config.type} mapped to window: ${windowId}`
+    );
+}
+
+       const apiEngine = new APIEngine(
     page,
     miniWin,
     null,
-    config.type
+    config.type,
+    {
+        showQR: (data) => {
+
+    const qrWindow =
+    createQRPaymentWindow(config.type);
+
+    if (
+        !qrWindow ||
+        qrWindow.isDestroyed()
+    ) {
+        return;
+    }
+
+    const sendQR = () => {
+        if (
+    qrWindow &&
+    !qrWindow.isDestroyed()
+) {
+    qrWindow.webContents.send(
+        'payment-qr-show',
+        data
+    );
+
+    console.log(
+        `[MAIN] ${config.type} QR data sent after QR window loaded.`
+    );
+}
+    };
+
+    if (qrWindow.webContents.isLoading()) {
+
+        qrWindow.webContents.once(
+            'did-finish-load',
+            sendQR
+        );
+
+    } else {
+
+        sendQR();
+    }
+},
+
+        hideQR: () => {
+
+    const qrWindow =
+        qrPaymentWindows.get(
+            config.type
+        );
+
+    if (
+        qrWindow &&
+        !qrWindow.isDestroyed()
+    ) {
+        qrWindow.close();
+    }
+
+    qrPaymentWindows.delete(
+        config.type
+    );
+},
+
+        updateQRTimer: (data) => {
+
+    const qrWindow =
+        qrPaymentWindows.get(
+            config.type
+        );
+
+    if (
+        !qrWindow ||
+        qrWindow.isDestroyed()
+    ) {
+        return;
+    }
+
+    if (
+        qrWindow.webContents.isLoading()
+    ) {
+        return;
+    }
+
+    qrWindow.webContents.send(
+        'payment-qr-timer',
+        data
+    );
+}
+    }
 );
 
 // ==========================================
@@ -2519,12 +2773,110 @@ try {
                 {};
 
             const apiEngine =
-                new APIEngine(
-                    page,
-                    win,
-                    null,
-                    config.type
-                );
+    new APIEngine(
+        page,
+        win,
+        null,
+        config.type,
+        {
+            showQR: (data) => {
+
+console.log(
+    '[QR MAP DEBUG]',
+    'browser =',
+    config.type,
+    'mini mapped =',
+    miniAutomationWindowsByBrowser.has(config.type)
+);
+
+                const qrWindow =
+    createQRPaymentWindow(config.type);
+
+                if (
+                    !qrWindow ||
+                    qrWindow.isDestroyed()
+                ) {
+                    return;
+                }
+
+                const sendQR = () => {
+
+                   if (
+    qrWindow &&
+    !qrWindow.isDestroyed()
+) {
+    qrWindow.webContents.send(
+        'payment-qr-show',
+        data
+    );
+
+                        console.log(
+                            '[MAIN] QR data sent after QR window loaded.'
+                        );
+                    }
+                };
+
+                if (
+                    qrWindow.webContents.isLoading()
+                ) {
+
+                    qrWindow.webContents.once(
+                        'did-finish-load',
+                        sendQR
+                    );
+
+                } else {
+
+                    sendQR();
+                }
+            },
+
+            hideQR: () => {
+
+    const qrWindow =
+        qrPaymentWindows.get(
+            config.type
+        );
+
+    if (
+        qrWindow &&
+        !qrWindow.isDestroyed()
+    ) {
+        qrWindow.close();
+    }
+
+    qrPaymentWindows.delete(
+        config.type
+    );
+},
+
+            updateQRTimer: (data) => {
+
+    const qrWindow =
+        qrPaymentWindows.get(
+            config.type
+        );
+
+    if (
+        !qrWindow ||
+        qrWindow.isDestroyed()
+    ) {
+        return;
+    }
+
+    if (
+        qrWindow.webContents.isLoading()
+    ) {
+        return;
+    }
+
+    qrWindow.webContents.send(
+        'payment-qr-timer',
+        data
+    );
+}
+        }
+    );
 
             console.log(
                 `[${config.type}] Tatkal booking starting for Train:`,

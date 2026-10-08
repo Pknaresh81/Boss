@@ -890,6 +890,116 @@ if (message) {
     );
 }
 
+// =========================================
+// QR PAYMENT POPUP LISTENER
+// =========================================
+
+console.log(
+    '[MINI WINDOW DEBUG] electronAPI loaded:',
+    !!window.electronAPI
+);
+
+console.log(
+    '[MINI WINDOW DEBUG] onPaymentQR available:',
+    !!(
+        window.electronAPI &&
+        window.electronAPI.onPaymentQR
+    )
+);
+
+if (window.electronAPI.onPaymentQR) {
+
+    window.electronAPI.onPaymentQR(function (qrData) {
+
+        const popup =
+            document.getElementById("qr-payment-popup");
+
+        const qrImage =
+            document.getElementById("qr-payment-image");
+
+        const qrTimer =
+            document.getElementById("qr-payment-timer");
+
+        const qrStatus =
+            document.getElementById("qr-payment-status");
+
+        if (!popup || !qrImage) {
+            console.warn(
+                "[MINI WINDOW] QR popup elements not found."
+            );
+            return;
+        }
+
+        if (qrData && qrData.image) {
+
+            qrImage.src = qrData.image;
+
+            if (qrTimer) {
+                qrTimer.textContent =
+                    qrData.remainingTime || "00:00";
+            }
+
+            if (qrStatus) {
+                qrStatus.textContent =
+                    "Waiting for payment...";
+            }
+
+            popup.style.display = "flex";
+
+            console.log(
+                "[MINI WINDOW] Payment QR popup shown."
+            );
+        }
+    });
+}
+
+// =========================================
+// QR PAYMENT POPUP HIDE LISTENER
+// =========================================
+
+if (window.electronAPI.onPaymentQRHide) {
+
+    window.electronAPI.onPaymentQRHide(function () {
+
+        const popup =
+            document.getElementById("qr-payment-popup");
+
+        if (popup) {
+
+            popup.style.display = "none";
+
+            console.log(
+                "[MINI WINDOW] Payment QR popup hidden."
+            );
+        }
+    });
+}
+
+// =========================================
+// QR PAYMENT TIMER UPDATE
+// =========================================
+
+if (window.electronAPI.onPaymentQRTimer) {
+
+    window.electronAPI.onPaymentQRTimer(function (data) {
+
+        const qrTimer =
+            document.getElementById(
+                "qr-payment-timer"
+            );
+
+        if (!qrTimer || !data) {
+            return;
+        }
+
+        if (data.remainingTime) {
+
+            qrTimer.textContent =
+                data.remainingTime;
+        }
+    });
+}
+
         // =========================================
         // RENDER TICKET
         // =========================================
@@ -1747,6 +1857,102 @@ document
         );
 
     </script>
+
+<!-- =========================================
+     QR PAYMENT POPUP
+========================================== -->
+
+<div
+    id="qr-payment-popup"
+    style="
+        display:none;
+        position:fixed;
+        inset:0;
+        z-index:99999;
+        background:rgba(0,0,0,0.88);
+        align-items:center;
+        justify-content:center;
+    "
+>
+
+    <div
+        style="
+            width:270px;
+            max-width:94%;
+            background:#0d1b2f;
+            border:1px solid rgba(90,170,255,0.45);
+            border-radius:10px;
+            padding:12px;
+            text-align:center;
+            box-shadow:0 10px 40px rgba(0,0,0,0.7);
+        "
+    >
+
+        <div
+            style="
+                color:#e8f3ff;
+                font-size:13px;
+                font-weight:700;
+                margin-bottom:8px;
+            "
+        >
+            SCAN & PAY
+        </div>
+
+        <div
+            id="qr-payment-image-box"
+            style="
+                width:220px;
+                height:220px;
+                margin:0 auto 10px;
+                background:#fff;
+                border-radius:6px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                overflow:hidden;
+            "
+        >
+
+            <img
+                id="qr-payment-image"
+                src=""
+                alt="Payment QR"
+                style="
+                    max-width:100%;
+                    max-height:100%;
+                    display:block;
+                "
+            >
+
+        </div>
+
+        <div
+            id="qr-payment-timer"
+            style="
+                color:#38bdf8;
+                font-family:monospace;
+                font-size:18px;
+                font-weight:700;
+                margin-bottom:5px;
+            "
+        >
+            00:00
+        </div>
+
+        <div
+            id="qr-payment-status"
+            style="
+                color:#8fa8c2;
+                font-size:10px;
+            "
+        >
+            Waiting for payment...
+        </div>
+
+    </div>
+
+</div>
 
 </body>
 

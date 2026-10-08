@@ -4,8 +4,13 @@ const path = require('path');
 
 class APIEngine {
 
-    constructor(pageOrCaptcha = null, winOrCell = null, requestCaptcha = null, browserType = 'WEB') {
-
+   constructor(
+    pageOrCaptcha = null,
+    winOrCell = null,
+    requestCaptcha = null,
+    browserType = 'WEB',
+    qrCallbacks = null
+) {
     if (typeof pageOrCaptcha === 'function') {
         this.requestCaptcha = pageOrCaptcha;
         this.win = winOrCell;
@@ -18,6 +23,9 @@ class APIEngine {
                 ? requestCaptcha
                 : null;
     }
+
+this.qrCallbacks =
+    qrCallbacks || {};
 
     this.browserType = String(browserType || 'WEB')
         .trim()
@@ -1602,7 +1610,6 @@ if (!this.page || this.page.isClosed()) {
 }
 
 result = await this.page.evaluate(script);
-                console.log(`1. Browser POST avlFarenquiry status (Attempt ${attempt}):`, result ? result.status : 0);
 
                 if (!result || result.status !== 200 || !result.body) {
 
@@ -1879,11 +1886,23 @@ const base64Payload = Buffer.from(rawPayload).toString('base64');
             typeof window.__bossSendProgress === 'function'
         ) {
 
+console.log(
+            '[LIVE PROGRESS DEBUG] Sending:',
+            step,
+            message,
+            percentage
+        );
+
             await window.__bossSendProgress(
                 step,
                 message,
                 percentage
             );
+
+            console.log(
+            '[LIVE PROGRESS DEBUG] Send completed:',
+            step
+        );
 
         }
 
@@ -2252,7 +2271,7 @@ diagnosticLogs.push(
 
 await liveProgress(
     'TRAIN SEARCH',
-    'Train list load ho rahi hai, target train search ki ja rahi hai...',
+    'Target train search ki ja rahi hai...',
     42
 );
 
@@ -6020,28 +6039,28 @@ for (;;) {
         }
     }
 
+    console.log(
+        '[QR DEBUG] Payment detection loop completed. payBookSuccess =',
+        payBookSuccess
+    );
 
     if (payBookSuccess) {
 
-        diagnosticLogs.push(
-            "SUCCESS: Pay & Book completed. Waiting for " +
-            providerName +
-            " QR payment page..."
-        );
-
-          await liveProgress(
-        'QR DETECTING',
-        'QR detecting...',
-        78
+         diagnosticLogs.push(
+        "SUCCESS: Pay & Book completed. Payment page transition handed back to Node."
     );
 
-        return {
-            success: true,
-            paymentMethod: selectedPayment,
-            totalFare: payload.realFare,
-            logs: diagnosticLogs,
-            message: 'Pay & Book clicked successfully.'
-        };
+ console.log(
+    '[QR DEBUG] Pay & Book completed. Leaving browser evaluate before payment navigation.'
+);
+
+return {
+    success: true,
+    paymentMethod: selectedPayment,
+    totalFare: payload.realFare,
+    logs: diagnosticLogs,
+    message: 'Pay & Book clicked successfully.'
+};
     }
 
 
@@ -6152,6 +6171,12 @@ if (this._bookingProgressBridgePage !== this.page) {
 }
 
 result = await this.page.evaluate(script);
+
+this.sendBookingStatus(
+    'QR detecting...',
+    'QR DETECTING',
+    78
+);
 
 console.log('\n================ AUTOMATION LOGS ===============');
 
@@ -6543,7 +6568,8 @@ if (paymentValue.startsWith('IPAY')) {
 } else if (paymentValue.startsWith('PAYTM')) {
     qrSelector = 'img[data-key="qr-code"]';
 } else if (paymentValue.startsWith('PHONEPE')) {
-    qrSelector = 'img[src^="data:image/"]';
+    qrSelector =
+        'canvas, img[src^="blob:"], img[src*="qr"], img[alt*="QR" i]';
 }
 
 if (!qrSelector) {
@@ -6575,6 +6601,245 @@ console.log(
     ' QR detected successfully.'
 );
 
+// ==========================================
+// SEND SAME QR + LIVE IRCTC TIMER
+// TO MINI WINDOW
+// ==========================================
+
+try {
+
+    let qrImage = null;
+
+    // ------------------------------------------
+    // IPAY = CANVAS QR
+    // PAYTM / PHONEPE = IMAGE QR
+    // ------------------------------------------
+
+    if (paymentValue.startsWith('IPAY')) {
+
+        qrImage =
+            await this.page.$eval(
+                '#irctcDynamicQrCanvas',
+                function(canvas) {
+                    return canvas.toDataURL(
+                        'image/png'
+                    );
+                }
+            );
+
+    } else {
+
+        const qrElement =
+            await this.page.$(qrSelector);
+
+        if (qrElement) {
+
+            const qrSize =
+    await qrElement.evaluate(function(el) {
+        return {
+            width: el.naturalWidth || el.width || 0,
+            height: el.naturalHeight || el.height || 0,
+            clientWidth: el.clientWidth || 0,
+            clientHeight: el.clientHeight || 0
+        };
+    });
+
+console.log(
+    '[QR DEBUG] QR source size:',
+    qrSize
+);
+
+            const qrSource =
+    await qrElement.evaluate(function(el) {
+
+        return (
+            el.currentSrc ||
+            el.src ||
+            el.getAttribute('src') ||
+            ''
+        );
+    });
+
+if (
+    qrSource &&
+    qrSource.startsWith('data:image/')
+) {
+
+    qrImage = qrSource;
+
+} else {
+
+    const base64 =
+        await qrElement.screenshot({
+            encoding: 'base64'
+        });
+
+    qrImage =
+        'data:image/png;base64,' +
+        base64;
+}
+        }
+    }
+
+    // ------------------------------------------
+    // FIND LIVE IRCTC PAYMENT TIMER
+    // ------------------------------------------
+
+    let remainingTime = '00:00';
+
+    try {
+
+        remainingTime =
+            await this.page.evaluate(() => {
+
+                const elements =
+                    Array.from(
+                        document.querySelectorAll('*')
+                    );
+
+                for (
+                    const element of elements
+                ) {
+
+                    const text =
+                        String(
+                            element.innerText || ''
+                        ).trim();
+
+                    if (
+                        /^\d{1,2}:\d{2}$/.test(text)
+                    ) {
+
+                        const parts =
+                            text.split(':');
+
+                        const minutes =
+                            parseInt(
+                                parts[0],
+                                10
+                            );
+
+                        const seconds =
+                            parseInt(
+                                parts[1],
+                                10
+                            );
+
+                        if (
+                            !isNaN(minutes) &&
+                            !isNaN(seconds) &&
+                            minutes >= 0 &&
+                            minutes <= 60 &&
+                            seconds >= 0 &&
+                            seconds <= 59
+                        ) {
+
+                            return (
+                                String(minutes).padStart(2, '0') +
+                                ':' +
+                                String(seconds).padStart(2, '0')
+                            );
+                        }
+                    }
+                }
+
+                return '00:00';
+
+            });
+
+    } catch (timerError) {
+
+        console.warn(
+            '[QR] Payment timer read failed:',
+            timerError.message
+        );
+
+    }
+
+    // ------------------------------------------
+    // SEND QR TO MINI WINDOW
+    // ------------------------------------------
+
+    if (
+        qrImage &&
+        this.win &&
+        !this.win.isDestroyed()
+    ) {
+
+      if (
+    this.qrCallbacks &&
+    typeof this.qrCallbacks.showQR === 'function'
+) {
+
+    this.qrCallbacks.showQR({
+        image: qrImage,
+        remainingTime: remainingTime
+    });
+
+    console.log(
+        '[QR] Payment QR sent to separate QR window.'
+    );
+
+} else {
+
+    console.warn(
+        '[QR] QR show callback available nahi hai.'
+    );
+}
+
+console.log(
+    '[QR] Payment QR sent to mini window.'
+);
+
+// Mini window renderer ready hone ke liye
+// ek short delayed resend
+setTimeout(() => {
+    try {
+
+        if (
+            this.qrCallbacks &&
+            typeof this.qrCallbacks.showQR === 'function'
+        ) {
+
+            this.qrCallbacks.showQR({
+                image: qrImage,
+                remainingTime: remainingTime
+            });
+
+            console.log(
+                '[QR] Payment QR resend sent to separate QR window.'
+            );
+        }
+
+    } catch (qrResendError) {
+
+        console.warn(
+            '[QR] Payment QR resend failed:',
+            qrResendError.message
+        );
+    }
+}, 700);
+
+        console.log(
+            '[QR] IRCTC payment timer:',
+            remainingTime
+        );
+
+    } else {
+
+        console.warn(
+            '[QR] QR image ya mini window available nahi hai.'
+        );
+    }
+
+} catch (qrPopupError) {
+
+    console.warn(
+        '[QR] Mini window QR popup preparation failed:',
+        qrPopupError.message
+    );
+}
+
 this.sendBookingStatus(
     'SCAN & PAY',
     'SCAN & PAY',
@@ -6602,6 +6867,10 @@ console.log(
 // Payment verification ko QR detect hote hi immediately call nahi karna.
 // Pehle payment page ko success/confirmation state mein aane denge.
 
+// ==========================================
+// NAVIGATION-SAFE PAYMENT CONFIRMATION LOOP
+// ==========================================
+
 let paymentCompleted = false;
 let paymentFailed = false;
 
@@ -6609,7 +6878,8 @@ for (let i = 0; i < 120; i++) {
 
     let paymentState = {
         success: false,
-        failed: false
+        failed: false,
+        remainingTime: '00:00'
     };
 
     try {
@@ -6617,6 +6887,16 @@ for (let i = 0; i < 120; i++) {
         if (!this.page || this.page.isClosed()) {
             throw new Error('Payment page closed.');
         }
+
+        if (
+    this.page.isClosed()
+) {
+    throw new Error('Payment page closed.');
+}
+
+await new Promise(function(resolve) {
+    setTimeout(resolve, 300);
+});
 
         paymentState =
             await this.page.evaluate(() => {
@@ -6638,48 +6918,178 @@ for (let i = 0; i < 120; i++) {
                     body.includes('transaction failed') ||
                     body.includes('payment failure');
 
+                let remainingTime = '00:00';
+
+                const elements =
+                    Array.from(
+                        document.querySelectorAll('*')
+                    );
+
+                for (const element of elements) {
+
+                    const text =
+                        String(
+                            element.innerText || ''
+                        ).trim();
+
+                    if (
+                        /^\d{1,2}:\d{2}$/.test(text)
+                    ) {
+
+                        const parts =
+                            text.split(':');
+
+                        const minutes =
+                            parseInt(
+                                parts[0],
+                                10
+                            );
+
+                        const seconds =
+                            parseInt(
+                                parts[1],
+                                10
+                            );
+
+                        if (
+                            !isNaN(minutes) &&
+                            !isNaN(seconds) &&
+                            minutes >= 0 &&
+                            minutes <= 60 &&
+                            seconds >= 0 &&
+                            seconds <= 59
+                        ) {
+
+                            remainingTime =
+                                String(minutes).padStart(2, '0') +
+                                ':' +
+                                String(seconds).padStart(2, '0');
+
+                            break;
+                        }
+                    }
+                }
+
                 return {
-                    success: success,
-                    failed: failed
+                    success,
+                    failed,
+                    remainingTime
                 };
             });
 
     } catch (e) {
 
-        if (
-            e &&
-            e.message &&
-            e.message.includes(
-                'Execution context was destroyed'
-            )
-        ) {
-
-            console.log(
-                '[PAYMENT] Page navigation detected. Continuing payment check...'
+        const errorMessage =
+            String(
+                e?.message || ''
             );
-
-            await new Promise(function(resolve) {
-                setTimeout(resolve, 500);
-            });
-
-            continue;
-        }
 
         console.warn(
             '[PAYMENT] Payment status read failed:',
-            e.message
+            errorMessage
+        );
+
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 500);
+        });
+
+        continue;
+    }
+
+    // ==========================================
+    // LIVE QR TIMER UPDATE
+    // ==========================================
+
+    try {
+
+        if (
+            this.qrCallbacks &&
+            typeof this.qrCallbacks.updateQRTimer === 'function'
+        ) {
+
+            this.qrCallbacks.updateQRTimer({
+                remainingTime:
+                    paymentState.remainingTime || '00:00'
+            });
+        }
+
+    } catch (timerUpdateError) {
+
+        console.warn(
+            '[QR] Live payment timer update failed:',
+            timerUpdateError.message
         );
     }
 
+    // ==========================================
+    // PAYMENT SUCCESS
+    // ==========================================
+
     if (paymentState.success) {
+
         paymentCompleted = true;
+
+        try {
+
+            if (
+                this.qrCallbacks &&
+                typeof this.qrCallbacks.hideQR === 'function'
+            ) {
+
+                this.qrCallbacks.hideQR();
+
+                console.log(
+                    '[QR] Payment successful. Separate QR window closed.'
+                );
+            }
+
+        } catch (qrHideError) {
+
+            console.warn(
+                '[QR] QR popup hide failed:',
+                qrHideError.message
+            );
+        }
+
         break;
     }
 
+    // ==========================================
+    // PAYMENT FAILURE
+    // ==========================================
+
     if (paymentState.failed) {
+
         paymentFailed = true;
+
+        try {
+
+            if (
+                this.qrCallbacks &&
+                typeof this.qrCallbacks.hideQR === 'function'
+            ) {
+
+                this.qrCallbacks.hideQR();
+
+                console.log(
+                    '[QR] Payment failed. Separate QR window closed.'
+                );
+            }
+
+        } catch (qrHideError) {
+
+            console.warn(
+                '[QR] QR popup hide failed:',
+                qrHideError.message
+            );
+        }
+
         break;
     }
+
+    // ==========================================
+    // NEXT PAYMENT CHECK
+    // ==========================================
 
     await new Promise(function(resolve) {
         setTimeout(resolve, 1000);
@@ -6701,6 +7111,28 @@ if (paymentFailed) {
 
 if (!paymentCompleted) {
 
+    try {
+
+        if (
+            this.qrCallbacks &&
+            typeof this.qrCallbacks.hideQR === 'function'
+        ) {
+
+            this.qrCallbacks.hideQR();
+
+            console.log(
+                '[QR] Payment confirmation timeout. Separate QR window closed.'
+            );
+        }
+
+    } catch (qrHideError) {
+
+        console.warn(
+            '[QR] QR popup hide failed on timeout:',
+            qrHideError.message
+        );
+    }
+
     this.sendProgress(
         'PAYMENT FAILED',
         'Payment confirmation timeout. Payment success confirm nahi hui.',
@@ -6720,6 +7152,18 @@ this.sendBookingStatus(
     'PAYMENT RECEIVED',
     'PAYMENT RECEIVED',
     90
+);
+
+console.log(
+    '[PAYMENT] Success detected. Waiting for IRCTC navigation to settle before verification...'
+);
+
+await new Promise(function(resolve) {
+    setTimeout(resolve, 1500);
+});
+
+console.log(
+    '[PAYMENT] Starting payment verification...'
 );
 
 // ==========================================
@@ -6850,7 +7294,15 @@ return {
 };
 
         } catch (error) {
-            console.error('[API] Sequence execution failed:', error.message);
+            console.error(
+    '[API] Sequence execution failed:',
+    error.message
+);
+
+console.error(
+    '[API] ERROR STACK:',
+    error.stack
+);
             this.sendProgress(
     'HIGH LOAD',
     'unable to process request',

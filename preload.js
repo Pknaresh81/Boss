@@ -211,7 +211,7 @@ onAppUpdateDownloaded: (callback) =>
     ),
 
           
-        onBookingLockUpdate: (callback) =>
+           onBookingLockUpdate: (callback) =>
             ipcRenderer.on(
                 'booking-lock-update',
                 (
@@ -227,6 +227,34 @@ onAppUpdateDownloaded: (callback) =>
                     event,
                     data
                 ) => callback(data)
-            )            
+            ),
+
+              // ==========================================
+        // QR PAYMENT POPUP
+        // ==========================================
+
+        onPaymentQR: (callback) =>
+            ipcRenderer.on(
+                'payment-qr-show',
+                (
+                    event,
+                    data
+                ) => callback(data)
+            ),
+
+        onPaymentQRHide: (callback) =>
+            ipcRenderer.on(
+                'payment-qr-hide',
+                () => callback()
+            ),
+
+        onPaymentQRTimer: (callback) =>
+            ipcRenderer.on(
+                'payment-qr-timer',
+                (
+                    event,
+                    data
+                ) => callback(data)
+            )
     }
 );
