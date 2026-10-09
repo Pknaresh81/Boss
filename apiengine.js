@@ -4708,6 +4708,7 @@ var firstRetry = 0;
 var firstRetryLimit = 10;
 var firstWaitCycles = 0;
 var firstWaitCycleLimit = 120;
+var previousPopup = false;
 
 for (;;) {
     firstWaitCycles++;
@@ -4732,7 +4733,9 @@ for (;;) {
         txt.includes('unable to process') ||
         txt.includes('please retry');
 
-    if (popup) {
+        if (popup) {
+    var isNewPopup = !previousPopup;
+    previousPopup = true;
 
         firstRetry++;
 
@@ -4743,11 +4746,13 @@ for (;;) {
             firstRetryLimit
         );
 
-await liveProgress(
-    'HIGH LOAD',
-    'unable to process request',
-    20
-);
+if (isNewPopup) {
+    await liveProgress(
+        'HIGH LOAD',
+        'unable to process request',
+        20
+    );
+}
 
         var close =
     document.querySelector(
@@ -4818,8 +4823,10 @@ if (close) {
     }
 }
 
-        continue;
+                continue;
     }
+
+    previousPopup = false;
 
     var wait =
         txt.includes('please wait') ||

@@ -867,6 +867,19 @@ if (
                     progressData.message || ""
                 ).trim();
 
+                const isRetryError =
+    /high load|unable to process|please retry/i.test(message);
+
+if (
+    window.passengerFillTimerState &&
+    isRetryError
+) {
+    console.log(
+        "[MINI WINDOW] Retry error hidden while passenger timer is running."
+    );
+    return;
+}
+
            // =========================================
 // TOP ORANGE AREA = LIVE BOOKING TRACKING
 // =========================================
