@@ -77,11 +77,10 @@ function createQRPaymentWindow(browserType = 'WEB') {
 
     const qrWindow =
         new BrowserWindow({
-            width: 350,
-            height: 375,
-            minWidth: 350,
-            minHeight: 375,
-            resizable: true,
+            width: 280,
+            height: 300,
+            minWidth: 280,
+            minHeight: 300,         
             movable: true,
             alwaysOnTop: true,
             autoHideMenuBar: true,
@@ -226,17 +225,6 @@ ipcMain.handle(
         .trim()
         .toUpperCase(),
     miniWin
-);
-
-console.log(
-    '[MINI MAP DEBUG]',
-    Array.from(
-        miniAutomationWindowsByBrowser.entries()
-    ).map(([key, value]) => ({
-        key,
-        destroyed: value.isDestroyed(),
-        position: value.getPosition()
-    }))
 );
 
             await miniWin.loadFile(
@@ -411,6 +399,7 @@ const BROWSER_CONFIG = {
     }
 
 };
+
 
 // ==========================================
 // BROWSER SETUP STATE

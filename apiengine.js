@@ -1937,7 +1937,7 @@ console.log(
 
 await liveProgress(
     'TRAIN SEARCH',
-    'From aur To station select ho rahe hain...',
+    'Journey details bhar rahe hain...',
     22
 );
 
@@ -2017,7 +2017,7 @@ if (targetToInput && payload.toStation) {
 
             await liveProgress(
     'JOURNEY DATE',
-    'Journey date select ho rahi hai...',
+    'Journey details bhar rahe hai...',
     24
 );
 
@@ -2181,7 +2181,7 @@ try {
 
 await liveProgress(
     'SEARCH BUTTON',
-    'Search Trains button click kiya ja raha hai...',
+    'Search Train...',
     26
 );
 
@@ -2237,7 +2237,7 @@ if (searchBtn && !searchBtn.disabled) {
 
     await liveProgress(
     'SEARCH STARTED',
-    'Search Trains click ho gaya, results load ho rahe hain...',
+    'Search Train...',
     40
 );
 
@@ -2256,7 +2256,7 @@ if (searchBtn && !searchBtn.disabled) {
 
 await liveProgress(
     'SEARCH RESULTS',
-    'Train search results aa rahe hain...',
+    'Train search sucessefully...',
     28
 );
 
@@ -2548,7 +2548,7 @@ if (secs !== window.__bossTatkalLastSecond) {
 
     await liveProgress(
     'TATKAL OPEN',
-    'Tatkal window open. Selecting journey date card...',
+    'journey details bhar rahe hain...',
     40
 );
 }
@@ -2981,7 +2981,7 @@ try {
 
 await liveProgress(
     'JOURNEY DATE',
-    'Journey date card select ho raha hai...',
+    'Journey date select ho rahi hai...',
     36
 );
 
@@ -3618,7 +3618,7 @@ bookBtn.click();
 
 await liveProgress(
     'BOOK NOW',
-    'Book Now click kiya ja raha hai...',
+    'BOOKING START KAR RAHE HAIN...',
     45
 );
 
@@ -3652,7 +3652,7 @@ if (passengerPageReached) {
 
     await liveProgress(
     'PASSENGER PAGE',
-    'Passenger details page open ho gaya hai...',
+    'FILLING PASSENGER DETAILS...',
     50
 );
 
@@ -3886,7 +3886,7 @@ diagnosticLogs.push(
 
 await liveProgress(
     'PASSENGER DETAILS',
-    'filling PASSENGER DETAILS....',
+    'FILLING PASSENGER DETAILS....',
     60
 );
 
@@ -4339,7 +4339,7 @@ try {
 }
 
 await new Promise(function(r) {
-    setTimeout(r, 500);
+    setTimeout(r, 100);
 });
 
 // =========================================================
@@ -6173,7 +6173,7 @@ if (this._bookingProgressBridgePage !== this.page) {
 result = await this.page.evaluate(script);
 
 this.sendBookingStatus(
-    'QR detecting...',
+    'QR DETECTING...',
     'QR DETECTING',
     78
 );
@@ -6380,95 +6380,70 @@ const isTatkalOrPremium =
     quotaUpper === 'PREMIUM TATKAL';
 
 
-// =========================================================
-// STEP 1: CHECK AVAILABILITY & REAL FARE
-// =========================================================
 
-const availabilityResponse =
-    await this.checkAvailabilityAndFare(bookingData);
+            // STEP 1: CHECK AVAILABILITY & REAL FARE
 
-if (availabilityResponse) {
+            if (!isTatkalOrPremium) {
 
+                const availabilityResponse =
+                    await this.checkAvailabilityAndFare(bookingData);
 
-    let extractedRealFare =
-        availabilityResponse.totalFare ||
-        (
-            availabilityResponse.avlFareResponseDTO &&
-            availabilityResponse.avlFareResponseDTO[0] &&
-            availabilityResponse.avlFareResponseDTO[0].totalFare
-        ) ||
-        (
-            availabilityResponse.lapFareDetails &&
-            availabilityResponse.lapFareDetails[0] &&
-            availabilityResponse.lapFareDetails[0].totalFare
-        );
+                if (availabilityResponse) {
 
-    if (availabilityResponse) {
+                    const extractedAvailability =
+                        availabilityResponse.avlDayList &&
+                        availabilityResponse.avlDayList[0] &&
+                        availabilityResponse.avlDayList[0].availablityStatus
+                            ? String(availabilityResponse.avlDayList[0].availablityStatus)
+                            : '';
 
-    const extractedAvailability =
-        availabilityResponse.avlDayList &&
-        availabilityResponse.avlDayList[0] &&
-        availabilityResponse.avlDayList[0].availablityStatus
-            ? String(
-                availabilityResponse.avlDayList[0].availablityStatus
-            )
-            : '';
+                    if (extractedAvailability) {
+                        bookingData.realAvailability = extractedAvailability;
 
-    if (extractedAvailability) {
-        bookingData.realAvailability = extractedAvailability;
+                        console.log(
+                            '[AVAILABILITY] Real availability found:',
+                            bookingData.realAvailability
+                        );
+                    }
 
-        console.log(
-            '[AVAILABILITY] Real availability found:',
-            bookingData.realAvailability
-        );
-    }
+                    const extractedRealFare =
+                        availabilityResponse.totalFare ||
+                        (
+                            availabilityResponse.avlFareResponseDTO &&
+                            availabilityResponse.avlFareResponseDTO[0] &&
+                            availabilityResponse.avlFareResponseDTO[0].totalFare
+                        ) ||
+                        (
+                            availabilityResponse.lapFareDetails &&
+                            availabilityResponse.lapFareDetails[0] &&
+                            availabilityResponse.lapFareDetails[0].totalFare
+                        );
 
-    let extractedRealFare =
-        availabilityResponse.totalFare ||
-        (
-            availabilityResponse.avlFareResponseDTO &&
-            availabilityResponse.avlFareResponseDTO[0] &&
-            availabilityResponse.avlFareResponseDTO[0].totalFare
-        ) ||
-        (
-            availabilityResponse.lapFareDetails &&
-            availabilityResponse.lapFareDetails[0] &&
-            availabilityResponse.lapFareDetails[0].totalFare
-        );
+                    if (extractedRealFare) {
+                        bookingData.realFare = String(extractedRealFare);
 
-    if (extractedRealFare) {
-        bookingData.realFare = String(extractedRealFare);
+                        console.log(
+                            '[AVAILABILITY] Real fare found:',
+                            bookingData.realFare
+                        );
+                    }
 
-        console.log(
-            '[AVAILABILITY] Real fare found:',
-            bookingData.realFare
-        );
-    }
+                    this.sendAvailabilityFare(
+                        bookingData.realAvailability || '--',
+                        bookingData.realFare || '--'
+                    );
+                }
 
-this.sendAvailabilityFare(
-    bookingData.realAvailability || '--',
-    bookingData.realFare || '--'
-);
+                // STEP 2: ALTERNATE AVAILABILITY
+                await this.checkAlternateAvailability(bookingData);
 
-}
-}
+            } else {
 
-
-// =========================================================
-// STEP 2: ALTERNATE AVAILABILITY
-// =========================================================
-
-if (!isTatkalOrPremium) {
-
-    await this.checkAlternateAvailability(bookingData);
-
-} else {
-
-    console.log(
-        '[TATKAL / PREMIUM TATKAL MODE] ' +
-        'Alternate availability skipped.'
-    );
-}
+                console.log(
+                    '[TATKAL / PREMIUM TATKAL MODE] ' +
+                    'Skipping avlFarenquiry and altAvlEnq API calls.'
+                );
+            }
 
             // STEP 3: Master Passengers List
             const masterPassengerResponse = await this.getMasterPassengerList();
@@ -6771,6 +6746,14 @@ if (
     typeof this.qrCallbacks.showQR === 'function'
 ) {
 
+
+if (
+    paymentValue.startsWith('IPAY') &&
+    remainingTime === '00:00'
+) {
+    remainingTime = '03:00';
+}
+
     this.qrCallbacks.showQR({
         image: qrImage,
         remainingTime: remainingTime
@@ -6870,6 +6853,25 @@ console.log(
 // ==========================================
 // NAVIGATION-SAFE PAYMENT CONFIRMATION LOOP
 // ==========================================
+
+
+const ipayTimerEnd = Date.now() + 180000;
+
+function getIPAYRemainingTime() {
+    const remaining = Math.max(
+        0,
+        Math.ceil((ipayTimerEnd - Date.now()) / 1000)
+    );
+
+    const minutes = Math.floor(remaining / 60);
+    const seconds = remaining % 60;
+
+    return (
+        String(minutes).padStart(2, '0') +
+        ':' +
+        String(seconds).padStart(2, '0')
+    );
+}
 
 let paymentCompleted = false;
 let paymentFailed = false;
@@ -7008,9 +7010,10 @@ await new Promise(function(resolve) {
         ) {
 
             this.qrCallbacks.updateQRTimer({
-                remainingTime:
-                    paymentState.remainingTime || '00:00'
-            });
+    remainingTime: paymentValue.startsWith('IPAY')
+        ? getIPAYRemainingTime()
+        : paymentState.remainingTime
+});
         }
 
     } catch (timerUpdateError) {
