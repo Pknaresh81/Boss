@@ -872,19 +872,76 @@ if (
 // =========================================
 
 if (message) {
+    const isFillingPassengers =
+        message.toLowerCase().includes(
+            "filling passenger details"
+        );
 
-    setText(
-        "status",
-        message
-    );
+    if (isFillingPassengers) {
+        const timerKey = "passenger-fill";
+        const duration = 45;
 
+        // Start countdown only once for this filling step
+        if (!window.passengerFillTimerState) {
+            const state = {
+                startTime: Date.now(),
+                interval: null,
+                message: message
+            };
+
+            window.passengerFillTimerState = state;
+
+            const updateTimer = () => {
+const elapsedMs = Date.now() - state.startTime;
+
+const remainingMs = Math.max(
+    0,
+    duration * 1000 - elapsedMs
+);
+
+const seconds = Math.floor(remainingMs / 1000);
+const milliseconds = Math.floor(remainingMs % 1000);
+
+const formattedTime =
+    `${seconds}:${String(milliseconds).padStart(3, '0')}`;
+
+setText(
+    "status",
+    `${state.message} ${formattedTime}`
+);
+
+if (remainingMs <= 0) {
+    clearInterval(state.interval);
+    window.passengerFillTimerState = null;
+
+    setText("status", state.message);
+}
+
+};
+
+
+            updateTimer();
+
+            state.interval = setInterval(
+                updateTimer,
+                10
+            );
+        } else {
+            window.passengerFillTimerState.message = message;
+        }
+    } else {
+        if (window.passengerFillTimerState) {
+            clearInterval(
+                window.passengerFillTimerState.interval
+            );
+
+            window.passengerFillTimerState = null;
+        }
+
+        setText("status", message);
+    }
 } else if (step) {
-
-    setText(
-        "status",
-        step.toUpperCase()
-    );
-
+    setText("status", step.toUpperCase());
 }
         }
     );

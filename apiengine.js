@@ -30,6 +30,7 @@ this.qrCallbacks =
     this.browserType = String(browserType || 'WEB')
         .trim()
         .toUpperCase();
+        this.winId = '';
 
     // Har browser ki separate session file
     this.sessionFilePath = path.join(
@@ -50,6 +51,7 @@ this.qrCallbacks =
         if (this.win && this.win.webContents) {
             try {
                 this.win.webContents.send('booking-progress', {
+                    winId: this.winId,
                     step: stepName,
                     message: message,
                     progress: percentage,
@@ -6284,6 +6286,14 @@ async bookTicket(bookingData) {
         bookingData =
             bookingData.automationData;
     }
+
+// Keep the correct booking status window ID
+this.winId = String(bookingData?.winId || '').trim();
+
+console.log(
+    '[PROGRESS WINDOW] winId =',
+    this.winId || '(missing)'
+);
 
     // ------------------------------------------
     // BASIC VALIDATION

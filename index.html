@@ -1213,6 +1213,8 @@ body {
 
 let ipcRenderer = null;
 
+const passengerFillTimers = new Map();
+
 try {
     if (typeof require === "function") {
         const electron = require("electron");
@@ -1258,6 +1260,65 @@ if (ipcRenderer) {
 
     statusBanner.innerText =
         statusMessage;
+
+        
+
+const isFillingPassengers =
+    statusMessage.toLowerCase().includes(
+        'filling passenger details'
+    );
+
+const timerKey = data.winId;
+
+if (
+    isFillingPassengers &&
+    !passengerFillTimers.has(timerKey)
+) {
+    const duration = 45;
+    const startTime = Date.now();
+
+    const timerState = {
+        interval: null
+    };
+
+    function updatePassengerTimer() {
+        const elapsed =
+            Math.floor((Date.now() - startTime) / 1000);
+
+        const remaining =
+            Math.max(0, duration - elapsed);
+
+        statusBanner.innerText =
+            statusMessage + ' ' + remaining + 's';
+
+        if (remaining <= 0) {
+            clearInterval(timerState.interval);
+            passengerFillTimers.delete(timerKey);
+
+            statusBanner.innerText = statusMessage;
+            statusBanner.style.background = '#2563eb';
+        }
+    }
+
+    passengerFillTimers.set(timerKey, timerState);
+
+    updatePassengerTimer();
+
+    timerState.interval = setInterval(
+        updatePassengerTimer,
+        1000
+    );
+
+} else if (
+    !isFillingPassengers &&
+    passengerFillTimers.has(timerKey)
+) {
+    const timerState =
+        passengerFillTimers.get(timerKey);
+
+    clearInterval(timerState.interval);
+    passengerFillTimers.delete(timerKey);
+}
 }
 
             if (resultTag) {
