@@ -143,50 +143,75 @@ body {
 
     <script>
 
+        
         // =========================================
-        // QR SHOW
+        // QR SHOW - IMAGE LOAD VALIDATION
         // =========================================
 
         if (
             window.electronAPI &&
             window.electronAPI.onPaymentQR
         ) {
-
             window.electronAPI.onPaymentQR(
                 function(qrData) {
-
                     const image =
-                        document.getElementById(
-                            'qr-payment-image'
-                        );
+                        document.getElementById('qr-payment-image');
 
                     const timer =
-                        document.getElementById(
-                            'qr-payment-timer'
+                        document.getElementById('qr-payment-timer');
+
+                    if (!qrData || !qrData.image) {
+                        console.error(
+                            '[QR WINDOW] QR data/image missing.'
                         );
-
-
-                    if (
-                        qrData &&
-                        qrData.image
-                    ) {
-
-                        image.src =
-                            qrData.image;
-
-                        if (timer) {
-
-                            timer.textContent =
-                                qrData.remainingTime ||
-                                '00:00';
-                        }
-
-
-                        console.log(
-                            '[QR WINDOW] QR received.'
-                        );
+                        return;
                     }
 
+                    // Purani image ke handlers clear karein
+                    image.onload = null;
+                    image.onerror = null;
+
+                    image.style.visibility = 'hidden';
+
+                    image.onload = function() {
+                        if (
+                            image.naturalWidth > 0 &&
+                            image.naturalHeight > 0
+                        ) {
+                            image.style.visibility = 'visible';
+
+                            console.log(
+                                '[QR WINDOW] Image loaded successfully:',
+                                image.naturalWidth,
+                                'x',
+                                image.naturalHeight
+                            );
+                        } else {
+                            console.error(
+                                '[QR WINDOW] Image loaded but dimensions invalid.'
+                            );
+                        }
+                    };
+
+                    image.onerror = function() {
+                        image.style.visibility = 'hidden';
+
+                        console.error(
+                            '[QR WINDOW] Image load failed. Source length:',
+                            String(image.src || '').length
+                        );
+                    };
+
+                    image.src = qrData.image;
+
+                    if (timer) {
+                        timer.textContent =
+                            qrData.remainingTime || '00:00';
+                    }
+
+                    console.log(
+                        '[QR WINDOW] QR data received. Image loading...'
+                    );
                 }
             );
         }

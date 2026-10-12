@@ -150,6 +150,7 @@ getRetryDelay(attempt, baseDelay = 1000, maxDelay = 5000) {
     return delayMs;
 }
 
+
 // ==========================================
 // HELPER: DETECT HIGH LOAD / RETRY PAGE
 // ==========================================
@@ -168,13 +169,11 @@ async detectRetryPageStatus() {
                     ? document.body.innerText || ''
                     : '';
 
-            const text =
-                bodyText
-                    .replace(/\s+/g, ' ')
-                    .trim();
+            const text = bodyText
+                .replace(/\s+/g, ' ')
+                .trim();
 
-            const lowerText =
-                text.toLowerCase();
+            const lowerText = text.toLowerCase();
 
             const highLoad =
                 lowerText.includes('high load');
@@ -202,14 +201,25 @@ async detectRetryPageStatus() {
 
         if (pageStatus) {
 
+            // Actual error ke mutabik alag status bhejo.
+            const errorStep =
+                pageStatus.type === 'HIGH LOAD'
+                    ? 'HIGH LOAD'
+                    : 'UNABLE TO PROCESS REQUEST';
+
+            const errorMessage =
+                pageStatus.type === 'HIGH LOAD'
+                    ? 'HIGH LOAD'
+                    : 'unable to process request';
+
             this.sendProgress(
-                'HIGH LOAD',
-                `${pageStatus.type}..... ${pageStatus.message}`,
+                errorStep,
+                errorMessage,
                 20
             );
 
             console.warn(
-                `[RETRY PAGE ${this.browserType}] ${pageStatus.type}:`,
+                `[RETRY PAGE ${this.browserType}] ${errorStep}:`,
                 pageStatus.message
             );
 
@@ -226,6 +236,7 @@ async detectRetryPageStatus() {
 
     return null;
 }
+
 
 // ==========================================
 // HELPER: HUMAN-LIKE TYPE IN INPUT FIELD
@@ -2019,7 +2030,7 @@ if (targetToInput && payload.toStation) {
 
             await liveProgress(
     'JOURNEY DATE',
-    'Journey details bhar rahe hai...',
+    'Journey details bhar rahe hain...',
     24
 );
 
@@ -2273,7 +2284,7 @@ diagnosticLogs.push(
 
 await liveProgress(
     'TRAIN SEARCH',
-    'Target train search ki ja rahi hai...',
+    'Target train search ki ja rahi hain...',
     42
 );
 
@@ -2374,7 +2385,7 @@ while (attempts < 60 && !bookNowClicked) {
 
         await liveProgress(
     'TRAIN FOUND',
-    'Target train mil gayi hai...',
+    'Target train mil gayi hain...',
     30
 );
 
@@ -2389,7 +2400,7 @@ while (attempts < 60 && !bookNowClicked) {
 
     await liveProgress(
     'TATKAL WAIT',
-    'Tatkal opening time check ho raha hai...',
+    'Tatkal opening time check ho raha hain...',
     32
 );
 
@@ -2455,7 +2466,7 @@ if (isTatkalQuota) {
         (
             tatkalHour === 10
                 ? "10:00:01 AM"
-                : "10:00:01 AM"
+                : "11:00:01 AM"
         )
     );
 
@@ -2550,7 +2561,7 @@ if (secs !== window.__bossTatkalLastSecond) {
 
     await liveProgress(
     'TATKAL OPEN',
-    'journey details bhar rahe hain...',
+    'Train select kar rahe hain...',
     40
 );
 }
@@ -2964,7 +2975,7 @@ matchedClassBox.dispatchEvent(
         
         await liveProgress(
     'CLASS CONFIRMED',
-    'Class ' + targetClass + ' successfully select ho gayi hai...',
+    'Class ' + targetClass + ' successfully select ho gayi hain...',
     34
 );
 
@@ -2983,7 +2994,7 @@ try {
 
 await liveProgress(
     'JOURNEY DATE',
-    'Journey date select ho rahi hai...',
+    'Journey date select ho rahi hain...',
     36
 );
 
@@ -3230,7 +3241,7 @@ await liveProgress(
 
             await liveProgress(
     'DATE CONFIRMED',
-    'Journey date successfully select ho gayi hai.',
+    'Journey date successfully select ho gayi hain.',
     38
 );
 
@@ -3629,6 +3640,7 @@ diagnosticLogs.push(
 );
 
 var passengerPageReached = false;
+var bookNowErrorDetected = false;
 
 for (var waitTry = 0; waitTry < 60; waitTry++) {
 
@@ -3638,6 +3650,7 @@ for (var waitTry = 0; waitTry < 60; waitTry++) {
 
     var currentUrl = window.location.href;
 
+    // Passenger page check
     if (
         currentUrl.indexOf('psgninput') !== -1 ||
         document.querySelector(
@@ -3645,6 +3658,67 @@ for (var waitTry = 0; waitTry < 60; waitTry++) {
         )
     ) {
         passengerPageReached = true;
+        break;
+    }
+
+    // Check IRCTC error text during the wait
+    var retryText = (
+        document.body.innerText || ''
+    ).toLowerCase();
+
+    var highLoadPopup =
+        retryText.includes('high load') ||
+        retryText.includes('unable to process') ||
+        retryText.includes('please retry');
+
+    if (highLoadPopup) {
+
+        bookNowErrorDetected = true;
+
+        diagnosticLogs.push(
+            "Book Now: High Load / Unable to Process popup detected during wait."
+        );
+
+        var detectedError = getIRCTCErrorStatus(
+            document.body.innerText || ''
+        );
+
+        await liveProgress(
+            detectedError.step,
+            detectedError.message,
+            20
+        );
+
+        // Retry closing the toast briefly
+        for (var closeTry = 0; closeTry < 10; closeTry++) {
+
+            var closeRetry = document.querySelector(
+                'a.ui-toast-close-icon.pi.pi-times'
+            );
+
+            if (closeRetry) {
+                try {
+                    closeRetry.click();
+
+                    diagnosticLogs.push(
+                        "Book Now error toast close button clicked."
+                    );
+
+                    break;
+
+                } catch (closeError) {
+                    diagnosticLogs.push(
+                        "Book Now toast close failed: " +
+                        (closeError.message || closeError)
+                    );
+                }
+            }
+
+            await new Promise(function(r) {
+                setTimeout(r, 200);
+            });
+        }
+
         break;
     }
 }
@@ -3679,11 +3753,17 @@ if (passengerPageReached) {
             "High Load / Unable to Process popup detected."
         );
 
+
+var detectedError = getIRCTCErrorStatus(
+    document.body.innerText || ''
+);
+
 await liveProgress(
-    'HIGH LOAD',
-    'HIGH LOAD',
+    detectedError.step,
+    detectedError.message,
     20
 );
+
 
         var closeRetry =
     document.querySelector(
@@ -3769,7 +3849,7 @@ if (closeRetry) {
             // -------------------------------------------------
 
             await new Promise(function(r) {
-                setTimeout(r, 500);
+                setTimeout(r, 1000);
             });
         }
 
@@ -4627,7 +4707,7 @@ if (!upiSelected) {
     diagnosticLogs.push("WARNING: BHIM/UPI option could not be selected!");
 }
 
-await new Promise(function(r) { setTimeout(r, 100); });
+await new Promise(function(r) { setTimeout(r, 200); });
 
         
 // =================================================
@@ -4700,6 +4780,45 @@ diagnosticLogs.push(
 );
 
 
+// ==========================================
+// HELPER: EXACT IRCTC ERROR FOR MINI WINDOW
+// ==========================================
+function getIRCTCErrorStatus(text) {
+
+    var lowerText = String(text || '').toLowerCase();
+
+    if (lowerText.includes('high load')) {
+        return {
+            step: 'HIGH LOAD',
+            message: 'HIGH LOAD'
+        };
+    }
+
+    if (
+        lowerText.includes('unable to process request') ||
+        lowerText.includes('unable to process the request') ||
+        lowerText.includes('unable to process')
+    ) {
+        return {
+            step: 'UNABLE TO PROCESS REQUEST',
+            message: 'unable to process request'
+        };
+    }
+
+    if (lowerText.includes('please retry')) {
+        return {
+            step: 'PLEASE RETRY',
+            message: 'please retry'
+        };
+    }
+
+    return {
+        step: 'BOOKING ERROR',
+        message: 'IRCTC booking error'
+    };
+}
+
+
 // =================================================
 // FIRST CONTINUE RETRY
 // =================================================
@@ -4707,7 +4826,7 @@ diagnosticLogs.push(
 var firstRetry = 0;
 var firstRetryLimit = 10;
 var firstWaitCycles = 0;
-var firstWaitCycleLimit = 120;
+var firstWaitCycleLimit = 240;
 var previousPopup = false;
 
 for (;;) {
@@ -4747,12 +4866,19 @@ for (;;) {
         );
 
 if (isNewPopup) {
-    await liveProgress(
-        'HIGH LOAD',
-        'unable to process request',
-        20
-    );
+    
+var detectedError = getIRCTCErrorStatus(
+    document.body.innerText || ''
+);
+
+await liveProgress(
+    detectedError.step,
+    detectedError.message,
+    20
+);
+
 }
+
 
         var close =
     document.querySelector(
@@ -4769,7 +4895,7 @@ if (close) {
     } catch (e) {}
 
     await new Promise(function(r) {
-        setTimeout(r, 500);
+        setTimeout(r, 1500);
     });
 }
 
@@ -4862,7 +4988,7 @@ var continueBtn2 = null;
 var secondFindRetry = 0;
 var secondFindLimit = 60;
 var secondFindWaitCycles = 0;
-var secondFindWaitCycleLimit = 120;
+var secondFindWaitCycleLimit = 300;
 
 for (;;) {
     secondFindWaitCycles++;
@@ -4898,11 +5024,17 @@ for (;;) {
             secondFindLimit
         );
 
+
+var detectedError = getIRCTCErrorStatus(
+    document.body.innerText || ''
+);
+
 await liveProgress(
-    'HIGH LOAD',
-    'unable to process request',
+    detectedError.step,
+    detectedError.message,
     20
 );
+
 
         var close2 =
     document.querySelector(
@@ -4967,15 +5099,18 @@ diagnosticLogs.push(
 
 
 // =================================================
-// SECOND CONTINUE RETRY
+// SECOND CONTINUE RETRY - MAXIMUM 10 RETRIES
 // =================================================
 
 var secondRetry = 0;
 var secondRetryLimit = 10;
 var secondWaitCycles = 0;
-var secondWaitCycleLimit = 120;
+var secondWaitCycleLimit = 240;
+var previousSecondPopup = false;
+var secondRetryPending = false;
 
 for (;;) {
+
     secondWaitCycles++;
 
     if (secondWaitCycles > secondWaitCycleLimit) {
@@ -4998,88 +5133,164 @@ for (;;) {
         txt3.includes('unable to process') ||
         txt3.includes('please retry');
 
+    // =============================================
+    // ERROR POPUP DETECTION
+    // =============================================
+
     if (popup3) {
 
-        secondRetry++;
+        var isNewSecondPopup = !previousSecondPopup;
+        previousSecondPopup = true;
 
-        diagnosticLogs.push(
-            "Second Continue error popup. Retry " +
-            secondRetry +
-            "/" +
-            secondRetryLimit
-        );
+        if (isNewSecondPopup) {
 
-await liveProgress(
-    'HIGH LOAD',
-    'unable to process request',
-    20
-);
+            secondRetry++;
 
-        var close3 =
-    document.querySelector(
-        'a.ui-toast-close-icon.pi.pi-times'
-    );
+            diagnosticLogs.push(
+                "Second Continue error popup. Retry " +
+                secondRetry + "/" + secondRetryLimit
+            );
 
-if (close3) {
-    try {
-        close3.click();
+            var detectedError = getIRCTCErrorStatus(
+                document.body.innerText || ''
+            );
 
-        diagnosticLogs.push(
-            "Second continue error toast closed successfully."
-        );
-    } catch (e) {}
+            await liveProgress(
+                detectedError.step,
+                detectedError.message,
+                20
+            );
 
-    await new Promise(function(r) {
-        setTimeout(r, 500);
-    });
-}
+            if (secondRetry > secondRetryLimit) {
+                return {
+                    success: false,
+                    error:
+                        'Second Continue failed after 10 retries.',
+                    logs: diagnosticLogs
+                };
+            }
 
-        if (secondRetry >= secondRetryLimit) {
+            secondRetryPending = true;
 
-            return {
-                success: false,
-                error:
-                    'Second Continue failed after 10 retries.',
-                logs: diagnosticLogs
-            };
-        }
+            // Close error toast
+            var close3 = document.querySelector(
+                'a.ui-toast-close-icon.pi.pi-times'
+            );
 
-        // Fresh Continue button
-        var retryBtn =
-            Array.from(
+            if (close3) {
+                try {
+                    close3.click();
+
+                    diagnosticLogs.push(
+                        "Second Continue error toast closed."
+                    );
+                } catch (e) {
+                    diagnosticLogs.push(
+                        "Second Continue toast close error: " +
+                        e.message
+                    );
+                }
+            }
+
+            // Allow page to respond
+            await new Promise(function(r) {
+                setTimeout(r, 1500);
+            });
+
+            // Fresh Continue button
+            var retryBtn = Array.from(
                 document.querySelectorAll('button')
             ).find(function(b) {
 
-                var t =
-                    (b.innerText || '')
+                var t = (b.innerText || '')
                     .trim()
                     .toLowerCase();
 
                 return (
-                    t.indexOf('continue') !== -1 &&
+                    t.includes('continue') &&
                     b.offsetParent !== null &&
                     !b.disabled
                 );
             });
 
-        if (retryBtn) {
+            if (retryBtn) {
 
-            retryBtn.click();
+                retryBtn.click();
+                secondRetryPending = false;
+
+                diagnosticLogs.push(
+                    "Second Continue retry click successful: " +
+                    secondRetry + "/" + secondRetryLimit
+                );
+
+            } else {
+
+                diagnosticLogs.push(
+                    "Second Continue button not ready. " +
+                    "Will search again after popup clears."
+                );
+            }
+        }
+
+        // Same popup abhi visible hai; duplicate retry count na karein.
+        continue;
+    }
+
+    // Popup disappear ho gaya
+    previousSecondPopup = false;
+
+    // Agar pichhli baar button nahi mila tha, ab dobara search karein.
+    if (secondRetryPending) {
+
+        var retryBtnAfterPopup = Array.from(
+            document.querySelectorAll('button')
+        ).find(function(b) {
+
+            var t = (b.innerText || '')
+                .trim()
+                .toLowerCase();
+
+            return (
+                t.includes('continue') &&
+                b.offsetParent !== null &&
+                !b.disabled
+            );
+        });
+
+        if (retryBtnAfterPopup) {
+
+            retryBtnAfterPopup.click();
+            secondRetryPending = false;
 
             diagnosticLogs.push(
-                "Second Continue retry clicked."
+                "Second Continue retry clicked after button became available."
             );
+
+            continue;
         }
+
+        diagnosticLogs.push(
+            "Waiting for Second Continue button to become available."
+        );
 
         continue;
     }
 
-    if (
-        !txt3.includes('please wait') &&
-        !txt3.includes('processing')
-    ) {
-        break;
+    // =============================================
+    // WAIT FOR PAGE RESPONSE
+    // =============================================
+
+    var stillProcessing =
+        txt3.includes('please wait') ||
+        txt3.includes('processing');
+
+    if (stillProcessing) {
+        continue;
     }
+
+    // No error popup and no processing message:
+    // continue existing flow.
+    break;
 }
 
 await liveProgress(
@@ -5161,99 +5372,128 @@ if (!paymentIsPaytm && !paymentIsPhonePe && !paymentIsIPay) {
     };
 }
 
-// =====================================================
+ // =====================================================
 // IRCTC IPAY
 // =====================================================
 if (paymentIsIPay) {
 
-    diagnosticLogs.push("STEP: IRCTC iPay select kar rahe hain.");
+    diagnosticLogs.push(
+        "STEP: IRCTC iPay select kar rahe hain."
+    );
 
-var ipay = null;
+    // OPTION 1: IRCTC IPAY — wait up to 60 seconds
+    var ipay = null;
+    var ipayDeadline = Date.now() + 60000;
 
-for (var ipayTry = 0; ipayTry < 30; ipayTry++) {
+    while (Date.now() < ipayDeadline) {
+        try {
+            ipay = Array.from(
+                document.querySelectorAll('div.bank-type')
+            ).find(function(el) {
 
-    try {
+                if (
+                    !el ||
+                    !el.isConnected ||
+                    el.offsetParent === null
+                ) {
+                    return false;
+                }
 
-        ipay = Array.from(
-            document.querySelectorAll('div.bank-type')
-        ).find(function(el) {
-
-            if (
-                !el ||
-                !el.isConnected ||
-                el.offsetParent === null
-            ) {
-                return false;
-            }
-
-            var txt =
-                String(
-                    el.innerText ||
-                    el.textContent ||
-                    ''
+                var txt = String(
+                    el.innerText || el.textContent || ''
                 )
-                .replace(/\s+/g, ' ')
-                .trim()
-                .toUpperCase();
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .toUpperCase();
 
-            return txt.indexOf('IRCTC IPAY') !== -1;
+                return txt.indexOf('IRCTC IPAY') !== -1;
+            });
+
+            if (ipay) break;
+
+        } catch (e) {}
+
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 250);
         });
+    }
 
-        if (ipay) {
-            diagnosticLogs.push(
-                "SUCCESS: IRCTC iPay option found."
-            );
-            break;
-        }
+    if (!ipay) {
+        diagnosticLogs.push(
+            "TIMEOUT: IRCTC iPay 60 seconds mein visible nahi hua."
+        );
 
-    } catch (e) {}
+        return {
+            success: false,
+            error: 'IRCTC iPay option 60 seconds mein nahi mila.',
+            logs: diagnosticLogs
+        };
+    }
+
+    diagnosticLogs.push(
+        "SUCCESS: IRCTC iPay option found."
+    );
+
+    ipay.click();
+
+    // OPTION 2: IRCTC IPAY NEW — wait up to 60 seconds
+    var ipayNew = null;
+    var ipayNewDeadline = Date.now() + 60000;
+
+    while (Date.now() < ipayNewDeadline) {
+        try {
+            ipayNew = Array.from(
+                document.querySelectorAll('div.border-all.link')
+            ).find(function(el) {
+
+                if (
+                    !el ||
+                    !el.isConnected ||
+                    el.offsetParent === null
+                ) {
+                    return false;
+                }
+
+                var txt = String(
+                    el.innerText || el.textContent || ''
+                )
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .toUpperCase();
+
+                return txt.startsWith('IRCTC IPAY NEW');
+            });
+
+            if (ipayNew) break;
+
+        } catch (e) {}
+
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 250);
+        });
+    }
+
+    if (!ipayNew) {
+        diagnosticLogs.push(
+            "TIMEOUT: IRCTC iPay New 60 seconds mein visible nahi hua."
+        );
+
+        return {
+            success: false,
+            error: 'IRCTC iPay New option 60 seconds mein nahi mila.',
+            logs: diagnosticLogs
+        };
+    }
+
+    ipayNew.click();
+
+    diagnosticLogs.push(
+        "SUCCESS: IRCTC iPay New selected."
+    );
 
     await new Promise(function(resolve) {
-        setTimeout(resolve, 100);
+        setTimeout(resolve, 250);
     });
-}
-
-if (!ipay) {
-    return {
-        success: false,
-        error: 'IRCTC iPay option nahi mila.',
-        logs: diagnosticLogs
-    };
-}
-
-ipay.click();
-
-await new Promise(function(r) {
-    setTimeout(r, 100);
-});
-
-    var ipayNew = Array.from(document.querySelectorAll(
-    'div.border-all.link'
-)).find(function(el) {
-    return (el.innerText || el.textContent || '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .toUpperCase()
-        .startsWith('IRCTC IPAY NEW');
-});
-
-if (!ipayNew) {
-    return {
-        success: false,
-        error: 'IRCTC iPay New option nahi mila.',
-        logs: diagnosticLogs
-    };
-}
-
-ipayNew.click();
-
-diagnosticLogs.push(
-    "SUCCESS: IRCTC iPay New selected."
-);
-
-await new Promise(function(r) {
-    setTimeout(r, 100);
-});
 }
 
 var providerName = paymentIsPaytm ? 'PAYTM' : paymentIsPhonePe ? 'PHONEPE' : 'IPAY';
@@ -5292,73 +5532,66 @@ diagnosticLogs.push(
 // =================================================
 
 var multiplePaymentService = null;
+var multiPaymentDeadline = Date.now() + 60000;
 
-for (var multiTry = 0; multiTry < 30; multiTry++) {
+while (Date.now() < multiPaymentDeadline) {
 
     try {
 
-        var bankTypeElements =
-            Array.from(
-                document.querySelectorAll('.bank-type')
-            );
+        var bankTypeElements = Array.from(
+            document.querySelectorAll('.bank-type')
+        );
 
-        multiplePaymentService =
-            bankTypeElements.find(function(el) {
+        multiplePaymentService = bankTypeElements.find(function(el) {
 
-                if (
-                    !el ||
-                    !el.isConnected ||
-                    el.offsetParent === null
-                ) {
-                    return false;
-                }
+            if (
+                !el ||
+                !el.isConnected ||
+                el.offsetParent === null
+            ) {
+                return false;
+            }
 
-                var ariaDisabled =
-                    String(
-                        el.getAttribute &&
-                        el.getAttribute('aria-disabled') ||
-                        ''
-                    )
-                    .trim()
-                    .toLowerCase();
+            var ariaDisabled = String(
+                el.getAttribute('aria-disabled') || ''
+            ).trim().toLowerCase();
 
-                if (ariaDisabled === 'true') {
-                    return false;
-                }
+            if (ariaDisabled === 'true') {
+                return false;
+            }
 
-                var txt =
-                    String(
-                        el.innerText ||
-                        el.textContent ||
-                        ''
-                    )
-                    .replace(/\s+/g, ' ')
-                    .trim()
-                    .toUpperCase();
+            var txt = String(
+                el.innerText || el.textContent || ''
+            )
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toUpperCase();
 
-                return txt.indexOf(
-                    'MULTIPLE PAYMENT SERVICE'
-                ) !== -1;
-            });
+            return txt.indexOf('MULTIPLE PAYMENT SERVICE') !== -1;
+        });
 
         if (multiplePaymentService) {
+            diagnosticLogs.push(
+                "SUCCESS: Multiple Payment Service option found."
+            );
             break;
         }
 
     } catch (e) {}
 
     await new Promise(function(resolve) {
-        setTimeout(resolve, 100);
+        setTimeout(resolve, 250);
     });
 }
 
-
 if (!multiplePaymentService) {
+    diagnosticLogs.push(
+        "TIMEOUT: Multiple Payment Service 60 seconds mein nahi mila."
+    );
 
     return {
         success: false,
-        error:
-            'Multiple Payment Service option nahi mila.',
+        error: 'Multiple Payment Service option 60 seconds mein nahi mila.',
         logs: diagnosticLogs
     };
 }
@@ -5489,41 +5722,42 @@ if (!isMultiplePaymentServiceActive(multiplePaymentService)) {
 // WAIT FOR MULTIPLE PAYMENT SERVICE TO ACTIVATE
 // =================================================
 
+
 diagnosticLogs.push(
     "STEP 2: Multiple Payment Service activation verify kar rahe hain..."
 );
 
 var multipleVerified = false;
+var multiVerifyDeadline = Date.now() + 60000;
 
-for (var multiVerifyTry = 0; multiVerifyTry < 30; multiVerifyTry++) {
+while (Date.now() < multiVerifyDeadline) {
 
     var freshMultiplePaymentService = null;
 
     try {
+        freshMultiplePaymentService = Array.from(
+            document.querySelectorAll('.bank-type')
+        ).find(function(el) {
 
-        freshMultiplePaymentService =
-            Array.from(
-                document.querySelectorAll('.bank-type')
-            ).find(function(el) {
+            if (
+                !el ||
+                !el.isConnected ||
+                el.offsetParent === null
+            ) {
+                return false;
+            }
 
-                if (!el || !el.isConnected) {
-                    return false;
-                }
+            var txt = String(
+                el.innerText || el.textContent || ''
+            )
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toUpperCase();
 
-                var txt =
-                    String(
-                        el.innerText ||
-                        el.textContent ||
-                        ''
-                    )
-                    .replace(/\s+/g, ' ')
-                    .trim()
-                    .toUpperCase();
-
-                return txt.indexOf(
-                    'MULTIPLE PAYMENT SERVICE'
-                ) !== -1;
-            });
+            return txt.indexOf(
+                'MULTIPLE PAYMENT SERVICE'
+            ) !== -1;
+        });
 
         if (
             freshMultiplePaymentService &&
@@ -5531,7 +5765,6 @@ for (var multiVerifyTry = 0; multiVerifyTry < 30; multiVerifyTry++) {
                 freshMultiplePaymentService
             )
         ) {
-
             multipleVerified = true;
             break;
         }
@@ -5539,9 +5772,10 @@ for (var multiVerifyTry = 0; multiVerifyTry < 30; multiVerifyTry++) {
     } catch (e) {}
 
     await new Promise(function(resolve) {
-        setTimeout(resolve, 100);
+        setTimeout(resolve, 250);
     });
 }
+
 
 
 if (multipleVerified) {
@@ -5566,6 +5800,7 @@ if (multipleVerified) {
 // PROVIDER SEARCH
 // =================================================
 
+
 diagnosticLogs.push(
     "STEP 3: Ab " +
     providerName +
@@ -5573,114 +5808,92 @@ diagnosticLogs.push(
 );
 
 var providerElement = null;
+var providerDeadline = Date.now() + 60000;
 
-for (var providerTry = 0; providerTry < 40; providerTry++) {
+while (Date.now() < providerDeadline) {
 
     providerElement = null;
 
     try {
 
-        var providerElements =
-            Array.from(
-                document.querySelectorAll(
-                    '.border-all.link, .col-pad a, .col-pad button, .bank-type'
+        var providerElements = Array.from(
+            document.querySelectorAll(
+                '.border-all.link, .col-pad a, .col-pad button, .bank-type'
+            )
+        );
+
+        function isUsableProviderElement(el) {
+
+            if (
+                !el ||
+                !el.isConnected ||
+                el.offsetParent === null ||
+                el.disabled === true
+            ) {
+                return false;
+            }
+
+            var ariaDisabled = String(
+                el.getAttribute &&
+                el.getAttribute('aria-disabled') || ''
+            ).trim().toLowerCase();
+
+            return ariaDisabled !== 'true';
+        }
+
+        providerElement = providerElements.find(function(el) {
+
+            if (!isUsableProviderElement(el)) {
+                return false;
+            }
+
+            var txt = String(
+                el.innerText || el.textContent || ''
+            )
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toUpperCase();
+
+            return txt === providerName;
+        });
+
+        if (!providerElement) {
+
+            providerElement = providerElements.find(function(el) {
+
+                if (!isUsableProviderElement(el)) {
+                    return false;
+                }
+
+                var txt = String(
+                    el.innerText || el.textContent || ''
                 )
-            );
-
-        providerElement =
-            providerElements.find(function(el) {
-
-                if (
-                    !el ||
-                    !el.isConnected ||
-                    el.offsetParent === null ||
-                    el.disabled === true
-                ) {
-                    return false;
-                }
-
-                var ariaDisabled =
-                    String(
-                        el.getAttribute &&
-                        el.getAttribute('aria-disabled') ||
-                        ''
-                    )
-                    .trim()
-                    .toLowerCase();
-
-                if (ariaDisabled === 'true') {
-                    return false;
-                }
-
-                var txt =
-                    String(
-                        el.innerText ||
-                        el.textContent ||
-                        ''
-                    )
                     .replace(/\s+/g, ' ')
                     .trim()
                     .toUpperCase();
 
-                return txt === providerName;
+                return (
+                    txt.indexOf(providerName) !== -1 &&
+                    txt.length <= 80
+                );
             });
-
-
-        if (!providerElement) {
-
-            providerElement =
-                providerElements.find(function(el) {
-
-                    if (
-                        !el ||
-                        !el.isConnected ||
-                        el.offsetParent === null ||
-                        el.disabled === true
-                    ) {
-                        return false;
-                    }
-
-                    var ariaDisabled =
-                        String(
-                            el.getAttribute &&
-                            el.getAttribute('aria-disabled') ||
-                            ''
-                        )
-                        .trim()
-                        .toLowerCase();
-
-                    if (ariaDisabled === 'true') {
-                        return false;
-                    }
-
-                    var txt =
-                        String(
-                            el.innerText ||
-                            el.textContent ||
-                            ''
-                        )
-                        .replace(/\s+/g, ' ')
-                        .trim()
-                        .toUpperCase();
-
-                    return (
-                        txt.indexOf(providerName) !== -1 &&
-                        txt.length <= 80
-                    );
-                });
         }
 
-
         if (providerElement) {
+            diagnosticLogs.push(
+                "SUCCESS: " + providerName +
+                " provider option found."
+            );
             break;
         }
 
     } catch (e) {}
 
     await new Promise(function(resolve) {
-        setTimeout(resolve, 100);
+        setTimeout(resolve, 250);
     });
 }
+
 
 
 // =================================================
@@ -5820,77 +6033,297 @@ diagnosticLogs.push(
 );
 
 var payAndBookBtn = null;
+
+
+async function reselectRequestedPayment() {
+
+    diagnosticLogs.push(
+        "RETRY: Re-selecting requested payment: " +
+        (paymentIsIPay ? "IRCTC iPay" : providerName)
+    );
+
+    // =============================================
+    // IRCTC IPAY
+    // =============================================
+
+    if (paymentIsIPay) {
+
+        var ipayOption = null;
+        var ipayDeadline = Date.now() + 15000;
+
+        while (Date.now() < ipayDeadline) {
+
+            ipayOption = Array.from(
+                document.querySelectorAll(
+                    '.bank-type, .border-all.link, ' +
+                    '.col-pad a, .col-pad button, ' +
+                    'button, a, [role="button"]'
+                )
+            ).find(function(el) {
+
+                if (
+                    !el ||
+                    !el.isConnected ||
+                    el.offsetParent === null ||
+                    el.disabled === true
+                ) {
+                    return false;
+                }
+
+                var txt = String(
+                    el.innerText || el.textContent || ''
+                ).replace(/\s+/g, ' ').trim().toUpperCase();
+
+                return (
+                    txt === 'IRCTC IPAY' ||
+                    txt === 'IRCTC I-PAY' ||
+                    txt === 'IPAY'
+                );
+            });
+
+            if (ipayOption) break;
+
+            await new Promise(function(r) {
+                setTimeout(r, 250);
+            });
+        }
+
+        if (!ipayOption) {
+            diagnosticLogs.push(
+                "RETRY ERROR: IRCTC iPay option not found."
+            );
+            return false;
+        }
+
+        ipayOption.click();
+
+        diagnosticLogs.push(
+            "RETRY: IRCTC iPay selected again."
+        );
+
+        await new Promise(function(r) {
+            setTimeout(r, 500);
+        });
+
+        return true;
+    }
+
+    // =============================================
+    // MULTIPLE PAYMENT SERVICE
+    // =============================================
+
+    var multiOption = null;
+    var multiDeadline = Date.now() + 15000;
+
+    while (Date.now() < multiDeadline) {
+
+        multiOption = Array.from(
+            document.querySelectorAll('.bank-type')
+        ).find(function(el) {
+
+            if (
+                !el ||
+                !el.isConnected ||
+                el.offsetParent === null
+            ) {
+                return false;
+            }
+
+            var txt = String(
+                el.innerText || el.textContent || ''
+            ).replace(/\s+/g, ' ').trim().toUpperCase();
+
+            return txt.includes('MULTIPLE PAYMENT SERVICE');
+        });
+
+        if (multiOption) break;
+
+        await new Promise(function(r) {
+            setTimeout(r, 250);
+        });
+    }
+
+    if (!multiOption) {
+        diagnosticLogs.push(
+            "RETRY ERROR: Multiple Payment Service not found."
+        );
+        return false;
+    }
+
+    if (!isMultiplePaymentServiceActive(multiOption)) {
+
+        multiOption.click();
+
+        await new Promise(function(r) {
+            setTimeout(r, 500);
+        });
+    }
+
+    // =============================================
+    // RESELECT THE SAME REQUESTED PROVIDER
+    // =============================================
+
+    var wantedProvider = String(
+        providerName || ''
+    ).replace(/\s+/g, ' ').trim().toUpperCase();
+
+    var providerDeadline = Date.now() + 15000;
+    var retryProvider = null;
+
+    while (Date.now() < providerDeadline) {
+
+        retryProvider = Array.from(
+            document.querySelectorAll(
+                '.border-all.link, .col-pad a, ' +
+                '.col-pad button, .bank-type'
+            )
+        ).find(function(el) {
+
+            if (
+                !el ||
+                !el.isConnected ||
+                el.offsetParent === null ||
+                el.disabled === true
+            ) {
+                return false;
+            }
+
+            var ariaDisabled = String(
+                el.getAttribute('aria-disabled') || ''
+            ).trim().toLowerCase();
+
+            if (ariaDisabled === 'true') return false;
+
+            var txt = String(
+                el.innerText || el.textContent || ''
+            ).replace(/\s+/g, ' ').trim().toUpperCase();
+
+            return (
+                txt === wantedProvider ||
+                (
+                    wantedProvider.length > 0 &&
+                    txt.includes(wantedProvider) &&
+                    txt.length <= 80
+                )
+            );
+        });
+
+        if (retryProvider) break;
+
+        await new Promise(function(r) {
+            setTimeout(r, 250);
+        });
+    }
+
+    if (!retryProvider) {
+        diagnosticLogs.push(
+            "RETRY ERROR: Requested provider not found: " +
+            providerName
+        );
+        return false;
+    }
+
+    retryProvider.click();
+
+    diagnosticLogs.push(
+        "RETRY: Same provider selected again: " +
+        providerName
+    );
+
+    await new Promise(function(r) {
+        setTimeout(r, 500);
+    });
+
+    return true;
+}
+
+
 var payBookRetry = 0;
-var payBookRetryLimit = 60;
+var payBookRetryLimit = 10;
 
 for (;;) {
+
+
+    // =============================================
+    // ON RETRY, RESELECT THE SAME PAYMENT PROVIDER
+    // =============================================
+
+    if (payBookRetry > 0) {
+
+        var paymentReselected =
+            await reselectRequestedPayment();
+
+        if (!paymentReselected) {
+            return {
+                success: false,
+                error:
+                    'Retry mein selected payment provider dobara select nahi hua.',
+                logs: diagnosticLogs
+            };
+        }
+    }
+
 
     // =================================================
     // FIND FRESH PAY & BOOK BUTTON
     // =================================================
 
+
+var payBookDeadline = Date.now() + 60000;
+
+while (Date.now() < payBookDeadline) {
+
     payAndBookBtn = null;
 
-    for (var payBookTry = 0; payBookTry < 40; payBookTry++) {
+    try {
+        payAndBookBtn = Array.from(
+            document.querySelectorAll(
+                'button, a, [role="button"]'
+            )
+        ).find(function(button) {
 
-        try {
+            if (
+                !button ||
+                !button.isConnected ||
+                button.offsetParent === null ||
+                button.disabled === true
+            ) {
+                return false;
+            }
 
-            payAndBookBtn =
-                Array.from(
-                    document.querySelectorAll(
-                        'button, a, [role="button"]'
-                    )
-                ).find(function(button) {
+            var ariaDisabled = String(
+                button.getAttribute &&
+                button.getAttribute('aria-disabled') || ''
+            ).trim().toLowerCase();
 
-                    if (
-                        !button ||
-                        !button.isConnected ||
-                        button.offsetParent === null ||
-                        button.disabled === true
-                    ) {
-                        return false;
-                    }
+            if (ariaDisabled === 'true') {
+                return false;
+            }
 
-                    var ariaDisabled =
-                        String(
-                            button.getAttribute &&
-                            button.getAttribute(
-                                'aria-disabled'
-                            ) || ''
-                        )
-                        .trim()
-                        .toLowerCase();
+            var text = String(
+                button.innerText || button.textContent || ''
+            )
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase();
 
-                    if (ariaDisabled === 'true') {
-                        return false;
-                    }
-
-                    var text =
-                        String(
-                            button.innerText ||
-                            button.textContent ||
-                            ''
-                        )
-                        .replace(/\s+/g, ' ')
-                        .trim()
-                        .toLowerCase();
-
-                    return (
-                        text.indexOf('pay & book') !== -1 ||
-                        text.indexOf('make payment') !== -1
-                    );
-                });
-
-        } catch (e) {}
+            return (
+                text.indexOf('pay & book') !== -1 ||
+                text.indexOf('make payment') !== -1
+            );
+        });
 
         if (payAndBookBtn) {
             break;
         }
 
-        await new Promise(function(resolve) {
-            setTimeout(resolve, 200);
-        });
-    }
+    } catch (e) {}
+
+    await new Promise(function(resolve) {
+        setTimeout(resolve, 250);
+    });
+}
+
 
 
     // =================================================
@@ -5930,14 +6363,31 @@ for (;;) {
             "Pay & Book click sent. Checking payment page..."
         );
 
-    } catch (payBookClickError) {
+    
+} catch (payBookClickError) {
 
-        diagnosticLogs.push(
-            "Pay & Book click failed. Retrying..."
-        );
+    payBookRetry++;
 
-        continue;
+    diagnosticLogs.push(
+        "Pay & Book click failed. Retry " +
+        payBookRetry + "/" + payBookRetryLimit
+    );
+
+    if (payBookRetry >= payBookRetryLimit) {
+        return {
+            success: false,
+            error: 'Pay & Book failed after 10 retries.',
+            logs: diagnosticLogs
+        };
     }
+
+    await new Promise(function(r) {
+        setTimeout(r, 500);
+    });
+
+    continue;
+}
+
 
 
     // =================================================
@@ -5946,14 +6396,16 @@ for (;;) {
     var payBookRetryAlreadyCounted = false;
     var payBookSuccess = false;
 
-    for (var payWait = 0; payWait < 20; payWait++) {
+    var payWaitDeadline = Date.now() + 60000;
 
-        await new Promise(function(resolve) {
-            setTimeout(resolve, 500);
-        });
+while (Date.now() < payWaitDeadline) {
 
-        var payText =
-            (document.body.innerText || '').toLowerCase();
+    await new Promise(function(resolve) {
+        setTimeout(resolve, 250);
+    });
+
+    var payText =
+        (document.body.innerText || '').toLowerCase();
 
         // ---------------------------------------------
         // HIGH LOAD / UNABLE / PLEASE RETRY
@@ -5976,11 +6428,17 @@ for (;;) {
                 payBookRetryLimit
             );
 
-            await liveProgress(
-    'HIGH LOAD',
-    'unable to process request',
+
+var detectedError = getIRCTCErrorStatus(
+    document.body.innerText || ''
+);
+
+await liveProgress(
+    detectedError.step,
+    detectedError.message,
     20
 );
+
 
             // -----------------------------------------
             // EXACT IRCTC TOAST CLOSE BUTTON
@@ -6030,22 +6488,103 @@ for (;;) {
             break;
         }
 
-
         // ---------------------------------------------
-        // PAYMENT / QR PAGE REACHED
+        // VERIFY ACTUAL PROVIDER QR
         // ---------------------------------------------
 
-        if (
-            payText.includes('qr') ||
-            payText.includes('payment') ||
-            payText.includes('paytm') ||
-            payText.includes('phonepe') ||
-            payText.includes('ipay')
-        ) {
+        var actualQrReady = false;
+
+        try {
+
+            if (paymentIsIPay) {
+
+                var ipayCanvas = document.querySelector(
+                    '#irctcDynamicQrCanvas'
+                );
+
+                actualQrReady = !!(
+                    ipayCanvas &&
+                    ipayCanvas.isConnected &&
+                    ipayCanvas.offsetParent !== null &&
+                    ipayCanvas.width >= 100 &&
+                    ipayCanvas.height >= 100
+                );
+
+            } else if (
+                String(paymentValue || '')
+                    .toUpperCase()
+                    .startsWith('PAYTM')
+            ) {
+
+                var paytmImage = document.querySelector(
+                    'img[data-key="qr-code"]'
+                );
+
+                actualQrReady = !!(
+                    paytmImage &&
+                    paytmImage.isConnected &&
+                    paytmImage.offsetParent !== null &&
+                    paytmImage.complete &&
+                    paytmImage.naturalWidth >= 100 &&
+                    paytmImage.naturalHeight >= 100
+                );
+
+            } else {
+
+                var phonepeCandidates = Array.from(
+                    document.querySelectorAll(
+                        'img[src*="qr" i], ' +
+                        'img[alt*="qr" i], ' +
+                        'img[src^="blob:"], canvas'
+                    )
+                );
+
+                actualQrReady = phonepeCandidates.some(
+                    function(el) {
+
+                        if (
+                            !el.isConnected ||
+                            el.offsetParent === null
+                        ) {
+                            return false;
+                        }
+
+                        if (el instanceof HTMLImageElement) {
+                            return (
+                                el.complete &&
+                                el.naturalWidth >= 100 &&
+                                el.naturalHeight >= 100
+                            );
+                        }
+
+                        return (
+                            el instanceof HTMLCanvasElement &&
+                            el.width >= 100 &&
+                            el.height >= 100
+                        );
+                    }
+                );
+            }
+
+        } catch (qrCheckError) {
+
+            diagnosticLogs.push(
+                "QR verification error: " +
+                qrCheckError.message
+            );
+        }
+
+        if (actualQrReady) {
 
             payBookSuccess = true;
+
+            diagnosticLogs.push(
+                "SUCCESS: Actual selected-provider QR detected."
+            );
+
             break;
         }
+
     }
 
     console.log(
@@ -6073,38 +6612,24 @@ return {
     }
 
 
-    // NO PAYMENT PAGE / NO POPUP
-// RETRY PAY & BOOK
-// =================================================
+// =============================================
+// NO QR / NO ERROR POPUP
+// DO NOT RETRY PAY & BOOK AUTOMATICALLY
+// =============================================
 
-if (!payBookRetryAlreadyCounted) {
-    payBookRetry++;
+diagnosticLogs.push(
+    "Pay & Book click ke baad QR/error popup detect nahi hua. " +
+    "Duplicate submission se bachne ke liye automatic retry roka gaya."
+);
+
+return {
+    success: false,
+    error:
+        'Pay & Book ke baad QR/error detect nahi hua. ' +
+        'Page navigation ko outer handler se verify karna zaroori hai.',
+    logs: diagnosticLogs
+};
 }
-
-    diagnosticLogs.push(
-        "Payment page not reached. Retrying Pay & Book " +
-        payBookRetry +
-        "/" +
-        payBookRetryLimit
-    );
-
-    if (payBookRetry >= payBookRetryLimit) {
-
-        return {
-            success: false,
-            error:
-                'Pay & Book failed after ' +
-                payBookRetryLimit +
-                ' retries.',
-            logs: diagnosticLogs
-        };
-    }
-
-    await new Promise(function(resolve) {
-        setTimeout(resolve, 300);
-    });
-}
-
 
 // =====================================================
 // OUTER BROWSER AUTOMATION TRY/CATCH
@@ -6179,7 +6704,149 @@ if (this._bookingProgressBridgePage !== this.page) {
     );
 }
 
-result = await this.page.evaluate(script);
+// ==========================================
+// NAVIGATION-SAFE PAYMENT PAGE HANDLER
+// ==========================================
+
+const automationUrlBefore = this.page.url();
+
+try {
+    result = await this.page.evaluate(script);
+
+} catch (automationEvalError) {
+
+    const errorMessage = String(
+        automationEvalError?.message || automationEvalError
+    );
+
+    const navigationContextLost =
+        /Execution context was destroyed|Cannot find context with specified id|Inspected target navigated or closed/i
+            .test(errorMessage);
+
+    if (!navigationContextLost) {
+        throw automationEvalError;
+    }
+
+    console.warn(
+        '[PAYMENT NAVIGATION] Page navigation ke dauran execution context change hua:',
+        errorMessage
+    );
+
+    this.sendBookingStatus(
+        'VERIFYING PAYMENT PAGE...',
+        'Payment page load hone ka wait ho raha hai...',
+        75
+    );
+
+    let paymentPageState = null;
+
+    // Maximum 30 seconds wait.
+    // Pay & Book dobara click nahi hoga.
+    for (let i = 0; i < 60; i++) {
+
+        if (!this.page || this.page.isClosed()) {
+            break;
+        }
+
+        try {
+            const state = await this.page.evaluate(() => {
+
+                const text = String(
+                    document.body?.innerText || ''
+                ).slice(0, 15000);
+
+                const qrElement = document.querySelector(
+                    '#irctcDynamicQrCanvas, ' +
+                    'img[data-key="qr-code"], ' +
+                    'img[src*="qr" i], ' +
+                    'img[alt*="qr" i], ' +
+                    '[id*="qr" i], ' +
+                    '[class*="qr" i], ' +
+                    'canvas'
+                );
+
+                return {
+                    url: window.location.href,
+                    ready: document.readyState,
+                    text: text,
+                    hasIpayButton: !!document.querySelector(
+                        '#upiAccordionBtn'
+                    ),
+                    hasQrElement: !!qrElement
+                };
+            });
+
+            const lowerText = state.text.toLowerCase();
+
+            const hasPaymentEvidence =
+                state.hasIpayButton ||
+                state.hasQrElement ||
+                /payment|ipay|upi|phonepe|paytm|scan.{0,30}pay|qr code|transaction/
+                    .test(lowerText);
+
+            const hasIrctcError =
+                /high load|unable to process|please retry/
+                    .test(lowerText);
+
+            const urlChanged =
+                state.url !== automationUrlBefore;
+
+            if (
+                state.ready !== 'loading' &&
+                !hasIrctcError &&
+                (hasPaymentEvidence || urlChanged)
+            ) {
+                paymentPageState = state;
+                break;
+            }
+
+        } catch (pageCheckError) {
+            // Page navigation abhi chal rahi ho sakti hai.
+            // Agle attempt mein dobara check karenge.
+        }
+
+        await new Promise(resolve =>
+            setTimeout(resolve, 500)
+        );
+    }
+
+    if (!paymentPageState) {
+        throw new Error(
+            'Pay & Book ke baad payment page detect nahi hua. ' +
+            'Duplicate submission se bachne ke liye automatic retry nahi kiya.'
+        );
+    }
+
+    console.log(
+        '[PAYMENT NAVIGATION] Navigation detect hui:',
+        paymentPageState.url
+    );
+
+    console.log(
+        '[PAYMENT NAVIGATION] QR/payment evidence:',
+        paymentPageState.hasQrElement ||
+        paymentPageState.hasIpayButton
+    );
+
+    result = {
+        success: true,
+        paymentMethod: String(
+            bookingData.payment ||
+            bookingData.paymentType ||
+            bookingData.paymentMethod ||
+            ''
+        ).trim().toUpperCase(),
+        totalFare: backendRealFare,
+        logs: [
+            'Pay & Book ke baad page navigation detect hui.',
+            'Original booking script dobara execute nahi hui.',
+            'Ab QR detection continue hogi.'
+        ],
+        message:
+            'Navigation detected; continuing to QR detection.'
+    };
+}
+
 
 this.sendBookingStatus(
     'QR DETECTING...',
@@ -6553,6 +7220,7 @@ var paymentValue = String(
     ''
 ).trim().toUpperCase();
 
+
 var qrSelector = null;
 
 if (paymentValue.startsWith('IPAY')) {
@@ -6560,8 +7228,9 @@ if (paymentValue.startsWith('IPAY')) {
 } else if (paymentValue.startsWith('PAYTM')) {
     qrSelector = 'img[data-key="qr-code"]';
 } else if (paymentValue.startsWith('PHONEPE')) {
+    // PhonePe: broad selector ko seedha QR na maanein.
     qrSelector =
-        'canvas, img[src^="blob:"], img[src*="qr"], img[alt*="QR" i]';
+        'img[src*="qr" i], img[alt*="qr" i], img[src^="blob:"], canvas';
 }
 
 if (!qrSelector) {
@@ -6572,18 +7241,67 @@ if (!qrSelector) {
 }
 
 try {
-    await this.page.waitForSelector(qrSelector, {
-        visible: true,
-        timeout: 15000
-    });
+    await this.page.waitForFunction(
+        (selector, provider) => {
+            const elements = Array.from(
+                document.querySelectorAll(selector)
+            );
+
+            return elements.some(el => {
+                const rect = el.getBoundingClientRect();
+
+                if (
+                    rect.width < 100 ||
+                    rect.height < 100 ||
+                    rect.width === 0 ||
+                    rect.height === 0
+                ) {
+                    return false;
+                }
+
+                if (provider.startsWith('IPAY')) {
+                    return (
+                        el instanceof HTMLCanvasElement &&
+                        el.width >= 100 &&
+                        el.height >= 100
+                    );
+                }
+
+                if (el instanceof HTMLImageElement) {
+                    return (
+                        el.complete &&
+                        el.naturalWidth >= 100 &&
+                        el.naturalHeight >= 100
+                    );
+                }
+
+                if (el instanceof HTMLCanvasElement) {
+                    return (
+                        el.width >= 100 &&
+                        el.height >= 100
+                    );
+                }
+
+                return false;
+            });
+        },
+        {
+            timeout: 60000
+        },
+        qrSelector,
+        paymentValue
+    );
 
     console.log(
-        '[QR] ' + paymentValue + ' QR detected successfully.'
+        '[QR] Ready QR element detected for:',
+        paymentValue
     );
 
 } catch (e) {
     throw new Error(
-        paymentValue + ' QR visible nahi hua: ' + e.message
+        paymentValue +
+        ' ka loaded QR 60 seconds mein nahi mila: ' +
+        e.message
     );
 }
 
@@ -6598,79 +7316,187 @@ console.log(
 // TO MINI WINDOW
 // ==========================================
 
+
 try {
-
     let qrImage = null;
+    let qrElement = null;
+    let qrReady = false;
 
-    // ------------------------------------------
-    // IPAY = CANVAS QR
-    // PAYTM / PHONEPE = IMAGE QR
-    // ------------------------------------------
+    // ==========================================
+    // WAIT FOR QR TO ACTUALLY LOAD
+    // ==========================================
 
-    if (paymentValue.startsWith('IPAY')) {
+    const qrDeadline = Date.now() + 60000;
 
-        qrImage =
-            await this.page.$eval(
-                '#irctcDynamicQrCanvas',
-                function(canvas) {
-                    return canvas.toDataURL(
-                        'image/png'
-                    );
+    while (Date.now() < qrDeadline) {
+        try {
+            if (!this.page || this.page.isClosed()) {
+                throw new Error('Payment page closed.');
+            }
+
+            if (paymentValue.startsWith('IPAY')) {
+                qrElement = await this.page.$(
+                    '#irctcDynamicQrCanvas'
+                );
+
+                if (qrElement) {
+                    const canvasInfo = await qrElement.evaluate(el => ({
+                        width: el.width,
+                        height: el.height
+                    }));
+
+                    if (
+                        canvasInfo.width >= 100 &&
+                        canvasInfo.height >= 100
+                    ) {
+                        qrImage = await qrElement.evaluate(
+                            el => el.toDataURL('image/png')
+                        );
+
+                        qrReady =
+                            !!qrImage &&
+                            qrImage.startsWith('data:image/png') &&
+                            qrImage.length > 2000;
+                    }
                 }
+
+            } else if (paymentValue.startsWith('PAYTM')) {
+                qrElement = await this.page.$(
+                    'img[data-key="qr-code"]'
+                );
+
+                if (qrElement) {
+                    const imageInfo = await qrElement.evaluate(el => ({
+                        complete: el.complete,
+                        width: el.naturalWidth,
+                        height: el.naturalHeight,
+                        src: el.currentSrc || el.src || ''
+                    }));
+
+                    if (
+                        imageInfo.complete &&
+                        imageInfo.width >= 100 &&
+                        imageInfo.height >= 100
+                    ) {
+                        if (
+                            imageInfo.src.startsWith('data:image/')
+                        ) {
+                            qrImage = imageInfo.src;
+                        } else {
+                            const base64 =
+                                await qrElement.screenshot({
+                                    encoding: 'base64'
+                                });
+
+                            if (base64 && base64.length > 2000) {
+                                qrImage =
+                                    'data:image/png;base64,' + base64;
+                            }
+                        }
+
+                        qrReady = !!qrImage;
+                    }
+                }
+
+            } else if (paymentValue.startsWith('PHONEPE')) {
+                const candidates = await this.page.$$(
+                    'img[src*="qr" i], img[alt*="qr" i], img[src^="blob:"], canvas'
+                );
+
+                for (const candidate of candidates) {
+                    const info = await candidate.evaluate(el => {
+                        const rect = el.getBoundingClientRect();
+
+                        return {
+                            tag: el.tagName,
+                            visible:
+                                rect.width >= 100 &&
+                                rect.height >= 100,
+                            complete:
+                                el instanceof HTMLImageElement
+                                    ? el.complete
+                                    : true,
+                            width:
+                                el instanceof HTMLImageElement
+                                    ? el.naturalWidth
+                                    : el.width,
+                            height:
+                                el instanceof HTMLImageElement
+                                    ? el.naturalHeight
+                                    : el.height,
+                            src:
+                                el instanceof HTMLImageElement
+                                    ? (el.currentSrc || el.src || '')
+                                    : ''
+                        };
+                    });
+
+                    if (
+                        !info.visible ||
+                        !info.complete ||
+                        info.width < 100 ||
+                        info.height < 100
+                    ) {
+                        continue;
+                    }
+
+                    if (info.tag === 'CANVAS') {
+                        qrImage = await candidate.evaluate(
+                            el => el.toDataURL('image/png')
+                        );
+                    } else {
+                        if (info.src.startsWith('data:image/')) {
+                            qrImage = info.src;
+                        } else {
+                            const base64 =
+                                await candidate.screenshot({
+                                    encoding: 'base64'
+                                });
+
+                            if (base64 && base64.length > 2000) {
+                                qrImage =
+                                    'data:image/png;base64,' + base64;
+                            }
+                        }
+                    }
+
+                    if (
+                        qrImage &&
+                        qrImage.startsWith('data:image/') &&
+                        qrImage.length > 2000
+                    ) {
+                        qrElement = candidate;
+                        qrReady = true;
+                        break;
+                    }
+
+                    qrImage = null;
+                }
+            }
+
+            if (qrReady && qrImage) {
+                console.log(
+                    '[QR] Loaded QR image ready:',
+                    paymentValue
+                );
+                break;
+            }
+
+        } catch (attemptError) {
+            console.warn(
+                '[QR] Waiting for QR:',
+                attemptError.message
             );
-
-    } else {
-
-        const qrElement =
-            await this.page.$(qrSelector);
-
-        if (qrElement) {
-
-            const qrSize =
-    await qrElement.evaluate(function(el) {
-        return {
-            width: el.naturalWidth || el.width || 0,
-            height: el.naturalHeight || el.height || 0,
-            clientWidth: el.clientWidth || 0,
-            clientHeight: el.clientHeight || 0
-        };
-    });
-
-console.log(
-    '[QR DEBUG] QR source size:',
-    qrSize
-);
-
-            const qrSource =
-    await qrElement.evaluate(function(el) {
-
-        return (
-            el.currentSrc ||
-            el.src ||
-            el.getAttribute('src') ||
-            ''
-        );
-    });
-
-if (
-    qrSource &&
-    qrSource.startsWith('data:image/')
-) {
-
-    qrImage = qrSource;
-
-} else {
-
-    const base64 =
-        await qrElement.screenshot({
-            encoding: 'base64'
-        });
-
-    qrImage =
-        'data:image/png;base64,' +
-        base64;
-}
         }
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    if (!qrReady || !qrImage) {
+        throw new Error(
+            paymentValue +
+            ' QR 60 seconds mein load nahi hua. Blank popup nahi bheja gaya.'
+        );
     }
 
     // ------------------------------------------
@@ -7264,11 +8090,12 @@ const bookingConfirmed =
     paymentText.includes('booked') ||
     paymentText.includes('confirmed');
 
+
 if (!bookingConfirmed) {
 
     this.sendProgress(
-        'HIGH LOAD',
-        'unable to process request',
+        'BOOKING ERROR',
+        'Payment verify hua, lekin booking confirmation/PNR nahi mila.',
         20
     );
 
@@ -7277,11 +8104,13 @@ if (!bookingConfirmed) {
     );
 }
 
+
+
 if (!finalPNR) {
 
     this.sendProgress(
-        'HIGH LOAD',
-        'unable to process request',
+        'BOOKING ERROR',
+        'Booking confirmation mil gayi, lekin final PNR nahi mila.',
         20
     );
 
@@ -7289,6 +8118,7 @@ if (!finalPNR) {
         'Booking confirmation mil gayi, lekin final PNR nahi mila.'
     );
 }
+
 
 this.sendBookingStatus(
     'final PNR ...... ' + finalPNR,
@@ -7313,23 +8143,26 @@ return {
     payment: paymentResult
 };
 
-        } catch (error) {
-            console.error(
-    '[API] Sequence execution failed:',
-    error.message
-);
+        
+} catch (error) {
+    console.error(
+        '[API] Sequence execution failed:',
+        error.message
+    );
 
-console.error(
-    '[API] ERROR STACK:',
-    error.stack
-);
-            this.sendProgress(
-    'HIGH LOAD',
-    'unable to process request',
+    console.error(
+        '[API] ERROR STACK:',
+        error.stack
+    );
+
+    this.sendProgress(
+    'BOOKING ERROR',
+    'Booking confirmation/PNR nahi mila.',
     20
 );
-            throw error;
-        }
+
+    throw error;
+}
     
     }
 }
