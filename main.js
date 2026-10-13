@@ -2067,7 +2067,7 @@ function createWindow() {
 
     backgroundColor: '#00000000',
 
-    resizable: true,
+    resizable: false,
     movable: false,
     maximizable: false,
     fullscreenable: false,

@@ -7,6 +7,21 @@
     <script src="https://cdn.tailwindcss.com"></script>
 
     <style>
+
+
+#tab-tokens h3 {
+    color: #38bdf8;
+}
+
+
+/* Calendar icon - Yellow on dark background */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(80%) sepia(100%) saturate(800%)
+            hue-rotate(5deg) brightness(105%) contrast(105%);
+    cursor: pointer;
+}
+
+
         html,
 body {
     background: transparent !important;
@@ -993,7 +1008,7 @@ body {
                                        checked
                                        class="rounded bg-slate-50 border-slate-300">
 
-                                <span>
+                                <span class="text-white">
                                     Book only if berth/seat is confirmed
                                 </span>
 
@@ -1059,15 +1074,12 @@ body {
 
 
 <div class="mt-5 border-t pt-4">
-    <h3 class="font-semibold text-slate-800 mb-2">
-        Clear Browser Data
-    </h3>
+    
+<h3 class="text-sm font-bold text-indigo-600 mb-3">
+    Clear Browser Data
+</h3>
 
-    <p class="text-sm text-slate-500 mb-3">
-        Selected browser ka saved session aur profile data reset karein.
-    </p>
-
-    <div class="flex flex-wrap gap-2">
+  <div class="flex flex-wrap gap-2">
         <button
             type="button"
             onclick="clearBrowserData('WEB')"
