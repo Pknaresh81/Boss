@@ -17,6 +17,14 @@ contextBridge.exposeInMainWorld(
                 browserName
             ),
 
+            
+clearBrowserData: (browserType) =>
+    ipcRenderer.invoke(
+        'clear-browser-data',
+        browserType
+    ),
+
+
 getBrowserStatuses: () =>
     ipcRenderer.invoke('get-browser-statuses'),
 

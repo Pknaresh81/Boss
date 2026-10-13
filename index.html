@@ -1057,6 +1057,41 @@ body {
                          class="space-y-2 mt-3 text-slate-700">
                     </div>
 
+
+<div class="mt-5 border-t pt-4">
+    <h3 class="font-semibold text-slate-800 mb-2">
+        Clear Browser Data
+    </h3>
+
+    <p class="text-sm text-slate-500 mb-3">
+        Selected browser ka saved session aur profile data reset karein.
+    </p>
+
+    <div class="flex flex-wrap gap-2">
+        <button
+            type="button"
+            onclick="clearBrowserData('WEB')"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded">
+            Clear Chrome
+        </button>
+
+        <button
+            type="button"
+            onclick="clearBrowserData('WEB2')"
+            class="bg-slate-700 hover:bg-slate-800 text-white px-3 py-2 rounded">
+            Clear Edge
+        </button>
+
+        <button
+            type="button"
+            onclick="clearBrowserData('WEB3')"
+            class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded">
+            Clear Brave
+        </button>
+    </div>
+</div>
+
+
                 </div>
 
             </section>
@@ -1214,6 +1249,58 @@ body {
 let ipcRenderer = null;
 
 const passengerFillTimers = new Map();
+
+
+async function clearBrowserData(browserType) {
+    const names = {
+        WEB: 'Chrome',
+        WEB2: 'Edge',
+        WEB3: 'Brave'
+    };
+
+    const browserName = names[browserType];
+
+    if (!browserName || !window.electronAPI?.clearBrowserData) {
+        alert('Browser data clear feature available nahi hai.');
+        return;
+    }
+
+    const confirmed = confirm(
+        `${browserName} ka poora Boss-managed browser profile reset hoga.\n\n` +
+        'IRCTC se logout ho sakta hai aur is profile ka doosra saved data bhi delete hoga.\n\n' +
+        'Kya aap continue karna chahte hain?'
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        const result =
+            await window.electronAPI.clearBrowserData(
+                browserType
+            );
+
+        if (result?.success) {
+            alert(
+                `${browserName} ka browser data clear ho gaya.`
+            );
+        } else {
+            alert(
+                result?.error ||
+                'Browser data clear nahi ho saka.'
+            );
+        }
+    } catch (error) {
+        console.error(
+            '[CLEAR BROWSER DATA] Error:',
+            error
+        );
+
+        alert('Browser data clear karte waqt error aaya.');
+    }
+}
+
 
 try {
     if (typeof require === "function") {

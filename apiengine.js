@@ -3650,17 +3650,6 @@ for (var waitTry = 0; waitTry < 60; waitTry++) {
 
     var currentUrl = window.location.href;
 
-    // Passenger page check
-    if (
-        currentUrl.indexOf('psgninput') !== -1 ||
-        document.querySelector(
-            'input[formcontrolname="passengerName"]'
-        )
-    ) {
-        passengerPageReached = true;
-        break;
-    }
-
     // Check IRCTC error text during the wait
     var retryText = (
         document.body.innerText || ''
@@ -3719,6 +3708,17 @@ for (var waitTry = 0; waitTry < 60; waitTry++) {
             });
         }
 
+        break;
+    }
+
+   // Passenger page check
+    if (
+        currentUrl.indexOf('psgninput') !== -1 ||
+        document.querySelector(
+            'input[formcontrolname="passengerName"]'
+        )
+    ) {
+        passengerPageReached = true;
         break;
     }
 }

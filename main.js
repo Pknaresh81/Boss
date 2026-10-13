@@ -2,7 +2,7 @@ const {
     app,
     BrowserWindow,
     ipcMain,
-    session
+    session,
 } = require('electron');
 
 const {
@@ -838,8 +838,8 @@ async function launchBrowser(
     [
         `--remote-debugging-port=${config.port}`,
         `--user-data-dir=${config.userDataDir}`,
-        '--window-size=500,680', // <-- Specific width aur height force karein
-        '--window-position=400,30', // <-- Screen position set karein
+        '--window-size=450,600', // <-- Specific width aur height force karein
+        `--window-position=${config.port === 9222 ? 0 : config.port === 9223 ? 455 : config.port === 9224 ? 910 : 0},100`, // <-- Screen position set karein
         '--no-default-browser-check',
         targetUrl
     ],
@@ -1297,6 +1297,141 @@ ipcMain.handle(
 );
 
 const activeBookingBrowsers = new Set();
+
+
+/* ==========================================
+   CLEAR SELECTED BROWSER PROFILE DATA
+========================================== */
+
+ipcMain.handle(
+    'clear-browser-data',
+    async (event, browserName) => {
+
+        const value = String(
+            browserName || ''
+        ).trim().toUpperCase();
+
+        const allowedTypes = {
+            WEB: 'WEB',
+            CHROME: 'WEB',
+            WEB2: 'WEB2',
+            EDGE: 'WEB2',
+            WEB3: 'WEB3',
+            BRAVE: 'WEB3'
+        };
+
+        const type = allowedTypes[value];
+
+        if (!type) {
+            return {
+                success: false,
+                error: 'Invalid browser selected.'
+            };
+        }
+
+        const config = getBrowserConfig(type);
+
+        // Booking ke dauran profile clear nahi karna
+        if (activeBookingBrowsers.has(type)) {
+            return {
+                success: false,
+                error:
+                    `${config.name} mein booking chal rahi hai. ` +
+                    'Booking khatam hone ke baad dobara try karein.'
+            };
+        }
+
+        try {
+            console.log(
+                `[CLEAR DATA ${type}] Started:`,
+                config.userDataDir
+            );
+
+            // Agar browser CDP ke through chal raha hai,
+            // to usi browser ko gracefully close karo.
+            const running =
+                await isBrowserDebugReady(config);
+
+            if (running) {
+                const browser = await puppeteer.connect({
+                    browserURL:
+                        `http://127.0.0.1:${config.port}`,
+                    defaultViewport: null,
+                    protocolTimeout: 30000
+                });
+
+                await browser.close();
+
+                // Browser band hone ka wait karo.
+                const deadline = Date.now() + 15000;
+
+                while (Date.now() < deadline) {
+                    if (
+                        !(await isBrowserDebugReady(config))
+                    ) {
+                        break;
+                    }
+
+                    await new Promise(resolve =>
+                        setTimeout(resolve, 300)
+                    );
+                }
+
+                if (await isBrowserDebugReady(config)) {
+                    return {
+                        success: false,
+                        error:
+                            `${config.name} poori tarah band nahi hua. ` +
+                            'Profile data delete nahi kiya gaya.'
+                    };
+                }
+            }
+
+            // Sirf selected Boss-managed profile delete karo.
+            await fs.promises.rm(
+                config.userDataDir,
+                {
+                    recursive: true,
+                    force: true,
+                    maxRetries: 3,
+                    retryDelay: 500
+                }
+            );
+
+            // Agli baar browser launch ke liye empty profile.
+            await fs.promises.mkdir(
+                config.userDataDir,
+                { recursive: true }
+            );
+
+            console.log(
+                `[CLEAR DATA ${type}] Profile reset complete.`
+            );
+
+            return {
+                success: true,
+                browserType: type,
+                browserName: config.name,
+                message:
+                    `${config.name} ka browser profile data clear ho gaya.`
+            };
+
+        } catch (error) {
+            console.error(
+                `[CLEAR DATA ${type}] Failed:`,
+                error
+            );
+
+            return {
+                success: false,
+                error:
+                    error?.message ||
+                    'Browser data clear nahi ho saka.'
+            };
+        }
+    }
+);
+
 
 // ==========================================
 // START BOOKING HANDLER
