@@ -698,7 +698,7 @@ let currentWindowId = null;
 // =========================================
 let automationRunning = false;
 let automationTargetBrowser = null;
-
+let finalBookingDisplayed = false;
     
 
         // =========================================
@@ -853,9 +853,9 @@ if (
                 progressData
             );
 
-            if (!progressData) {
-                return;
-            }
+            if (!progressData || finalBookingDisplayed) {
+    return;
+}
 
             const step =
                 String(
@@ -1513,7 +1513,7 @@ setText(
 
     }
 
-
+finalBookingDisplayed = false;
     // Lock BEFORE IPC call
     automationRunning = true;
 
@@ -1730,39 +1730,64 @@ payment:
                 );
 
 
-                if (
-                    response &&
-                    response.success
-                ) {
+                
+if (response && response.success) {
 
-                    setText(
-                        "status",
-                        "SUCCESS"
-                    );
+  const finalPNR = String(
+    response.pnr ||
+    response.data?.pnr ||
+    response.data?.data?.pnr ||
+    ""
+  ).trim();
 
+  if (/^\d{10}$/.test(finalPNR)) {
+finalBookingDisplayed = true;
+    setText(
+      "status",
+      "FINAL PNR ...... " + finalPNR
+    );
 
-                    setText(
-                        "result",
-                        "DONE"
-                    );
+    setText(
+      "result",
+      "booking sucessful by BOSS..."
+    );
 
-                } else {
+    console.log(
+      "[MINI WINDOW] Final PNR displayed:",
+      finalPNR
+    );
 
-                    setText(
-                        "status",
-                        "FAILED"
-                    );
+  } else {
 
+    setText(
+      "status",
+      "PNR VERIFY PENDING"
+    );
 
-                    setText(
-                        "result",
+    setText(
+      "result",
+      "Valid PNR response mein nahi mila."
+    );
 
-                        response?.error ||
-                        "ERROR"
+    console.warn(
+      "[MINI WINDOW] Success response mein valid PNR nahi mila:",
+      response
+    );
+  }
 
-                    );
+} else {
 
-                }
+  setText(
+    "status",
+    "FAILED"
+  );
+
+  setText(
+    "result",
+    response?.error || "ERROR"
+  );
+}
+
 
                         } catch (error) {
 

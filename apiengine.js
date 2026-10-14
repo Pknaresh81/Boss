@@ -6042,68 +6042,202 @@ async function reselectRequestedPayment() {
         (paymentIsIPay ? "IRCTC iPay" : providerName)
     );
 
+
     // =============================================
-    // IRCTC IPAY
+    // IRCTC IPAY + IPAY NEW RETRY
     // =============================================
 
     if (paymentIsIPay) {
 
-        var ipayOption = null;
-        var ipayDeadline = Date.now() + 15000;
-
-        while (Date.now() < ipayDeadline) {
-
-            ipayOption = Array.from(
-                document.querySelectorAll(
-                    '.bank-type, .border-all.link, ' +
-                    '.col-pad a, .col-pad button, ' +
-                    'button, a, [role="button"]'
-                )
-            ).find(function(el) {
-
-                if (
-                    !el ||
-                    !el.isConnected ||
-                    el.offsetParent === null ||
-                    el.disabled === true
-                ) {
-                    return false;
-                }
-
-                var txt = String(
-                    el.innerText || el.textContent || ''
-                ).replace(/\s+/g, ' ').trim().toUpperCase();
-
-                return (
-                    txt === 'IRCTC IPAY' ||
-                    txt === 'IRCTC I-PAY' ||
-                    txt === 'IPAY'
-                );
-            });
-
-            if (ipayOption) break;
-
-            await new Promise(function(r) {
-                setTimeout(r, 250);
-            });
+        function normalizePaymentText(el) {
+            return String(
+                el?.innerText || el?.textContent || ''
+            ).replace(/\s+/g, ' ').trim().toUpperCase();
         }
 
-        if (!ipayOption) {
-            diagnosticLogs.push(
-                "RETRY ERROR: IRCTC iPay option not found."
+        function isVisiblePaymentOption(el) {
+            return !!(
+                el &&
+                el.isConnected &&
+                el.offsetParent !== null &&
+                el.disabled !== true &&
+                String(el.getAttribute('aria-disabled') || '')
+                    .trim().toLowerCase() !== 'true'
             );
+        }
+
+        function hasSelectedState(el) {
+            var current = el;
+            var depth = 0;
+
+            while (current && depth < 3) {
+
+                var cls = String(
+                    current.className || ''
+                ).toLowerCase();
+
+                var ariaSelected = String(
+                    current.getAttribute?.('aria-selected') || ''
+                ).toLowerCase();
+
+                var ariaChecked = String(
+                    current.getAttribute?.('aria-checked') || ''
+                ).toLowerCase();
+
+                var ariaExpanded = String(
+                    current.getAttribute?.('aria-expanded') || ''
+                ).toLowerCase();
+
+                if (
+                    cls.includes('bank-type-active') ||
+                    cls.includes('selected') ||
+                    cls.includes('active') ||
+                    ariaSelected === 'true' ||
+                    ariaChecked === 'true' ||
+                    ariaExpanded === 'true' ||
+                    current.querySelector?.(
+                        'input:checked, [aria-checked="true"], ' +
+                        '[aria-selected="true"]'
+                    )
+                ) {
+                    return true;
+                }
+
+                current = current.parentElement;
+                depth++;
+            }
+
             return false;
         }
 
-        ipayOption.click();
+        async function findIpayOption(selector, matcher, timeout) {
 
-        diagnosticLogs.push(
-            "RETRY: IRCTC iPay selected again."
+            var deadline = Date.now() + timeout;
+
+            while (Date.now() < deadline) {
+
+                var found = Array.from(
+                    document.querySelectorAll(selector)
+                ).find(function(el) {
+                    return (
+                        isVisiblePaymentOption(el) &&
+                        matcher(normalizePaymentText(el))
+                    );
+                });
+
+                if (found) return found;
+
+                await new Promise(function(resolve) {
+                    setTimeout(resolve, 250);
+                });
+            }
+
+            return null;
+        }
+
+        async function ensureIpaySelected(
+            selector,
+            matcher,
+            label
+        ) {
+
+            var option = await findIpayOption(
+                selector,
+                matcher,
+                15000
+            );
+
+            if (!option) {
+                diagnosticLogs.push(
+                    'RETRY ERROR: ' + label + ' option not found.'
+                );
+                return false;
+            }
+
+            if (!hasSelectedState(option)) {
+
+                try {
+                    option.scrollIntoView({
+                        behavior: 'auto',
+                        block: 'center'
+                    });
+                } catch (e) {}
+
+                option.click();
+
+                diagnosticLogs.push(
+                    'RETRY: ' + label + ' clicked again.'
+                );
+            }
+
+            // Fresh DOM se selected state verify karo.
+            var verifyDeadline = Date.now() + 5000;
+
+            while (Date.now() < verifyDeadline) {
+
+                var freshOption = await findIpayOption(
+                    selector,
+                    matcher,
+                    500
+                );
+
+                if (
+                    freshOption &&
+                    hasSelectedState(freshOption)
+                ) {
+                    diagnosticLogs.push(
+                        'SUCCESS: ' + label +
+                        ' selected state verified.'
+                    );
+                    return true;
+                }
+
+                await new Promise(function(resolve) {
+                    setTimeout(resolve, 250);
+                });
+            }
+
+            diagnosticLogs.push(
+                'RETRY ERROR: ' + label +
+                ' click ke baad selected state verify nahi hui.'
+            );
+
+            return false;
+        }
+
+        // STEP 1: IRCTC IPAY
+        var ipaySelected = await ensureIpaySelected(
+            '.bank-type',
+            function(txt) {
+                return (
+                    txt.includes('IRCTC IPAY') &&
+                    !txt.includes('IRCTC IPAY NEW')
+                );
+            },
+            'IRCTC IPAY'
         );
 
-        await new Promise(function(r) {
-            setTimeout(r, 500);
+        if (!ipaySelected) return false;
+
+        // STEP 2: IRCTC IPAY NEW
+        var ipayNewSelected = await ensureIpaySelected(
+            '.border-all.link',
+            function(txt) {
+                return txt.startsWith('IRCTC IPAY NEW');
+            },
+            'IRCTC IPAY NEW'
+        );
+
+        if (!ipayNewSelected) return false;
+
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 500);
         });
+
+        diagnosticLogs.push(
+            'SUCCESS: IRCTC IPAY and IRCTC IPAY NEW ' +
+            'both selected states verified.'
+        );
 
         return true;
     }
@@ -6510,11 +6644,7 @@ await liveProgress(
                     ipayCanvas.height >= 100
                 );
 
-            } else if (
-                String(paymentValue || '')
-                    .toUpperCase()
-                    .startsWith('PAYTM')
-            ) {
+            } else if (paymentIsPaytm) {
 
                 var paytmImage = document.querySelector(
                     'img[data-key="qr-code"]'
@@ -6592,43 +6722,69 @@ await liveProgress(
         payBookSuccess
     );
 
+    
+    // =============================================
+    // RETRY OR STOP AFTER RESULT CHECK
+    // =============================================
+
+    // QR mil gaya: selected provider ka QR confirm hai.
     if (payBookSuccess) {
 
-         diagnosticLogs.push(
-        "SUCCESS: Pay & Book completed. Payment page transition handed back to Node."
-    );
+        diagnosticLogs.push(
+            "SUCCESS: Pay & Book completed. Payment QR detected."
+        );
 
- console.log(
-    '[QR DEBUG] Pay & Book completed. Leaving browser evaluate before payment navigation.'
-);
-
-return {
-    success: true,
-    paymentMethod: selectedPayment,
-    totalFare: payload.realFare,
-    logs: diagnosticLogs,
-    message: 'Pay & Book clicked successfully.'
-};
+        return {
+            success: true,
+            paymentMethod: selectedPayment,
+            totalFare: payload.realFare,
+            logs: diagnosticLogs,
+            message: 'Pay & Book clicked successfully.'
+        };
     }
 
+    // Error popup mila tha: outer for-loop mein wapas jao.
+    // Isse next attempt mein provider reselect hoga.
+    if (payBookRetryAlreadyCounted) {
 
-// =============================================
-// NO QR / NO ERROR POPUP
-// DO NOT RETRY PAY & BOOK AUTOMATICALLY
-// =============================================
+        if (payBookRetry >= payBookRetryLimit) {
+            return {
+                success: false,
+                error:
+                    'Pay & Book failed after ' +
+                    payBookRetryLimit +
+                    ' retries.',
+                logs: diagnosticLogs
+            };
+        }
 
-diagnosticLogs.push(
-    "Pay & Book click ke baad QR/error popup detect nahi hua. " +
-    "Duplicate submission se bachne ke liye automatic retry roka gaya."
-);
+        diagnosticLogs.push(
+            "Retry " + (payBookRetry + 1) +
+            "/" + payBookRetryLimit +
+            ": selected provider dobara select karke Pay & Book retry hoga."
+        );
 
-return {
-    success: false,
-    error:
-        'Pay & Book ke baad QR/error detect nahi hua. ' +
-        'Page navigation ko outer handler se verify karna zaroori hai.',
-    logs: diagnosticLogs
-};
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 1500);
+        });
+
+        continue;
+    }
+
+    // Na QR mila, na known error popup.
+    // Is condition mein blind duplicate click mat karo.
+    diagnosticLogs.push(
+        "QR ya recognized error popup nahi mila. " +
+        "Page state verify kiye bina duplicate Pay & Book click nahi kiya."
+    );
+
+    return {
+        success: false,
+        error:
+            'Pay & Book ke baad QR ya recognized error detect nahi hua.',
+        logs: diagnosticLogs
+    };
+
 }
 
 // =====================================================
@@ -6738,9 +6894,23 @@ try {
         75
     );
 
+   
     let paymentPageState = null;
 
-    // Maximum 30 seconds wait.
+    const expectedPayment = String(
+        bookingData.payment ||
+        bookingData.paymentType ||
+        bookingData.paymentMethod ||
+        ''
+    ).trim().toUpperCase();
+
+    if (!expectedPayment) {
+        throw new Error(
+            'Navigation recovery mein payment method nahi mila.'
+        );
+    }
+
+    // Maximum 30 seconds.
     // Pay & Book dobara click nahi hoga.
     for (let i = 0; i < 60; i++) {
 
@@ -6749,101 +6919,270 @@ try {
         }
 
         try {
-            const state = await this.page.evaluate(() => {
 
-                const text = String(
-                    document.body?.innerText || ''
-                ).slice(0, 15000);
+            
+const state = await this.page.evaluate(
+    (expectedPayment) => {
 
-                const qrElement = document.querySelector(
-                    '#irctcDynamicQrCanvas, ' +
-                    'img[data-key="qr-code"], ' +
-                    'img[src*="qr" i], ' +
-                    'img[alt*="qr" i], ' +
-                    '[id*="qr" i], ' +
-                    '[class*="qr" i], ' +
-                    'canvas'
+        function visible(el) {
+            return !!(
+                el &&
+                el.isConnected &&
+                el.offsetParent !== null
+            );
+        }
+
+        function normalize(text) {
+            return String(text || '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase();
+        }
+
+        function validImage(el) {
+            return (
+                visible(el) &&
+                el.complete &&
+                el.naturalWidth >= 100 &&
+                el.naturalHeight >= 100
+            );
+        }
+
+        function validCanvas(el) {
+            return (
+                visible(el) &&
+                el.width >= 100 &&
+                el.height >= 100
+            );
+        }
+
+        function findClickableByText(predicate) {
+            const elements = Array.from(
+                document.querySelectorAll(
+                    'button, a, label, [role="button"], ' +
+                    '[role="tab"], [role="radio"], ' +
+                    'input[type="radio"], div, span'
+                )
+            );
+
+            for (const el of elements) {
+                if (!visible(el)) {
+                    continue;
+                }
+
+                const text = normalize(
+                    el.innerText || el.textContent
                 );
 
-                return {
-                    url: window.location.href,
-                    ready: document.readyState,
-                    text: text,
-                    hasIpayButton: !!document.querySelector(
-                        '#upiAccordionBtn'
-                    ),
-                    hasQrElement: !!qrElement
-                };
+                if (!text || !predicate(text)) {
+                    continue;
+                }
+
+                const clickable = el.closest(
+                    'button, a, label, [role="button"], ' +
+                    '[role="tab"], [role="radio"]'
+                );
+
+                if (
+                    clickable &&
+                    visible(clickable) &&
+                    !clickable.disabled &&
+                    clickable.getAttribute('aria-disabled') !== 'true'
+                ) {
+                    return clickable;
+                }
+            }
+
+            return null;
+        }
+
+        let clickedUpi = false;
+        let clickedQrButton = false;
+        let actualQrReady = false;
+        let qrType = '';
+
+        if (expectedPayment.startsWith('IPAY')) {
+
+            // STEP 1: UPI option dhoondo.
+            const upiOption = findClickableByText(
+                text => text === 'upi'
+            );
+
+            if (upiOption) {
+
+                const alreadySelected =
+                    upiOption.getAttribute('aria-selected') === 'true' ||
+                    upiOption.getAttribute('aria-checked') === 'true' ||
+                    upiOption.getAttribute('aria-pressed') === 'true' ||
+                    upiOption.checked === true ||
+                    upiOption.classList.contains('active') ||
+                    upiOption.classList.contains('selected');
+
+                if (!alreadySelected) {
+                    upiOption.click();
+                    clickedUpi = true;
+                }
+            }
+
+            // STEP 2: UPI select hone ke baad QR CTA dhoondo.
+            const qrButton = findClickableByText(
+                text =>
+                    text.includes('click here to pay using qr') ||
+                    text.includes('pay using qr')
+            );
+
+            if (qrButton) {
+                qrButton.click();
+                clickedQrButton = true;
+            }
+
+            // STEP 3: "Click here to show QR"
+// QR isi page par khulta hai, isliye page ko
+// dobara navigate nahi karna hai.
+const showQrButton = findClickableByText(
+    text => text.includes('click here to show qr')
+);
+
+let clickedShowQr = false;
+
+if (showQrButton) {
+    showQrButton.click();
+    clickedShowQr = true;
+}
+
+// STEP 4: Actual iPay QR verify karo.
+ const canvas = document.querySelector(
+   '#irctcDynamicQrCanvas'
+ );
+
+            actualQrReady = validCanvas(canvas);
+
+            if (actualQrReady) {
+                qrType = 'IRCTC IPAY QR';
+            }
+
+        } else if (expectedPayment.startsWith('PAYTM')) {
+
+            const el = document.querySelector(
+                'img[data-key="qr-code"]'
+            );
+
+            actualQrReady = validImage(el);
+
+            if (actualQrReady) {
+                qrType = 'PAYTM QR';
+            }
+
+        } else if (expectedPayment.startsWith('PHONEPE')) {
+
+            const elements = Array.from(
+                document.querySelectorAll(
+                    'img[src*="qr" i], ' +
+                    'img[alt*="qr" i], ' +
+                    'img[src^="blob:"], canvas'
+                )
+            );
+
+            actualQrReady = elements.some(function(el) {
+                if (el instanceof HTMLImageElement) {
+                    return validImage(el);
+                }
+
+                if (el instanceof HTMLCanvasElement) {
+                    return validCanvas(el);
+                }
+
+                return false;
             });
 
-            const lowerText = state.text.toLowerCase();
+            if (actualQrReady) {
+                qrType = 'PHONEPE QR';
+            }
+        }
 
-            const hasPaymentEvidence =
-                state.hasIpayButton ||
-                state.hasQrElement ||
-                /payment|ipay|upi|phonepe|paytm|scan.{0,30}pay|qr code|transaction/
-                    .test(lowerText);
+        const text = String(
+            document.body?.innerText || ''
+        ).slice(0, 15000);
+
+        return {
+            url: window.location.href,
+            ready: document.readyState,
+            text: text,
+            actualQrReady: actualQrReady,
+            qrType: qrType,
+            clickedUpi: clickedUpi,
+            clickedQrButton: clickedQrButton
+        };
+    },
+    expectedPayment
+);
+
+console.log(
+    '[IPAY RECOVERY] UPI clicked:',
+    state.clickedUpi
+);
+
+console.log(
+    '[IPAY RECOVERY] QR button clicked:',
+    state.clickedQrButton
+);
+
+console.log(
+    '[IPAY RECOVERY] QR ready:',
+    state.actualQrReady
+);
 
             const hasIrctcError =
-                /high load|unable to process|please retry/
-                    .test(lowerText);
-
-            const urlChanged =
-                state.url !== automationUrlBefore;
+                /high load|unable to process|please retry/i
+                    .test(state.text);
 
             if (
                 state.ready !== 'loading' &&
                 !hasIrctcError &&
-                (hasPaymentEvidence || urlChanged)
+                state.actualQrReady
             ) {
                 paymentPageState = state;
                 break;
             }
 
         } catch (pageCheckError) {
-            // Page navigation abhi chal rahi ho sakti hai.
-            // Agle attempt mein dobara check karenge.
+            // Navigation ke dauran dobara check hoga.
         }
 
-        await new Promise(resolve =>
-            setTimeout(resolve, 500)
-        );
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 500);
+        });
     }
 
     if (!paymentPageState) {
         throw new Error(
-            'Pay & Book ke baad payment page detect nahi hua. ' +
-            'Duplicate submission se bachne ke liye automatic retry nahi kiya.'
+            'Navigation ke baad selected provider ka actual QR ' +
+            '30 seconds mein verify nahi hua. ' +
+            'Duplicate Pay & Book click nahi kiya.'
         );
     }
 
     console.log(
-        '[PAYMENT NAVIGATION] Navigation detect hui:',
-        paymentPageState.url
+        '[PAYMENT NAVIGATION] Actual QR verified:',
+        paymentPageState.qrType
     );
 
     console.log(
-        '[PAYMENT NAVIGATION] QR/payment evidence:',
-        paymentPageState.hasQrElement ||
-        paymentPageState.hasIpayButton
+        '[PAYMENT NAVIGATION] URL:',
+        paymentPageState.url
     );
 
     result = {
         success: true,
-        paymentMethod: String(
-            bookingData.payment ||
-            bookingData.paymentType ||
-            bookingData.paymentMethod ||
-            ''
-        ).trim().toUpperCase(),
+        paymentMethod: expectedPayment,
         totalFare: backendRealFare,
         logs: [
-            'Pay & Book ke baad page navigation detect hui.',
-            'Original booking script dobara execute nahi hui.',
-            'Ab QR detection continue hogi.'
+            'Navigation detect hui.',
+            'Actual provider QR verify hua: ' +
+                paymentPageState.qrType,
+            'Pay & Book dobara click nahi hua.'
         ],
-        message:
-            'Navigation detected; continuing to QR detection.'
+        message: 'Actual payment QR verified after navigation.'
     };
 }
 
@@ -6933,6 +7272,11 @@ const response = await this.safeFetch(url, {
 
 this.validateResponse(response, 'Payment verification');
         const data = await this.parseResponse(response);
+
+console.log(
+    '[PAYMENT VERIFY] Response received:',
+    JSON.stringify(data, null, 2)
+);
 
         if (data === null) {
             throw new Error('Payment verification response empty hai.');
@@ -7153,60 +7497,52 @@ const isTatkalOrPremium =
                 throw new Error('Automated booking flow failed.');
             }
 
-            // IPAY QR FLOW
-if (String(bookingData.payment || bookingData.paymentType || bookingData.paymentMethod || '')
-    .trim().toUpperCase().startsWith('IPAY')) {
+// ==========================================
+// IPAY QR FLOW
+// QR recovery mein pehle hi handle ho chuka hai.
+// Yahan UPI/QR buttons dobara click nahi karne hain.
+// ==========================================
 
-    console.log('[IPAY] Waiting for iPay QR page...');
+if (
+    String(
+        bookingData.payment ||
+        bookingData.paymentType ||
+        bookingData.paymentMethod ||
+        ''
+    ).trim().toUpperCase().startsWith('IPAY')
+) {
+    console.log(
+        '[IPAY] Existing QR verify kar rahe hain. ' +
+        'UPI/QR buttons dobara click nahi honge.'
+    );
 
-    await new Promise(r => setTimeout(r, 500));
-
-    for (let i = 0; i < 30; i++) {
-        try {
-            const ready = await this.page.evaluate(() =>
-                !!document.querySelector('#upiAccordionBtn')
+    await this.page.waitForFunction(
+        () => {
+            const canvas = document.querySelector(
+                '#irctcDynamicQrCanvas'
             );
 
-            if (ready) break;
-        } catch (e) {}
+            if (!canvas || !canvas.isConnected) {
+                return false;
+            }
 
-        await new Promise(r => setTimeout(r, 300));
-    }
+            const rect = canvas.getBoundingClientRect();
 
-    const upi = await this.page.$('#upiAccordionBtn');
+            return (
+                rect.width >= 100 &&
+                rect.height >= 100 &&
+                canvas.width >= 100 &&
+                canvas.height >= 100
+            );
+        },
+        { timeout: 15000 }
+    );
 
-if (upi) {
-    await upi.click();
-} else {
-    throw new Error('iPay UPI button nahi mila.');
+    console.log(
+        '[IPAY] Existing QR canvas verified. No extra click.'
+    );
 }
 
-    await new Promise(r => setTimeout(r, 300));
-
-    const qrPay = await this.page.$('label[for="qr-click"]');
-
-if (qrPay) {
-    await qrPay.click();
-} else {
-    throw new Error('iPay QR option nahi mila.');
-}
-
-    console.log('[IPAY] UPI selected + Click Here To Pay Using QR clicked.');
-
-
-for (let i = 0; i < 30; i++) {
-    const qrBtn = await this.page.$('#irctc-generate-qr-btn');
-
-    if (qrBtn) {
-        await qrBtn.click();
-        console.log('[IPAY] Click here to show QR clicked.');
-        break;
-    }
-
-    await new Promise(r => setTimeout(r, 200));
-}
-
-        }
 await new Promise(function(r) {
     setTimeout(r, 500);
 });
@@ -7718,6 +8054,7 @@ function getIPAYRemainingTime() {
 
 let paymentCompleted = false;
 let paymentFailed = false;
+let confirmedPagePNR = null;
 
 for (let i = 0; i < 120; i++) {
 
@@ -7733,94 +8070,98 @@ for (let i = 0; i < 120; i++) {
             throw new Error('Payment page closed.');
         }
 
-        if (
-    this.page.isClosed()
-) {
-    throw new Error('Payment page closed.');
-}
-
 await new Promise(function(resolve) {
     setTimeout(resolve, 300);
 });
 
-        paymentState =
-            await this.page.evaluate(() => {
+        
+paymentState = await this.page.evaluate(() => {
+    const url = window.location.href.toLowerCase();
 
-                const body =
-                    String(
-                        document.body?.innerText || ''
-                    ).toLowerCase();
+    const bodyText = String(
+        document.body?.innerText || ''
+    );
 
-                const success =
-                    body.includes('payment successful') ||
-                    body.includes('payment success') ||
-                    body.includes('payment completed') ||
-                    body.includes('transaction successful') ||
-                    body.includes('transaction completed');
+    const body = bodyText.toLowerCase();
 
-                const failed =
-                    body.includes('payment failed') ||
-                    body.includes('transaction failed') ||
-                    body.includes('payment failure');
+    
+const bookingConfirmPage =
+    url.includes('/nget/booking-confirm');
 
-                let remainingTime = '00:00';
+// PNR ko label ke saath identify karein.
+// Random 10-digit number ko PNR na maanein.
+const pnrMatch = bodyText.match(
+    /\bPNR(?:\s*(?:Number|No\.?))?\s*[:#-]?\s*([0-9]{10})\b/i
+);
 
-                const elements =
-                    Array.from(
-                        document.querySelectorAll('*')
-                    );
+const pnr = pnrMatch ? pnrMatch[1] : null;
 
-                for (const element of elements) {
+// Confirmation URL par pahunchna hi confirmation
+// page detect karne ke liye kaafi hai.
+// PNR alag se extract kiya jayega.
+const bookingConfirmed = bookingConfirmPage;
 
-                    const text =
-                        String(
-                            element.innerText || ''
-                        ).trim();
+const success =
+    bookingConfirmed ||
+    body.includes('payment successful') ||
+    body.includes('payment success') ||
+    body.includes('payment completed') ||
+    body.includes('transaction successful') ||
+    body.includes('transaction completed');
 
-                    if (
-                        /^\d{1,2}:\d{2}$/.test(text)
-                    ) {
 
-                        const parts =
-                            text.split(':');
+    const failed =
+        !bookingConfirmed &&
+        (
+            body.includes('payment failed') ||
+            body.includes('transaction failed') ||
+            body.includes('payment failure')
+        );
 
-                        const minutes =
-                            parseInt(
-                                parts[0],
-                                10
-                            );
+    let remainingTime = '00:00';
 
-                        const seconds =
-                            parseInt(
-                                parts[1],
-                                10
-                            );
+    const elements = Array.from(
+        document.querySelectorAll('*')
+    );
 
-                        if (
-                            !isNaN(minutes) &&
-                            !isNaN(seconds) &&
-                            minutes >= 0 &&
-                            minutes <= 60 &&
-                            seconds >= 0 &&
-                            seconds <= 59
-                        ) {
+    for (const element of elements) {
+        const text = String(
+            element.innerText || ''
+        ).trim();
 
-                            remainingTime =
-                                String(minutes).padStart(2, '0') +
-                                ':' +
-                                String(seconds).padStart(2, '0');
+        if (/^\d{1,2}:\d{2}$/.test(text)) {
+            const parts = text.split(':');
+            const minutes = parseInt(parts[0], 10);
+            const seconds = parseInt(parts[1], 10);
 
-                            break;
-                        }
-                    }
-                }
+            if (
+                Number.isInteger(minutes) &&
+                Number.isInteger(seconds) &&
+                minutes >= 0 &&
+                minutes <= 60 &&
+                seconds >= 0 &&
+                seconds <= 59
+            ) {
+                remainingTime =
+                    String(minutes).padStart(2, '0') +
+                    ':' +
+                    String(seconds).padStart(2, '0');
 
-                return {
-                    success,
-                    failed,
-                    remainingTime
-                };
-            });
+                break;
+            }
+        }
+    }
+
+    return {
+        success,
+        failed,
+        remainingTime,
+        bookingConfirmed,
+        pnr,
+        url
+    };
+});
+
 
     } catch (e) {
 
@@ -7874,6 +8215,7 @@ await new Promise(function(resolve) {
     if (paymentState.success) {
 
         paymentCompleted = true;
+        confirmedPagePNR = paymentState.pnr || null;
 
         try {
 
@@ -8026,11 +8368,93 @@ const totalAmount =
     stepResult.totalFare ||
     stepResult.data?.totalFare;
 
+
+
 if (!clientTransactionId) {
+    console.log(
+        '[PAYMENT VERIFY] Transaction ID missing; checking the payment confirmation page for PNR.'
+    );
+
+    let pagePNR =
+        confirmedPagePNR &&
+        /^\d{10}$/.test(String(confirmedPagePNR))
+            ? String(confirmedPagePNR)
+            : null;
+
+    // Use the SAME Puppeteer page used by the payment loop.
+    // Do not close or click the feedback popup.
+    for (let attempt = 1; attempt <= 15 && !pagePNR; attempt++) {
+        try {
+            if (!this.page || this.page.isClosed()) {
+                console.warn('[PNR] Payment page is not available.');
+                break;
+            }
+
+            const result = await this.page.evaluate(() => {
+                const url = window.location.href;
+
+                const text = [
+                    document.body?.innerText || '',
+                    document.body?.textContent || ''
+                ].join('\n');
+
+                const match = text.match(
+                    /\bPNR\s*(?:Number|No\.?)?\s*[:#-]?\s*([0-9]{10})\b/i
+                );
+
+                return {
+                    url,
+                    pnr: match ? match[1] : null
+                };
+            });
+
+            if (attempt === 1) {
+                console.log('[PNR] Confirmation check URL:', result.url);
+            }
+
+            if (result.pnr && /^\d{10}$/.test(String(result.pnr))) {
+                pagePNR = String(result.pnr);
+                confirmedPagePNR = pagePNR;
+
+                console.log('[PNR] PNR detected on payment page.');
+                break;
+            }
+        } catch (e) {
+            console.warn(
+                '[PNR] Read attempt failed:',
+                attempt,
+                e.message
+            );
+        }
+
+        if (!pagePNR) {
+            await this.delay(1000);
+        }
+    }
+
+    if (pagePNR) {
+        console.log('[BOOKING] PNR found:', pagePNR);
+
+        this.sendBookingStatus(
+            'BOOKING CONFIRMED',
+            'PNR: ' + pagePNR,
+            100
+        );
+
+        return {
+            success: true,
+            supported: true,
+            pnr: pagePNR,
+            data: stepResult,
+            payment: null
+        };
+    }
+
     throw new Error(
-        'Payment verification ke liye client transaction ID nahi mili.'
+        'Transaction ID nahi mili aur payment page par labelled PNR nahi mila. IRCTC booking status verify karein.'
     );
 }
+
 
 if (
     totalAmount === null ||
@@ -8059,21 +8483,142 @@ const paymentText =
 
 
 
-// ==========================================
-// EXTRACT FINAL PNR
-// ==========================================
+ // ==========================================
+ // RETRY PNR EXTRACTION FROM CONFIRMATION PAGE
+ // Feedback popup ko close nahi karna hai.
+ // ==========================================
 
-let finalPNR = null;
+for (let attempt = 1; attempt <= 15; attempt++) {
+
+    if (
+        confirmedPagePNR &&
+        /^\d{10}$/.test(String(confirmedPagePNR))
+    ) {
+        break;
+    }
+
+    try {
+        if (this.page && !this.page.isClosed()) {
+
+            const pagePNR = await this.page.evaluate(() => {
+
+                const text = String(
+                    document.body?.innerText || ''
+                );
+
+                const match = text.match(
+                    /\bPNR(?:\s*(?:Number|No\.?))?\s*[:#-]?\s*([0-9]{10})\b/i
+                );
+
+                return match ? match[1] : null;
+            });
+
+            if (
+                pagePNR &&
+                /^\d{10}$/.test(String(pagePNR))
+            ) {
+                confirmedPagePNR = pagePNR;
+
+                console.log(
+                    '[PNR] Confirmation page PNR detected.'
+                );
+
+                break;
+            }
+        }
+
+    } catch (pagePNRError) {
+
+        console.warn(
+            '[PNR] Confirmation page read attempt failed:',
+            attempt,
+            pagePNRError.message
+        );
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 1000));
+}
+
+
+ // ==========================================
+ // EXTRACT FINAL PNR - ROBUST RESPONSE CHECK
+ // ==========================================
+
+let finalPNR =
+    (typeof confirmedPagePNR !== 'undefined')
+        ? confirmedPagePNR
+        : null;
+
+function findPNRInObject(obj, depth = 0) {
+
+    if (!obj || depth > 12) {
+        return null;
+    }
+
+    if (typeof obj === 'string') {
+
+        const labeledMatch = obj.match(
+            /\bPNR\b[\s"'=:_-]*([0-9]{10})\b/i
+        );
+
+        return labeledMatch ? labeledMatch[1] : null;
+    }
+
+    if (Array.isArray(obj)) {
+
+        for (const item of obj) {
+            const found = findPNRInObject(
+                item,
+                depth + 1
+            );
+
+            if (found) return found;
+        }
+
+        return null;
+    }
+
+    if (typeof obj === 'object') {
+
+        // First inspect explicitly named PNR fields.
+        for (const [key, value] of Object.entries(obj)) {
+
+            if (/pnr/i.test(key)) {
+
+                const match = String(
+                    value ?? ''
+                ).match(/\b([0-9]{10})\b/);
+
+                if (match) {
+                    return match[1];
+                }
+            }
+        }
+
+        // Then inspect nested objects and strings.
+        for (const value of Object.values(obj)) {
+
+            const found = findPNRInObject(
+                value,
+                depth + 1
+            );
+
+            if (found) return found;
+        }
+    }
+
+    return null;
+}
 
 try {
 
-    const pnrMatch =
-        paymentText.match(
-            /\bpnr\b[\s"'=:_-]*([0-9]{10})/i
+    if (
+        !finalPNR ||
+        !/^\d{10}$/.test(String(finalPNR))
+    ) {
+        finalPNR = findPNRInObject(
+            paymentResult
         );
-
-    if (pnrMatch && pnrMatch[1]) {
-        finalPNR = pnrMatch[1];
     }
 
 } catch (pnrError) {
@@ -8082,46 +8627,41 @@ try {
         '[PNR] Extraction error:',
         pnrError.message
     );
-
 }
 
-const bookingConfirmed =
-    !!finalPNR ||
-    paymentText.includes('booked') ||
-    paymentText.includes('confirmed');
+if (
+    !finalPNR ||
+    !/^\d{10}$/.test(String(finalPNR))
+) {
 
+    console.error(
+        '[PNR] PNR not found in confirmation/payment data.'
+    );
 
-if (!bookingConfirmed) {
-
-    this.sendProgress(
-        'BOOKING ERROR',
-        'Payment verify hua, lekin booking confirmation/PNR nahi mila.',
-        20
+    this.sendBookingStatus(
+        'PNR PENDING',
+        'Confirmation received; PNR extraction pending.',
+        90
     );
 
     throw new Error(
-        'Payment verify hua, lekin booking confirmation/PNR nahi mila.'
+        'Valid PNR abhi confirmation/payment response mein nahi mila.'
     );
 }
 
+finalPNR = String(finalPNR);
 
+console.log(
+    '[PNR] Valid PNR extracted:',
+    finalPNR
+);
 
-if (!finalPNR) {
-
-    this.sendProgress(
-        'BOOKING ERROR',
-        'Booking confirmation mil gayi, lekin final PNR nahi mila.',
-        20
-    );
-
-    throw new Error(
-        'Booking confirmation mil gayi, lekin final PNR nahi mila.'
-    );
-}
-
+// ==========================================
+// FINAL PNR + SUCCESS STATUS
+// ==========================================
 
 this.sendBookingStatus(
-    'final PNR ...... ' + finalPNR,
+    'FINAL PNR ...... ' + finalPNR,
     'FINAL PNR',
     95
 );
@@ -8133,12 +8673,15 @@ this.sendBookingStatus(
 );
 
 console.log(
-    '[BOOKING] Booking successfully confirmed.'
+    '[BOOKING] Booking successfully confirmed. PNR:',
+    finalPNR
 );
+
 
 return {
     success: true,
     supported: true,
+    pnr: String(finalPNR),
     data: stepResult,
     payment: paymentResult
 };
