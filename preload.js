@@ -178,6 +178,11 @@ onAppUpdateDownloaded: (callback) =>
         'close-license-window'
     ),    
 
+    completeLicenseActivation: () =>
+    ipcRenderer.send(
+        'complete-license-activation'
+    ),
+
         // ==========================================
         // MINI AUTOMATION WINDOW
         // ==========================================

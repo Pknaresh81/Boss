@@ -7504,7 +7504,7 @@ const isTatkalOrPremium =
 
             // STEP 1: CHECK AVAILABILITY & REAL FARE
 
-            if (!isTatkalOrPremium) {
+            if (true) {
 
                 const availabilityResponse =
                     await this.checkAvailabilityAndFare(bookingData);

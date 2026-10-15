@@ -1997,27 +1997,20 @@ ipcMain.handle('verify-license-key', async (event, licenseKey) => {
             };
         }
 
-        licenseVerified = true;
+        
+licenseVerified = true;
 
-        console.log('[LICENSE] Verification SUCCESS');
+console.log('[LICENSE] Verification SUCCESS');
 
-        if (licenseWindow && !licenseWindow.isDestroyed()) {
-            licenseWindow.close();
-        }
+// License window abhi close nahi hogi.
+// Pehle license.html expiry date save karega.
 
-        if (!win || win.isDestroyed()) {
-            console.log('[LICENSE] Creating dashboard...');
-            createWindow();
-        } else {
-            win.show();
-            win.focus();
-        }
+return {
+    success: true,
+    message: result.message,
+    expiryDate: result.expiryDate
+};
 
-        return {
-            success: true,
-            message: result.message,
-            expiryDate: result.expiryDate
-        };
 
     } catch (error) {
 
@@ -2032,6 +2025,23 @@ ipcMain.handle('verify-license-key', async (event, licenseKey) => {
                 error?.message ||
                 'License verification failed.'
         };
+    }
+});
+
+ipcMain.on('complete-license-activation', () => {
+    console.log('[LICENSE] Completing activation...');
+
+    if (licenseWindow && !licenseWindow.isDestroyed()) {
+        licenseWindow.close();
+    }
+
+    if (!win || win.isDestroyed()) {
+        console.log('[LICENSE] Creating dashboard...');
+        createWindow();
+    } else {
+        console.log('[LICENSE] Showing existing dashboard...');
+        win.show();
+        win.focus();
     }
 });
 
