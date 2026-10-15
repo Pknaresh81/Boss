@@ -839,7 +839,7 @@ async function launchBrowser(
         `--remote-debugging-port=${config.port}`,
         `--user-data-dir=${config.userDataDir}`,
         '--window-size=450,600', // <-- Specific width aur height force karein
-        `--window-position=${config.port === 9222 ? 0 : config.port === 9223 ? 455 : config.port === 9224 ? 910 : 0},100`, // <-- Screen position set karein
+        `--window-position=${config.port === 9222 ? 0 : config.port === 9223 ? 455 : config.port === 9224 ? 910 : 0},140`, // <-- Screen position set karein
         '--no-default-browser-check',
         targetUrl
     ],

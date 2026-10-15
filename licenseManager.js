@@ -1,6 +1,7 @@
 const { initializeApp } = require("firebase/app");
 const { getDatabase, ref, get, update } = require("firebase/database");
-const os = require('os');
+const { execFileSync } = require('child_process');
+
 
 // Aapke Firebase Console se praapt Config Details
 const firebaseConfig = {
@@ -17,18 +18,48 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// Machine ka MAC Address (HWID) Extract karne ka Function
+
+ // Machine ki stable Windows ID read karne ka function
 function getHardwareID() {
-    const interfaces = os.networkInterfaces();
-    for (let name in interfaces) {
-        for (let net of interfaces[name]) {
-            if (!net.internal && net.mac && net.mac !== '00:00:00:00:00:00') {
-                return net.mac.toUpperCase();
-            }
-        }
+    if (process.platform !== 'win32') {
+        return 'UNKNOWN_HWID';
     }
-    return "UNKNOWN_HWID";
+
+    try {
+        const output = execFileSync(
+            'reg',
+            [
+                'query',
+                'HKLM\\SOFTWARE\\Microsoft\\Cryptography',
+                '/v',
+                'MachineGuid'
+            ],
+            {
+                encoding: 'utf8',
+                windowsHide: true
+            }
+        );
+
+        const match = output.match(
+            /MachineGuid\s+REG_SZ\s+([^\r\n]+)/i
+        );
+
+        if (!match || !match[1].trim()) {
+            return 'UNKNOWN_HWID';
+        }
+
+        return 'WIN-' + match[1].trim().toUpperCase();
+
+    } catch (error) {
+        console.error(
+            '[LICENSE] MachineGuid read error:',
+            error.message
+        );
+
+        return 'UNKNOWN_HWID';
+    }
 }
+
 
 // Key Check & Auto-Binding Core Logic
 async function verifyLicense(licenseKey) {
@@ -47,6 +78,14 @@ async function verifyLicense(licenseKey) {
 
         const data = snapshot.val();
         const currentHWID = getHardwareID();
+        
+if (currentHWID === 'UNKNOWN_HWID') {
+    return {
+        success: false,
+        message: 'PC ki unique ID read nahi ho paayi. BOSS restart karein.'
+    };
+}
+
         const today = new Date().toISOString().split('T')[0];
 
         // 2. Status Check

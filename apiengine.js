@@ -1889,48 +1889,74 @@ const base64Payload = Buffer.from(rawPayload).toString('base64');
     // =====================================================
     // LIVE BOOKING STATUS -> NODE -> ELECTRON UI
     // =====================================================
-   async function liveProgress(step, message, percentage) {
 
-    diagnosticLogs.push(message);
+async function liveProgress(step, message, percentage) {
+
+    diagnosticLogs.push(
+        '[LIVE PROGRESS] ' + step + ': ' + message
+    );
+
+    console.log(
+        '[LIVE PROGRESS DEBUG] Sending:',
+        step,
+        message,
+        percentage
+    );
 
     try {
 
         if (
-            typeof window.__bossSendProgress === 'function'
+            typeof window.__bossSendProgress !== 'function'
         ) {
 
-console.log(
-            '[LIVE PROGRESS DEBUG] Sending:',
+            console.warn(
+                '[LIVE PROGRESS] Bridge unavailable:',
+                'window.__bossSendProgress is not a function'
+            );
+
+            diagnosticLogs.push(
+                '[LIVE PROGRESS] Bridge unavailable.'
+            );
+
+            return false;
+        }
+
+        await window.__bossSendProgress(
             step,
             message,
             percentage
         );
 
-            await window.__bossSendProgress(
-                step,
-                message,
-                percentage
-            );
-
-            console.log(
-            '[LIVE PROGRESS DEBUG] Send completed:',
-            step
+        console.log(
+            '[LIVE PROGRESS DEBUG] Bridge call completed:',
+            step,
+            message,
+            percentage
         );
 
-        }
+        return true;
 
     } catch (progressError) {
 
-        console.warn(
+        console.error(
             '[LIVE PROGRESS] Bridge error:',
-            progressError &&
-            progressError.message
-                ? progressError.message
-                : progressError
+            progressError
         );
 
+        diagnosticLogs.push(
+            '[LIVE PROGRESS] Bridge error: ' +
+            (
+                progressError &&
+                progressError.message
+                    ? progressError.message
+                    : String(progressError)
+            )
+        );
+
+        return false;
     }
 }
+
         try {
             var currentUrl = window.location.href;
             diagnosticLogs.push("Current Browser URL: " + currentUrl);
@@ -2424,8 +2450,8 @@ var isTatkalQuota =
 
 if (isTatkalQuota) {
 
-    // AC Tatkal = 10:00:01 AM
-    // Non-AC Tatkal = 11:00:01 AM
+    // AC Tatkal = 10:00:02 AM
+    // Non-AC Tatkal = 11:00:02 AM
     //
     // AC classes:
     // 1A, 2A, 3A, 3E, CC, EC, EA
@@ -2450,7 +2476,7 @@ if (isTatkalQuota) {
    
 
     var tatkalMinute = 0;
-    var tatkalSecond = 1;
+    var tatkalSecond = 2;
 
     diagnosticLogs.push(
         "Tatkal timing detected."
@@ -2465,8 +2491,8 @@ if (isTatkalQuota) {
         "Tatkal opening time: " +
         (
             tatkalHour === 10
-                ? "10:00:01 AM"
-                : "11:00:01 AM"
+                ? "10:00:02 AM"
+                : "11:00:02 AM"
         )
     );
 
@@ -3660,25 +3686,79 @@ for (var waitTry = 0; waitTry < 60; waitTry++) {
         retryText.includes('unable to process') ||
         retryText.includes('please retry');
 
+    var bodyText = document.body.innerText || '';
+    var retryText = bodyText.toLowerCase();
+
+    var highLoadPopup =
+        retryText.includes('high load') ||
+        retryText.includes('unable to process') ||
+        retryText.includes('please retry') ||
+        retryText.includes('try again later') ||
+        retryText.includes('temporarily unavailable') ||
+        retryText.includes('service unavailable') ||
+        retryText.includes('request could not be processed');
+
     if (highLoadPopup) {
 
         bookNowErrorDetected = true;
 
         diagnosticLogs.push(
-            "Book Now: High Load / Unable to Process popup detected during wait."
+            "Book Now: IRCTC error detected immediately after click."
         );
 
-        var detectedError = getIRCTCErrorStatus(
-            document.body.innerText || ''
-        );
+        // Actual error text dhoondo; fallback message bhi ready rakho
+        var errorMessage = 'IRCTC High Load / Unable to Process. Please retry.';
 
-        await liveProgress(
-            detectedError.step,
-            detectedError.message,
-            20
-        );
+        var errorLines = bodyText
+            .split('\\n')
+            .map(function(line) {
+                return line.trim();
+            })
+            .filter(function(line) {
+                return line.length > 0;
+            });
 
-        // Retry closing the toast briefly
+        for (var errorIndex = 0; errorIndex < errorLines.length; errorIndex++) {
+
+            var lineLower = errorLines[errorIndex].toLowerCase();
+
+            if (
+                lineLower.includes('high load') ||
+                lineLower.includes('unable to process') ||
+                lineLower.includes('please retry') ||
+                lineLower.includes('try again later') ||
+                lineLower.includes('temporarily unavailable') ||
+                lineLower.includes('service unavailable') ||
+                lineLower.includes('request could not be processed')
+            ) {
+                errorMessage = errorLines[errorIndex];
+                break;
+            }
+        }
+
+        // Mini window ko turant error progress bhejo
+        try {
+
+            await liveProgress(
+                'BOOKING ERROR',
+                errorMessage,
+                20
+            );
+
+            diagnosticLogs.push(
+                "Immediate Book Now error progress sent: " +
+                errorMessage
+            );
+
+        } catch (progressError) {
+
+            diagnosticLogs.push(
+                "Immediate error progress failed: " +
+                (progressError.message || progressError)
+            );
+        }
+
+        // Error toast ko close karne ki koshish
         for (var closeTry = 0; closeTry < 10; closeTry++) {
 
             var closeRetry = document.querySelector(
@@ -3696,6 +3776,7 @@ for (var waitTry = 0; waitTry < 60; waitTry++) {
                     break;
 
                 } catch (closeError) {
+
                     diagnosticLogs.push(
                         "Book Now toast close failed: " +
                         (closeError.message || closeError)
@@ -3711,16 +3792,28 @@ for (var waitTry = 0; waitTry < 60; waitTry++) {
         break;
     }
 
-   // Passenger page check
-    if (
-        currentUrl.indexOf('psgninput') !== -1 ||
-        document.querySelector(
-            'input[formcontrolname="passengerName"]'
-        )
-    ) {
+
+  
+    // Passenger page check — URL OR passenger form
+    var passengerNameInput = document.querySelector(
+        'input[formcontrolname="passengerName"], ' +
+        'input[placeholder*="Full Name"], ' +
+        'input[placeholder*="Govt"]'
+    );
+
+    var isPassengerUrl =
+        window.location.href.indexOf('psgninput') !== -1;
+
+    if (isPassengerUrl || passengerNameInput) {
         passengerPageReached = true;
+
+        diagnosticLogs.push(
+            "Passenger page detected after Book Now."
+        );
+
         break;
     }
+
 }
 
 if (passengerPageReached) {
