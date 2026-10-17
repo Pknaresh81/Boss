@@ -2450,8 +2450,8 @@ var isTatkalQuota =
 
 if (isTatkalQuota) {
 
-    // AC Tatkal = 10:00:02 AM
-    // Non-AC Tatkal = 11:00:02 AM
+    // AC Tatkal = 10:00:01 AM
+    // Non-AC Tatkal = 11:00:01 AM
     //
     // AC classes:
     // 1A, 2A, 3A, 3E, CC, EC, EA
@@ -2476,7 +2476,7 @@ if (isTatkalQuota) {
    
 
     var tatkalMinute = 0;
-    var tatkalSecond = 2;
+    var tatkalSecond = 1;
 
     diagnosticLogs.push(
         "Tatkal timing detected."
@@ -2491,8 +2491,8 @@ if (isTatkalQuota) {
         "Tatkal opening time: " +
         (
             tatkalHour === 10
-                ? "10:00:02 AM"
-                : "11:00:02 AM"
+                ? "10:00:01 AM"
+                : "11:00:01 AM"
         )
     );
 
@@ -3279,7 +3279,7 @@ await liveProgress(
             );
 
             await new Promise(function(r) {
-                setTimeout(r, 400);
+                setTimeout(r, 2000);
             });
 
         } else {
@@ -3653,6 +3653,7 @@ var retryDateEl = Array.from(
 
                 try {
 
+
 bookBtn.click();
 
 await liveProgress(
@@ -3666,7 +3667,10 @@ diagnosticLogs.push(
 );
 
 var passengerPageReached = false;
-var bookNowErrorDetected = false;
+
+// Sirf passenger page detect karo.
+// BOOK NOW ke baad High Load / Unable to Process
+// ko mini window mein bhejne wala extra logic hata diya hai.
 
 for (var waitTry = 0; waitTry < 60; waitTry++) {
 
@@ -3674,127 +3678,6 @@ for (var waitTry = 0; waitTry < 60; waitTry++) {
         setTimeout(r, 100);
     });
 
-    var currentUrl = window.location.href;
-
-    // Check IRCTC error text during the wait
-    var retryText = (
-        document.body.innerText || ''
-    ).toLowerCase();
-
-    var highLoadPopup =
-        retryText.includes('high load') ||
-        retryText.includes('unable to process') ||
-        retryText.includes('please retry');
-
-    var bodyText = document.body.innerText || '';
-    var retryText = bodyText.toLowerCase();
-
-    var highLoadPopup =
-        retryText.includes('high load') ||
-        retryText.includes('unable to process') ||
-        retryText.includes('please retry') ||
-        retryText.includes('try again later') ||
-        retryText.includes('temporarily unavailable') ||
-        retryText.includes('service unavailable') ||
-        retryText.includes('request could not be processed');
-
-    if (highLoadPopup) {
-
-        bookNowErrorDetected = true;
-
-        diagnosticLogs.push(
-            "Book Now: IRCTC error detected immediately after click."
-        );
-
-        // Actual error text dhoondo; fallback message bhi ready rakho
-        var errorMessage = 'IRCTC High Load / Unable to Process. Please retry.';
-
-        var errorLines = bodyText
-            .split('\\n')
-            .map(function(line) {
-                return line.trim();
-            })
-            .filter(function(line) {
-                return line.length > 0;
-            });
-
-        for (var errorIndex = 0; errorIndex < errorLines.length; errorIndex++) {
-
-            var lineLower = errorLines[errorIndex].toLowerCase();
-
-            if (
-                lineLower.includes('high load') ||
-                lineLower.includes('unable to process') ||
-                lineLower.includes('please retry') ||
-                lineLower.includes('try again later') ||
-                lineLower.includes('temporarily unavailable') ||
-                lineLower.includes('service unavailable') ||
-                lineLower.includes('request could not be processed')
-            ) {
-                errorMessage = errorLines[errorIndex];
-                break;
-            }
-        }
-
-        // Mini window ko turant error progress bhejo
-        try {
-
-            await liveProgress(
-                'BOOKING ERROR',
-                errorMessage,
-                20
-            );
-
-            diagnosticLogs.push(
-                "Immediate Book Now error progress sent: " +
-                errorMessage
-            );
-
-        } catch (progressError) {
-
-            diagnosticLogs.push(
-                "Immediate error progress failed: " +
-                (progressError.message || progressError)
-            );
-        }
-
-        // Error toast ko close karne ki koshish
-        for (var closeTry = 0; closeTry < 10; closeTry++) {
-
-            var closeRetry = document.querySelector(
-                'a.ui-toast-close-icon.pi.pi-times'
-            );
-
-            if (closeRetry) {
-                try {
-                    closeRetry.click();
-
-                    diagnosticLogs.push(
-                        "Book Now error toast close button clicked."
-                    );
-
-                    break;
-
-                } catch (closeError) {
-
-                    diagnosticLogs.push(
-                        "Book Now toast close failed: " +
-                        (closeError.message || closeError)
-                    );
-                }
-            }
-
-            await new Promise(function(r) {
-                setTimeout(r, 200);
-            });
-        }
-
-        break;
-    }
-
-
-  
-    // Passenger page check — URL OR passenger form
     var passengerNameInput = document.querySelector(
         'input[formcontrolname="passengerName"], ' +
         'input[placeholder*="Full Name"], ' +
@@ -3805,6 +3688,7 @@ for (var waitTry = 0; waitTry < 60; waitTry++) {
         window.location.href.indexOf('psgninput') !== -1;
 
     if (isPassengerUrl || passengerNameInput) {
+
         passengerPageReached = true;
 
         diagnosticLogs.push(
@@ -3813,94 +3697,29 @@ for (var waitTry = 0; waitTry < 60; waitTry++) {
 
         break;
     }
-
 }
 
 if (passengerPageReached) {
     bookNowClicked = true;
 
     await liveProgress(
-    'PASSENGER PAGE',
-    'FILLING PASSENGER DETAILS...',
-    50
-);
+        'PASSENGER PAGE',
+        'FILLING PASSENGER DETAILS...',
+        50
+    );
 
     diagnosticLogs.push(
         "Passenger page reached after Book Now click."
     );
 
     break;
-} else {
-
-    var retryText =
-        (document.body.innerText || '').toLowerCase();
-
-    var highLoadPopup =
-        retryText.includes('high load') ||
-        retryText.includes('unable to process') ||
-        retryText.includes('please retry');
-
-    if (highLoadPopup) {
-
-        diagnosticLogs.push(
-            "High Load / Unable to Process popup detected."
-        );
-
-
-var detectedError = getIRCTCErrorStatus(
-    document.body.innerText || ''
-);
-
-await liveProgress(
-    detectedError.step,
-    detectedError.message,
-    20
-);
-
-
-        var closeRetry =
-    document.querySelector(
-        'a.ui-toast-close-icon.pi.pi-times'
-    );
-
-if (closeRetry) {
-
-    try {
-        closeRetry.click();
-
-        diagnosticLogs.push(
-            "IRCTC error toast closed successfully."
-        );
-
-    } catch (e) {
-
-        diagnosticLogs.push(
-            "Error toast close failed: " +
-            (e.message || e)
-        );
-    }
-
-} else {
-
-    diagnosticLogs.push(
-        "IRCTC error toast close button not found."
-    );
 }
 
-        await new Promise(function(r) {
-            setTimeout(r, 500);
-        });
+else {
 
-        diagnosticLogs.push(
-            "Popup closed. Next attempt will reselect Train -> Class -> Date."
-        );
-
-    } else {
-
-        diagnosticLogs.push(
-            "Book Now failed. Next attempt will reselect Train -> Class -> Date."
-        );
-    }
+    diagnosticLogs.push(
+        "Passenger page not detected yet. Next attempt will reselect Train -> Class -> Date."
+    );
 
     classSelectionCompleted = false;
     targetCard = null;
@@ -3911,7 +3730,6 @@ if (closeRetry) {
 
     continue;
 }
-
 
                 } catch (clickError) {
 
@@ -3945,7 +3763,6 @@ if (closeRetry) {
                 setTimeout(r, 1000);
             });
         }
-
 
         // -------------------------------------------------
         // BOOK NOW SUCCESS
@@ -4800,7 +4617,7 @@ if (!upiSelected) {
     diagnosticLogs.push("WARNING: BHIM/UPI option could not be selected!");
 }
 
-await new Promise(function(r) { setTimeout(r, 200); });
+await new Promise(function(r) { setTimeout(r, 2000); });
 
         
 // =================================================
@@ -6752,7 +6569,7 @@ await liveProgress(
                     paytmImage.naturalHeight >= 100
                 );
 
-            } else {
+            } else if (paymentIsPhonePe) {
 
                 var phonepeCandidates = Array.from(
                     document.querySelectorAll(
@@ -7166,32 +6983,79 @@ if (showQrButton) {
                 qrType = 'PAYTM QR';
             }
 
-        } else if (expectedPayment.startsWith('PHONEPE')) {
+        
+} else if (expectedPayment.startsWith('PHONEPE')) {
 
-            const elements = Array.from(
-                document.querySelectorAll(
-                    'img[src*="qr" i], ' +
-                    'img[alt*="qr" i], ' +
-                    'img[src^="blob:"], canvas'
-                )
-            );
+    // Actual PhonePe payment URL verify karo.
+    let phonePeUrlVerified = false;
 
-            actualQrReady = elements.some(function(el) {
-                if (el instanceof HTMLImageElement) {
-                    return validImage(el);
-                }
+    try {
+        const currentUrl = new URL(window.location.href);
 
-                if (el instanceof HTMLCanvasElement) {
-                    return validCanvas(el);
-                }
+        phonePeUrlVerified =
+            currentUrl.protocol === 'https:' &&
+            currentUrl.hostname === 'mercury-t2.phonepe.com' &&
+            currentUrl.pathname === '/transact/sltv3' &&
+            Boolean(currentUrl.searchParams.get('token'));
+    } catch (error) {
+        phonePeUrlVerified = false;
+    }
 
-                return false;
-            });
+    const elements = Array.from(
+        document.querySelectorAll(
+            'img[src*="qr" i], ' +
+            'img[alt*="qr" i], ' +
+            'img[src^="blob:"], canvas'
+        )
+    );
 
-            if (actualQrReady) {
-                qrType = 'PHONEPE QR';
-            }
+    const phonePeQrReady = elements.some(function(el) {
+
+        if (!el.isConnected) {
+            return false;
         }
+
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+
+        const visible =
+            style.display !== 'none' &&
+            style.visibility !== 'hidden' &&
+            Number(style.opacity) !== 0 &&
+            rect.width > 0 &&
+            rect.height > 0;
+
+        if (!visible) {
+            return false;
+        }
+
+        if (el instanceof HTMLImageElement) {
+            return (
+                el.complete &&
+                el.naturalWidth >= 100 &&
+                el.naturalHeight >= 100
+            );
+        }
+
+        if (el instanceof HTMLCanvasElement) {
+            return (
+                el.width >= 100 &&
+                el.height >= 100
+            );
+        }
+
+        return false;
+    });
+
+    // URL aur QR dono valid hone chahiye.
+    actualQrReady =
+        phonePeUrlVerified && phonePeQrReady;
+
+    if (actualQrReady) {
+        qrType = 'PHONEPE QR';
+    }
+}
+
 
         const text = String(
             document.body?.innerText || ''
@@ -7229,14 +7093,21 @@ console.log(
                 /high load|unable to process|please retry/i
                     .test(state.text);
 
-            if (
-                state.ready !== 'loading' &&
-                !hasIrctcError &&
-                state.actualQrReady
-            ) {
-                paymentPageState = state;
-                break;
-            }
+            const isPhonePeRecovery =
+    expectedPayment.startsWith('PHONEPE');
+
+if (
+    state.ready !== 'loading' &&
+    !hasIrctcError &&
+    state.actualQrReady &&
+    (
+        !isPhonePeRecovery ||
+        state.providerUrlVerified === true
+    )
+) {
+    paymentPageState = state;
+    break;
+}
 
         } catch (pageCheckError) {
             // Navigation ke dauran dobara check hoga.
@@ -7279,12 +7150,196 @@ console.log(
     };
 }
 
+ // ==========================================
+ // PHONEPE PAYMENT PAGE VERIFICATION
+ // ==========================================
+
+const expectedPaymentForVerification = String(
+    bookingData.payment ||
+    bookingData.paymentType ||
+    bookingData.paymentMethod ||
+    ''
+).trim().toUpperCase();
+
+const isPhonePePayment =
+    expectedPaymentForVerification.includes('PHONEPE');
+
+const alreadyVerifiedAfterNavigation = Boolean(
+    result &&
+    Array.isArray(result.logs) &&
+    result.logs.some(log =>
+        String(log).includes('Actual provider QR verified')
+    )
+);
+
+if (
+    isPhonePePayment &&
+    result &&
+    result.success &&
+    !alreadyVerifiedAfterNavigation
+) {
+    this.sendBookingStatus(
+        'VERIFYING PAYMENT PAGE...',
+        'PhonePe payment page load aur QR verify ho raha hai...',
+        75
+    );
+
+    console.log(
+        '[PHONEPE VERIFICATION] Payment page verification started.'
+    );
+
+    let phonePeQrVerified = false;
+
+    for (let attempt = 0; attempt < 60; attempt++) {
+        if (!this.page || this.page.isClosed()) {
+            break;
+        }
+
+        try {
+            const phonePeState = await this.page.evaluate(() => {
+                function isVisible(el) {
+                    if (!el || !el.isConnected) {
+                        return false;
+                    }
+
+                    const style = window.getComputedStyle(el);
+                    const rect = el.getBoundingClientRect();
+
+                    return (
+                        style.display !== 'none' &&
+                        style.visibility !== 'hidden' &&
+                        Number(style.opacity) !== 0 &&
+                        rect.width > 0 &&
+                        rect.height > 0
+                    );
+                }
+
+                let providerUrlVerified = false;
+
+                try {
+                    const url = new URL(window.location.href);
+
+                    providerUrlVerified =
+                        url.protocol === 'https:' &&
+                        url.hostname === 'mercury-t2.phonepe.com' &&
+                        url.pathname === '/transact/sltv3' &&
+                        Boolean(url.searchParams.get('token'));
+                } catch (error) {
+                    providerUrlVerified = false;
+                }
+
+                const candidates = Array.from(
+                    document.querySelectorAll(
+                        'img[src*="qr" i], ' +
+                        'img[alt*="qr" i], ' +
+                        'img[src^="blob:"], canvas'
+                    )
+                );
+
+                const qrReady = candidates.some(el => {
+                    if (!isVisible(el)) {
+                        return false;
+                    }
+
+                    if (el instanceof HTMLImageElement) {
+                        return (
+                            el.complete &&
+                            el.naturalWidth >= 100 &&
+                            el.naturalHeight >= 100
+                        );
+                    }
+
+                    if (el instanceof HTMLCanvasElement) {
+                        return (
+                            el.width >= 100 &&
+                            el.height >= 100
+                        );
+                    }
+
+                    return false;
+                });
+
+                return {
+                    url: window.location.href,
+                    ready: document.readyState,
+                    providerUrlVerified,
+                    qrReady
+                };
+            });
+
+            let safeUrl = phonePeState.url;
+
+            try {
+                const parsedUrl = new URL(safeUrl);
+
+                if (parsedUrl.searchParams.has('token')) {
+                    parsedUrl.searchParams.set(
+                        'token',
+                        '[REDACTED]'
+                    );
+                }
+
+                safeUrl = parsedUrl.toString();
+            } catch (error) {
+                safeUrl = '[INVALID URL]';
+            }
+
+            console.log(
+                '[PHONEPE VERIFICATION] Attempt:',
+                attempt + 1,
+                '| URL:',
+                safeUrl,
+                '| URL Verified:',
+                phonePeState.providerUrlVerified,
+                '| Ready:',
+                phonePeState.ready,
+                '| QR:',
+                phonePeState.qrReady
+            );
+
+            if (
+                phonePeState.ready !== 'loading' &&
+                phonePeState.providerUrlVerified === true &&
+                phonePeState.qrReady === true
+            ) {
+                phonePeQrVerified = true;
+
+                console.log(
+                    '[PAYMENT NAVIGATION] Actual QR verified: PHONEPE QR'
+                );
+
+                console.log(
+                    '[PAYMENT NAVIGATION] URL:',
+                    safeUrl
+                );
+
+                break;
+            }
+        } catch (verificationError) {
+            // Navigation ke dauran context change ho sakta hai.
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    if (!phonePeQrVerified) {
+        throw new Error(
+            'PhonePe ka expected payment URL aur actual QR ' +
+            'verify nahi hua. Booking flow aage nahi badhaya gaya.'
+        );
+    }
+
+    console.log(
+        '[PHONEPE VERIFICATION] Actual PhonePe QR verified successfully.'
+    );
+}
 
 this.sendBookingStatus(
     'QR DETECTING...',
     'QR DETECTING',
     78
 );
+
 
 console.log('\n================ AUTOMATION LOGS ===============');
 
@@ -7504,8 +7559,7 @@ const isTatkalOrPremium =
 
             // STEP 1: CHECK AVAILABILITY & REAL FARE
 
-            if (true) {
-
+            if (!isTatkalOrPremium) {
                 const availabilityResponse =
                     await this.checkAvailabilityAndFare(bookingData);
 
@@ -7635,10 +7689,6 @@ if (
         '[IPAY] Existing QR canvas verified. No extra click.'
     );
 }
-
-await new Promise(function(r) {
-    setTimeout(r, 500);
-});
 
 console.log('[QR] Waiting for payment page to load...');
     
@@ -7918,7 +7968,7 @@ try {
             );
         }
 
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 500));
     }
 
     if (!qrReady || !qrImage) {
@@ -8003,8 +8053,9 @@ try {
 
     }
 
+
     // ------------------------------------------
-    // SEND QR TO MINI WINDOW
+    // SEND QR TO MINI WINDOW - FAST DISPLAY
     // ------------------------------------------
 
     if (
@@ -8012,68 +8063,57 @@ try {
         this.win &&
         !this.win.isDestroyed()
     ) {
-
-      if (
-    this.qrCallbacks &&
-    typeof this.qrCallbacks.showQR === 'function'
-) {
-
-
-if (
-    paymentValue.startsWith('IPAY') &&
-    remainingTime === '00:00'
-) {
-    remainingTime = '03:00';
-}
-
-    this.qrCallbacks.showQR({
-        image: qrImage,
-        remainingTime: remainingTime
-    });
-
-    console.log(
-        '[QR] Payment QR sent to separate QR window.'
-    );
-
-} else {
-
-    console.warn(
-        '[QR] QR show callback available nahi hai.'
-    );
-}
-
-console.log(
-    '[QR] Payment QR sent to mini window.'
-);
-
-// Mini window renderer ready hone ke liye
-// ek short delayed resend
-setTimeout(() => {
-    try {
+        if (
+            paymentValue.startsWith('IPAY') &&
+            remainingTime === '00:00'
+        ) {
+            remainingTime = '03:00';
+        }
 
         if (
             this.qrCallbacks &&
             typeof this.qrCallbacks.showQR === 'function'
         ) {
-
-            this.qrCallbacks.showQR({
+            const qrPayload = {
                 image: qrImage,
                 remainingTime: remainingTime
-            });
+            };
+
+            // Send immediately
+            this.qrCallbacks.showQR(qrPayload);
 
             console.log(
-                '[QR] Payment QR resend sent to separate QR window.'
+                '[QR] QR sent immediately to mini window.'
+            );
+
+            // Quick backup resend
+            setTimeout(() => {
+                try {
+                    if (
+                        this.qrCallbacks &&
+                        typeof this.qrCallbacks.showQR === 'function' &&
+                        this.win &&
+                        !this.win.isDestroyed()
+                    ) {
+                        this.qrCallbacks.showQR(qrPayload);
+
+                        console.log(
+                            '[QR] Quick backup QR resend sent.'
+                        );
+                    }
+                } catch (error) {
+                    console.warn(
+                        '[QR] Backup resend failed:',
+                        error.message
+                    );
+                }
+            }, 200);
+
+        } else {
+            console.warn(
+                '[QR] QR show callback available nahi hai.'
             );
         }
-
-    } catch (qrResendError) {
-
-        console.warn(
-            '[QR] Payment QR resend failed:',
-            qrResendError.message
-        );
-    }
-}, 700);
 
         console.log(
             '[QR] IRCTC payment timer:',
@@ -8081,14 +8121,12 @@ setTimeout(() => {
         );
 
     } else {
-
         console.warn(
             '[QR] QR image ya mini window available nahi hai.'
         );
     }
 
 } catch (qrPopupError) {
-
     console.warn(
         '[QR] Mini window QR popup preparation failed:',
         qrPopupError.message
@@ -8104,6 +8142,7 @@ this.sendBookingStatus(
 console.log(
     '[PAYMENT] QR detected. Waiting for actual payment confirmation.'
 );
+
 
 // ==========================================
 // WAIT FOR PAYMENT BEFORE VERIFICATION

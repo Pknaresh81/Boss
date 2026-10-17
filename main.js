@@ -841,6 +841,7 @@ async function launchBrowser(
         '--window-size=450,600', // <-- Specific width aur height force karein
         `--window-position=${config.port === 9222 ? 0 : config.port === 9223 ? 455 : config.port === 9224 ? 910 : 0},140`, // <-- Screen position set karein
         '--no-default-browser-check',
+        '--disable-sync',
         targetUrl
     ],
     {
@@ -1307,10 +1308,6 @@ ipcMain.handle(
     'clear-browser-data',
     async (event, browserName) => {
 
-        const value = String(
-            browserName || ''
-        ).trim().toUpperCase();
-
         const allowedTypes = {
             WEB: 'WEB',
             CHROME: 'WEB',
@@ -1320,7 +1317,9 @@ ipcMain.handle(
             BRAVE: 'WEB3'
         };
 
-        const type = allowedTypes[value];
+        const type = allowedTypes[
+            String(browserName || '').trim().toUpperCase()
+        ];
 
         if (!type) {
             return {
@@ -1331,81 +1330,77 @@ ipcMain.handle(
 
         const config = getBrowserConfig(type);
 
-        // Booking ke dauran profile clear nahi karna
         if (activeBookingBrowsers.has(type)) {
             return {
                 success: false,
-                error:
-                    `${config.name} mein booking chal rahi hai. ` +
-                    'Booking khatam hone ke baad dobara try karein.'
+                error: `${config.name} mein booking chal rahi hai.`
             };
         }
 
+        const imageNames = {
+            WEB: 'chrome.exe',
+            WEB2: 'msedge.exe',
+            WEB3: 'brave.exe'
+        };
+
         try {
             console.log(
-                `[CLEAR DATA ${type}] Started:`,
+                `[CLEAR DATA ${type}] Starting full profile reset:`,
                 config.userDataDir
             );
 
-            // Agar browser CDP ke through chal raha hai,
-            // to usi browser ko gracefully close karo.
-            const running =
-                await isBrowserDebugReady(config);
-
-            if (running) {
-                const browser = await puppeteer.connect({
-                    browserURL:
-                        `http://127.0.0.1:${config.port}`,
-                    defaultViewport: null,
-                    protocolTimeout: 30000
-                });
-
-                await browser.close();
-
-                // Browser band hone ka wait karo.
-                const deadline = Date.now() + 15000;
-
-                while (Date.now() < deadline) {
-                    if (
-                        !(await isBrowserDebugReady(config))
-                    ) {
-                        break;
+            // STEP 1: Close browser processes.
+            // NOTE: This closes ALL instances of the selected browser,
+            // including any personal browser windows of the same type.
+            await new Promise((resolve, reject) => {
+                exec(
+                    `taskkill /F /T /IM "${imageNames[type]}"`,
+                    { windowsHide: true },
+                    (error, stdout, stderr) => {
+                        // "Process not found" is okay; verify folder deletion below.
+                        if (error && error.code !== 128) {
+                            console.log(
+                                `[CLEAR DATA ${type}] taskkill:`,
+                                stderr || error.message
+                            );
+                        }
+                        resolve();
                     }
+                );
+            });
 
-                    await new Promise(resolve =>
-                        setTimeout(resolve, 300)
-                    );
-                }
+            // STEP 2: Wait for processes to exit.
+            await new Promise(resolve => setTimeout(resolve, 2000));
 
-                if (await isBrowserDebugReady(config)) {
-                    return {
-                        success: false,
-                        error:
-                            `${config.name} poori tarah band nahi hua. ` +
-                            'Profile data delete nahi kiya gaya.'
-                    };
-                }
+            // STEP 3: Delete the entire BOSS-managed profile.
+            await fs.promises.rm(config.userDataDir, {
+                recursive: true,
+                force: true,
+                maxRetries: 10,
+                retryDelay: 1000
+            });
+
+            // STEP 4: Verify the old folder is gone.
+            if (fs.existsSync(config.userDataDir)) {
+                throw new Error(
+                    'Profile folder abhi bhi maujood hai; deletion verify nahi hua.'
+                );
             }
 
-            // Sirf selected Boss-managed profile delete karo.
-            await fs.promises.rm(
-                config.userDataDir,
-                {
-                    recursive: true,
-                    force: true,
-                    maxRetries: 3,
-                    retryDelay: 500
-                }
-            );
+            // STEP 5: Create an empty profile directory.
+            await fs.promises.mkdir(config.userDataDir, {
+                recursive: true
+            });
 
-            // Agli baar browser launch ke liye empty profile.
-            await fs.promises.mkdir(
-                config.userDataDir,
-                { recursive: true }
-            );
+            // STEP 6: Verify fresh directory exists.
+            const stat = await fs.promises.stat(config.userDataDir);
+
+            if (!stat.isDirectory()) {
+                throw new Error('Fresh profile directory create nahi hua.');
+            }
 
             console.log(
-                `[CLEAR DATA ${type}] Profile reset complete.`
+                `[CLEAR DATA ${type}] VERIFIED: Fresh profile directory created.`
             );
 
             return {
@@ -1413,12 +1408,12 @@ ipcMain.handle(
                 browserType: type,
                 browserName: config.name,
                 message:
-                    `${config.name} ka browser profile data clear ho gaya.`
+                    `${config.name} ka local BOSS profile reset ho gaya.`
             };
 
         } catch (error) {
             console.error(
-                `[CLEAR DATA ${type}] Failed:`,
+                `[CLEAR DATA ${type}] RESET FAILED:`,
                 error
             );
 
@@ -1426,12 +1421,11 @@ ipcMain.handle(
                 success: false,
                 error:
                     error?.message ||
-                    'Browser data clear nahi ho saka.'
+                    'Browser profile reset nahi ho saka.'
             };
         }
     }
 );
-
 
 // ==========================================
 // START BOOKING HANDLER
@@ -2900,6 +2894,53 @@ try {
             console.log(
                 `[${config.type}] Connected to page: ${await page.url()}`
             );
+
+
+            // ==========================================
+            // TATKAL MINI WINDOW MAPPING
+            // ==========================================
+
+            const windowId =
+                payload.windowId ||
+                payload.ticketData?.windowId ||
+                null;
+
+            let miniWin =
+                windowId
+                    ? miniAutomationWindows.get(windowId)
+                    : null;
+
+            // Fallback: use the mini window already mapped
+            // to this browser type when windowId is missing.
+            if (
+                !miniWin ||
+                miniWin.isDestroyed()
+            ) {
+                miniWin =
+                    miniAutomationWindowsByBrowser.get(
+                        config.type
+                    ) || null;
+            }
+
+            if (
+                miniWin &&
+                !miniWin.isDestroyed()
+            ) {
+                miniAutomationWindowsByBrowser.set(
+                    config.type,
+                    miniWin
+                );
+
+                console.log(
+                    `[MINI MAP] Tatkal ${config.type} mapped successfully`,
+                    windowId ? `windowId=${windowId}` : '(browser fallback)'
+                );
+            } else {
+                console.warn(
+                    `[MINI MAP] No mini window found for ${config.type}`
+                );
+            }
+
 
             const ticketData =
                 payload.ticketData ||
