@@ -5,30 +5,6 @@ const {
     session,
 } = require('electron');
 
-
-const { app: electronApp } = require('electron');
-
-app.on('browser-window-created', (_event, win) => {
-    win.on('unresponsive', () => {
-        console.error(
-            '[FREEZE DEBUG] Window unresponsive:',
-            win.getTitle(),
-            'ID:',
-            win.id
-        );
-    });
-
-    win.on('responsive', () => {
-        console.log(
-            '[FREEZE DEBUG] Window responsive again:',
-            win.getTitle(),
-            'ID:',
-            win.id
-        );
-    });
-});
-
-
 const {
     verifyLicense
 } = require('./licenseManager');
