@@ -2450,8 +2450,8 @@ var isTatkalQuota =
 
 if (isTatkalQuota) {
 
-    // AC Tatkal = 10:00:01 AM
-    // Non-AC Tatkal = 11:00:01 AM
+    // AC Tatkal = 10:00:02 AM
+    // Non-AC Tatkal = 11:00:02 AM
     //
     // AC classes:
     // 1A, 2A, 3A, 3E, CC, EC, EA
@@ -2476,7 +2476,7 @@ if (isTatkalQuota) {
    
 
     var tatkalMinute = 0;
-    var tatkalSecond = 1;
+    var tatkalSecond = 2;
 
     diagnosticLogs.push(
         "Tatkal timing detected."
@@ -2491,8 +2491,8 @@ if (isTatkalQuota) {
         "Tatkal opening time: " +
         (
             tatkalHour === 10
-                ? "10:00:01 AM"
-                : "11:00:01 AM"
+                ? "10:00:02 AM"
+                : "11:00:02 AM"
         )
     );
 
@@ -2739,7 +2739,7 @@ if (!targetClass) return { success:false, error:'trainClass missing from payload
             );
 
             await new Promise(function(r) {
-                setTimeout(r, 700);
+                setTimeout(r, 400);
             });
 
             attempts++;
@@ -2775,7 +2775,7 @@ if (!targetClass) return { success:false, error:'trainClass missing from payload
 
 
         await new Promise(function(r) {
-            setTimeout(r, 200);
+            setTimeout(r, 100);
         });
 
 
@@ -2819,7 +2819,7 @@ matchedClassBox.dispatchEvent(
 
 
         await new Promise(function(r) {
-            setTimeout(r, 500);
+            setTimeout(r, 300);
         });
 
 
@@ -2946,7 +2946,7 @@ matchedClassBox.dispatchEvent(
             }
 
             await new Promise(function(r) {
-                setTimeout(r, 200);
+                setTimeout(r, 100);
             });
         }
 
@@ -2981,7 +2981,7 @@ matchedClassBox.dispatchEvent(
             );
 
             await new Promise(function(r) {
-                setTimeout(r, 700);
+                setTimeout(r, 300);
             });
 
             attempts++;
@@ -3006,7 +3006,7 @@ matchedClassBox.dispatchEvent(
 );
 
         await new Promise(function(r) {
-            setTimeout(r, 500);
+            setTimeout(r, 250);
         });
 
 
@@ -3323,7 +3323,7 @@ if (!journeyDateSelected) {
     attempts++;
 
     await new Promise(function(r) {
-        setTimeout(r, 300);
+        setTimeout(r, 200);
     });
 
     continue;
@@ -3458,12 +3458,12 @@ if (bTry > 0 && targetCard) {
 
     if (!retryClassEl) {
         diagnosticLogs.push("Retry: exact class nahi mila.");
-        await new Promise(function(r) { setTimeout(r, 200); });
+        await new Promise(function(r) { setTimeout(r, 150); });
         continue;
     }
 
 retryClassEl.click();
-await new Promise(function(r) { setTimeout(r, 500); });
+await new Promise(function(r) { setTimeout(r, 300); });
 
 targetCard = Array.from(
     document.querySelectorAll(
@@ -3561,7 +3561,7 @@ var retryDateEl = Array.from(
 
     if (!retryDateEl) {
         diagnosticLogs.push("Retry: journey date nahi mila.");
-        await new Promise(function(r) { setTimeout(r, 200); });
+        await new Promise(function(r) { setTimeout(r, 150); });
         continue;
     }
 
@@ -3798,7 +3798,7 @@ else {
         );
 
         await new Promise(function(r) {
-            setTimeout(r, 700);
+            setTimeout(r, 400);
         });
     }
 
@@ -5246,10 +5246,11 @@ if (!selectedPayment) {
     return {
         success: false,
         error:
-            'Payment type payload mein empty hai. Form se PAYTM QR / PHONEPE QR value nahi aa rahi.',
+            'Payment type payload mein empty hai. Form se PAYTM QR / PHONEPE QR / RAZORPAY value nahi aa rahi.',
         logs: diagnosticLogs
     };
 }
+
 
 
 // =====================================================
@@ -5266,12 +5267,12 @@ var paymentIsPhonePe =
     selectedPayment === 'PHONEPEQR' ||
     selectedPayment.indexOf('PHONEPE') === 0;
 
-var paymentIsIPay =
-    selectedPayment === 'IPAY QR' ||
-    selectedPayment === 'IPAYQR' ||
-    selectedPayment.indexOf('IPAY') === 0;    
+var paymentIsRazorpay =
+    selectedPayment === 'RAZORPAY QR' ||
+    selectedPayment === 'RAZORPAYQR' ||
+    selectedPayment.indexOf('RAZORPAY') === 0;    
 
-if (!paymentIsPaytm && !paymentIsPhonePe && !paymentIsIPay) {
+if (!paymentIsPaytm && !paymentIsPhonePe && !paymentIsRazorpay ) {
 
     return {
         success: false,
@@ -5282,135 +5283,11 @@ if (!paymentIsPaytm && !paymentIsPhonePe && !paymentIsIPay) {
     };
 }
 
- // =====================================================
-// IRCTC IPAY
-// =====================================================
-if (paymentIsIPay) {
-
-    diagnosticLogs.push(
-        "STEP: IRCTC iPay select kar rahe hain."
-    );
-
-    // OPTION 1: IRCTC IPAY — wait up to 60 seconds
-    var ipay = null;
-    var ipayDeadline = Date.now() + 60000;
-
-    while (Date.now() < ipayDeadline) {
-        try {
-            ipay = Array.from(
-                document.querySelectorAll('div.bank-type')
-            ).find(function(el) {
-
-                if (
-                    !el ||
-                    !el.isConnected ||
-                    el.offsetParent === null
-                ) {
-                    return false;
-                }
-
-                var txt = String(
-                    el.innerText || el.textContent || ''
-                )
-                    .replace(/\s+/g, ' ')
-                    .trim()
-                    .toUpperCase();
-
-                return txt.indexOf('IRCTC IPAY') !== -1;
-            });
-
-            if (ipay) break;
-
-        } catch (e) {}
-
-        await new Promise(function(resolve) {
-            setTimeout(resolve, 250);
-        });
-    }
-
-    if (!ipay) {
-        diagnosticLogs.push(
-            "TIMEOUT: IRCTC iPay 60 seconds mein visible nahi hua."
-        );
-
-        return {
-            success: false,
-            error: 'IRCTC iPay option 60 seconds mein nahi mila.',
-            logs: diagnosticLogs
-        };
-    }
-
-    diagnosticLogs.push(
-        "SUCCESS: IRCTC iPay option found."
-    );
-
-    ipay.click();
-
-    // OPTION 2: IRCTC IPAY NEW — wait up to 60 seconds
-    var ipayNew = null;
-    var ipayNewDeadline = Date.now() + 60000;
-
-    while (Date.now() < ipayNewDeadline) {
-        try {
-            ipayNew = Array.from(
-                document.querySelectorAll('div.border-all.link')
-            ).find(function(el) {
-
-                if (
-                    !el ||
-                    !el.isConnected ||
-                    el.offsetParent === null
-                ) {
-                    return false;
-                }
-
-                var txt = String(
-                    el.innerText || el.textContent || ''
-                )
-                    .replace(/\s+/g, ' ')
-                    .trim()
-                    .toUpperCase();
-
-                return txt.startsWith('IRCTC IPAY NEW');
-            });
-
-            if (ipayNew) break;
-
-        } catch (e) {}
-
-        await new Promise(function(resolve) {
-            setTimeout(resolve, 250);
-        });
-    }
-
-    if (!ipayNew) {
-        diagnosticLogs.push(
-            "TIMEOUT: IRCTC iPay New 60 seconds mein visible nahi hua."
-        );
-
-        return {
-            success: false,
-            error: 'IRCTC iPay New option 60 seconds mein nahi mila.',
-            logs: diagnosticLogs
-        };
-    }
-
-    ipayNew.click();
-
-    diagnosticLogs.push(
-        "SUCCESS: IRCTC iPay New selected."
-    );
-
-    await new Promise(function(resolve) {
-        setTimeout(resolve, 250);
-    });
-}
-
-var providerName = paymentIsPaytm ? 'PAYTM' : paymentIsPhonePe ? 'PHONEPE' : 'IPAY';
+var providerName = paymentIsPaytm ? 'PAYTM' : paymentIsPhonePe ? 'PHONEPE' : 'RAZORPAY';
 
 diagnosticLogs.push(
     "Normalized payment: " +
-    (paymentIsPaytm ? 'PAYTM QR' : paymentIsPhonePe ? 'PHONEPE QR' : 'IPAY QR')
+    (paymentIsPaytm ? 'PAYTM QR' : paymentIsPhonePe ? 'PHONEPE QR' : 'RAZORPAY QR')
 );
 
 diagnosticLogs.push(
@@ -5423,10 +5300,6 @@ diagnosticLogs.push(
 // PAYTM / PHONEPE
 // PEHLE MULTIPLE PAYMENT SERVICE CLICK HOGA.
 // =====================================================
-
-if (paymentIsIPay) {
-    diagnosticLogs.push("IRCTC iPay selected. Multiple Payment Service skip.");
-} else {
 
 diagnosticLogs.push(
     providerName + " QR selected."
@@ -5925,8 +5798,6 @@ await new Promise(function(resolve) {
     setTimeout(resolve, 50);
 });
 
-}
-
 
 diagnosticLogs.push(
     providerName +
@@ -5949,208 +5820,9 @@ async function reselectRequestedPayment() {
 
     diagnosticLogs.push(
         "RETRY: Re-selecting requested payment: " +
-        (paymentIsIPay ? "IRCTC iPay" : providerName)
+        providerName
     );
 
-
-    // =============================================
-    // IRCTC IPAY + IPAY NEW RETRY
-    // =============================================
-
-    if (paymentIsIPay) {
-
-        function normalizePaymentText(el) {
-            return String(
-                el?.innerText || el?.textContent || ''
-            ).replace(/\s+/g, ' ').trim().toUpperCase();
-        }
-
-        function isVisiblePaymentOption(el) {
-            return !!(
-                el &&
-                el.isConnected &&
-                el.offsetParent !== null &&
-                el.disabled !== true &&
-                String(el.getAttribute('aria-disabled') || '')
-                    .trim().toLowerCase() !== 'true'
-            );
-        }
-
-        function hasSelectedState(el) {
-            var current = el;
-            var depth = 0;
-
-            while (current && depth < 3) {
-
-                var cls = String(
-                    current.className || ''
-                ).toLowerCase();
-
-                var ariaSelected = String(
-                    current.getAttribute?.('aria-selected') || ''
-                ).toLowerCase();
-
-                var ariaChecked = String(
-                    current.getAttribute?.('aria-checked') || ''
-                ).toLowerCase();
-
-                var ariaExpanded = String(
-                    current.getAttribute?.('aria-expanded') || ''
-                ).toLowerCase();
-
-                if (
-                    cls.includes('bank-type-active') ||
-                    cls.includes('selected') ||
-                    cls.includes('active') ||
-                    ariaSelected === 'true' ||
-                    ariaChecked === 'true' ||
-                    ariaExpanded === 'true' ||
-                    current.querySelector?.(
-                        'input:checked, [aria-checked="true"], ' +
-                        '[aria-selected="true"]'
-                    )
-                ) {
-                    return true;
-                }
-
-                current = current.parentElement;
-                depth++;
-            }
-
-            return false;
-        }
-
-        async function findIpayOption(selector, matcher, timeout) {
-
-            var deadline = Date.now() + timeout;
-
-            while (Date.now() < deadline) {
-
-                var found = Array.from(
-                    document.querySelectorAll(selector)
-                ).find(function(el) {
-                    return (
-                        isVisiblePaymentOption(el) &&
-                        matcher(normalizePaymentText(el))
-                    );
-                });
-
-                if (found) return found;
-
-                await new Promise(function(resolve) {
-                    setTimeout(resolve, 250);
-                });
-            }
-
-            return null;
-        }
-
-        async function ensureIpaySelected(
-            selector,
-            matcher,
-            label
-        ) {
-
-            var option = await findIpayOption(
-                selector,
-                matcher,
-                15000
-            );
-
-            if (!option) {
-                diagnosticLogs.push(
-                    'RETRY ERROR: ' + label + ' option not found.'
-                );
-                return false;
-            }
-
-            if (!hasSelectedState(option)) {
-
-                try {
-                    option.scrollIntoView({
-                        behavior: 'auto',
-                        block: 'center'
-                    });
-                } catch (e) {}
-
-                option.click();
-
-                diagnosticLogs.push(
-                    'RETRY: ' + label + ' clicked again.'
-                );
-            }
-
-            // Fresh DOM se selected state verify karo.
-            var verifyDeadline = Date.now() + 5000;
-
-            while (Date.now() < verifyDeadline) {
-
-                var freshOption = await findIpayOption(
-                    selector,
-                    matcher,
-                    500
-                );
-
-                if (
-                    freshOption &&
-                    hasSelectedState(freshOption)
-                ) {
-                    diagnosticLogs.push(
-                        'SUCCESS: ' + label +
-                        ' selected state verified.'
-                    );
-                    return true;
-                }
-
-                await new Promise(function(resolve) {
-                    setTimeout(resolve, 250);
-                });
-            }
-
-            diagnosticLogs.push(
-                'RETRY ERROR: ' + label +
-                ' click ke baad selected state verify nahi hui.'
-            );
-
-            return false;
-        }
-
-        // STEP 1: IRCTC IPAY
-        var ipaySelected = await ensureIpaySelected(
-            '.bank-type',
-            function(txt) {
-                return (
-                    txt.includes('IRCTC IPAY') &&
-                    !txt.includes('IRCTC IPAY NEW')
-                );
-            },
-            'IRCTC IPAY'
-        );
-
-        if (!ipaySelected) return false;
-
-        // STEP 2: IRCTC IPAY NEW
-        var ipayNewSelected = await ensureIpaySelected(
-            '.border-all.link',
-            function(txt) {
-                return txt.startsWith('IRCTC IPAY NEW');
-            },
-            'IRCTC IPAY NEW'
-        );
-
-        if (!ipayNewSelected) return false;
-
-        await new Promise(function(resolve) {
-            setTimeout(resolve, 500);
-        });
-
-        diagnosticLogs.push(
-            'SUCCESS: IRCTC IPAY and IRCTC IPAY NEW ' +
-            'both selected states verified.'
-        );
-
-        return true;
-    }
 
     // =============================================
     // MULTIPLE PAYMENT SERVICE
@@ -6432,8 +6104,6 @@ while (Date.now() < payBookDeadline) {
     continue;
 }
 
-
-
     // =================================================
     // CHECK RESULT / ERROR POPUP
     // =================================================
@@ -6536,101 +6206,117 @@ await liveProgress(
         // VERIFY ACTUAL PROVIDER QR
         // ---------------------------------------------
 
-        var actualQrReady = false;
+     
+var actualQrReady = false;
 
-        try {
+try {
 
-            if (paymentIsIPay) {
+    if (paymentIsPaytm) {
 
-                var ipayCanvas = document.querySelector(
-                    '#irctcDynamicQrCanvas'
-                );
+        var paytmImage = document.querySelector(
+            'img[data-key="qr-code"]'
+        );
 
-                actualQrReady = !!(
-                    ipayCanvas &&
-                    ipayCanvas.isConnected &&
-                    ipayCanvas.offsetParent !== null &&
-                    ipayCanvas.width >= 100 &&
-                    ipayCanvas.height >= 100
-                );
+        actualQrReady = !!(
+            paytmImage &&
+            paytmImage.isConnected &&
+            paytmImage.offsetParent !== null &&
+            paytmImage.complete &&
+            paytmImage.naturalWidth >= 100 &&
+            paytmImage.naturalHeight >= 100
+        );
 
-            } else if (paymentIsPaytm) {
+    } else if (paymentIsPhonePe) {
 
-                var paytmImage = document.querySelector(
-                    'img[data-key="qr-code"]'
-                );
+        var phonepeCandidates = Array.from(
+            document.querySelectorAll(
+                'img[src*="qr" i], ' +
+                'img[alt*="qr" i], ' +
+                'img[src^="blob:"], canvas'
+            )
+        );
 
-                actualQrReady = !!(
-                    paytmImage &&
-                    paytmImage.isConnected &&
-                    paytmImage.offsetParent !== null &&
-                    paytmImage.complete &&
-                    paytmImage.naturalWidth >= 100 &&
-                    paytmImage.naturalHeight >= 100
-                );
+        actualQrReady = phonepeCandidates.some(
+            function(el) {
 
-            } else if (paymentIsPhonePe) {
+                if (
+                    !el.isConnected ||
+                    el.offsetParent === null
+                ) {
+                    return false;
+                }
 
-                var phonepeCandidates = Array.from(
-                    document.querySelectorAll(
-                        'img[src*="qr" i], ' +
-                        'img[alt*="qr" i], ' +
-                        'img[src^="blob:"], canvas'
-                    )
-                );
+                if (el instanceof HTMLImageElement) {
+                    return (
+                        el.complete &&
+                        el.naturalWidth >= 100 &&
+                        el.naturalHeight >= 100
+                    );
+                }
 
-                actualQrReady = phonepeCandidates.some(
-                    function(el) {
-
-                        if (
-                            !el.isConnected ||
-                            el.offsetParent === null
-                        ) {
-                            return false;
-                        }
-
-                        if (el instanceof HTMLImageElement) {
-                            return (
-                                el.complete &&
-                                el.naturalWidth >= 100 &&
-                                el.naturalHeight >= 100
-                            );
-                        }
-
-                        return (
-                            el instanceof HTMLCanvasElement &&
-                            el.width >= 100 &&
-                            el.height >= 100
-                        );
-                    }
+                return (
+                    el instanceof HTMLCanvasElement &&
+                    el.width >= 100 &&
+                    el.height >= 100
                 );
             }
+        );
 
-        } catch (qrCheckError) {
+    } else if (paymentIsRazorpay) {
 
-            diagnosticLogs.push(
-                "QR verification error: " +
-                qrCheckError.message
+        // RAZORPAY: Verify actual loaded UPI QR image.
+        var razorpayImage = document.querySelector(
+            'img[alt="UPI QR Code"]'
+        );
+
+        if (razorpayImage) {
+
+            var razorpayRect =
+                razorpayImage.getBoundingClientRect();
+
+            var razorpayStyle =
+                window.getComputedStyle(razorpayImage);
+
+            actualQrReady = !!(
+                razorpayImage.isConnected &&
+                razorpayRect.width >= 100 &&
+                razorpayRect.height >= 100 &&
+                razorpayStyle.display !== 'none' &&
+                razorpayStyle.visibility !== 'hidden' &&
+                Number(razorpayStyle.opacity) !== 0 &&
+                razorpayImage.complete &&
+                razorpayImage.naturalWidth >= 100 &&
+                razorpayImage.naturalHeight >= 100
             );
-        }
-
-        if (actualQrReady) {
-
-            payBookSuccess = true;
-
-            diagnosticLogs.push(
-                "SUCCESS: Actual selected-provider QR detected."
-            );
-
-            break;
         }
 
     }
 
-    console.log(
-        '[QR DEBUG] Payment detection loop completed. payBookSuccess =',
-        payBookSuccess
+} catch (qrCheckError) {
+
+    diagnosticLogs.push(
+        "QR verification error: " +
+        qrCheckError.message
     );
+}
+
+if (actualQrReady) {
+
+    payBookSuccess = true;
+
+    diagnosticLogs.push(
+        "SUCCESS: Actual selected-provider QR detected."
+    );
+
+    break;
+}
+
+}
+
+console.log(
+    '[QR DEBUG] Payment detection loop completed. payBookSuccess =',
+    payBookSuccess
+);
 
     
     // =============================================
@@ -6793,11 +6479,6 @@ try {
         throw automationEvalError;
     }
 
-    console.warn(
-        '[PAYMENT NAVIGATION] Page navigation ke dauran execution context change hua:',
-        errorMessage
-    );
-
     this.sendBookingStatus(
         'VERIFYING PAYMENT PAGE...',
         'Payment page load hone ka wait ho raha hai...',
@@ -6820,158 +6501,376 @@ try {
         );
     }
 
-    // Maximum 30 seconds.
-    // Pay & Book dobara click nahi hoga.
-    for (let i = 0; i < 60; i++) {
 
-        if (!this.page || this.page.isClosed()) {
-            break;
+let razorpayShowQrClicked = false;
+
+// Maximum 30 seconds.
+// Pay & Book dobara click nahi hoga.
+for (let i = 0; i < 60; i++) {
+
+
+    if (!this.page || this.page.isClosed()) {
+        break;
+    }
+
+    try {
+
+        // ==========================================
+        // WAIT FOR PAYMENT PAGE
+        // Razorpay checkout alag page/frame mein hai.
+        // Isliye Razorpay ke liye main-page wait skip.
+        // ==========================================
+
+        if (!expectedPayment.startsWith('RAZORPAY')) {
+            await this.page.waitForFunction(
+                () =>
+                    document.readyState === 'interactive' ||
+                    document.readyState === 'complete',
+                { timeout: 3000 }
+            );
         }
 
+
+        // RAZORPAY: Retry locating Show QR across checkout frames.
+        if (
+            expectedPayment.startsWith('RAZORPAY') &&
+            !razorpayShowQrClicked
+        ) {
+            try {
+                const browserPages = await this.page.browser().pages();
+
+                for (const candidatePage of browserPages) {
+                    if (
+                        candidatePage.isClosed() ||
+                        !candidatePage.url().startsWith(
+                            'https://checkout-hosted.razorpay.com/orders/'
+                        )
+                    ) {
+                        continue;
+                    }
+
+                    for (const frame of candidatePage.frames()) {
+                        try {
+                            const button = await frame.$(
+                                'span[name="generateQR"]'
+                            );
+
+                            if (!button) continue;
+
+                            const clicked = await button.evaluate(el => {
+                                const text = (
+                                    el.innerText ||
+                                    el.textContent ||
+                                    ''
+                                ).replace(/\s+/g, ' ').trim().toLowerCase();
+
+                                const rect = el.getBoundingClientRect();
+                                const style = getComputedStyle(el);
+
+                                if (
+                                    text !== 'show qr' ||
+                                    rect.width <= 0 ||
+                                    rect.height <= 0 ||
+                                    style.display === 'none' ||
+                                    style.visibility === 'hidden'
+                                ) {
+                                    return false;
+                                }
+
+                                el.click();
+                                return true;
+                            });
+
+                            
+if (clicked) {
+    // Show QR ke baad Continue & Pay button ka wait.
+    let continuePayClicked = false;
+
+    for (let attempt = 0; attempt < 20; attempt++) {
         try {
-
-            
-const state = await this.page.evaluate(
-    (expectedPayment) => {
-
-        function visible(el) {
-            return !!(
-                el &&
-                el.isConnected &&
-                el.offsetParent !== null
-            );
-        }
-
-        function normalize(text) {
-            return String(text || '')
-                .replace(/\s+/g, ' ')
-                .trim()
-                .toLowerCase();
-        }
-
-        function validImage(el) {
-            return (
-                visible(el) &&
-                el.complete &&
-                el.naturalWidth >= 100 &&
-                el.naturalHeight >= 100
-            );
-        }
-
-        function validCanvas(el) {
-            return (
-                visible(el) &&
-                el.width >= 100 &&
-                el.height >= 100
-            );
-        }
-
-        function findClickableByText(predicate) {
-            const elements = Array.from(
-                document.querySelectorAll(
-                    'button, a, label, [role="button"], ' +
-                    '[role="tab"], [role="radio"], ' +
-                    'input[type="radio"], div, span'
-                )
+            const continuePayButton = await frame.$(
+                'button[data-testid="fee-bearer-cta"]'
             );
 
-            for (const el of elements) {
-                if (!visible(el)) {
-                    continue;
-                }
+            if (continuePayButton) {
+                const buttonInfo = await continuePayButton.evaluate(el => {
+                    const rect = el.getBoundingClientRect();
+                    const style = getComputedStyle(el);
 
-                const text = normalize(
-                    el.innerText || el.textContent
-                );
-
-                if (!text || !predicate(text)) {
-                    continue;
-                }
-
-                const clickable = el.closest(
-                    'button, a, label, [role="button"], ' +
-                    '[role="tab"], [role="radio"]'
-                );
+                    return {
+                        text: (el.innerText || el.textContent || '')
+                            .replace(/\s+/g, ' ')
+                            .trim(),
+                        visible: rect.width > 0 &&
+                            rect.height > 0 &&
+                            style.display !== 'none' &&
+                            style.visibility !== 'hidden',
+                        enabled: !el.disabled
+                    };
+                });
 
                 if (
-                    clickable &&
-                    visible(clickable) &&
-                    !clickable.disabled &&
-                    clickable.getAttribute('aria-disabled') !== 'true'
+                    buttonInfo.text === 'Continue & Pay' &&
+                    buttonInfo.visible &&
+                    buttonInfo.enabled
                 ) {
-                    return clickable;
+                    await continuePayButton.click({ timeout: 3000 });
+                    continuePayClicked = true;
+                    break;
                 }
             }
-
-            return null;
+        } catch (_) {
+            // Frame navigation ho to agle attempt mein retry.
         }
 
-        let clickedUpi = false;
-        let clickedQrButton = false;
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    if (!continuePayClicked) {
+        throw new Error(
+            'Razorpay Continue & Pay button nahi mila ya click nahi hua.'
+        );
+    }
+
+    razorpayShowQrClicked = true;
+    break;
+}
+
+                        } catch (_) {
+                            // Frame navigate ho raha hai; agle attempt mein retry.
+                        }
+                    }
+
+                    if (razorpayShowQrClicked) break;
+                }
+            } catch (_) {
+                // Checkout navigation ke dauran retry.
+            }
+        }
+
+
+        // ==========================================
+        // RAZORPAY: FAST PARALLEL QR VERIFICATION
+        // ==========================================
+
+        if (expectedPayment.startsWith('RAZORPAY')) {
+            let razorpayQrVerified = false;
+            let razorpayVerifiedUrl = '';
+
+            try {
+                const browserPages = await this.page.browser().pages();
+
+                for (const candidatePage of browserPages) {
+                    if (
+                        candidatePage.isClosed() ||
+                        !candidatePage.url().startsWith(
+                            'https://checkout-hosted.razorpay.com/orders/'
+                        )
+                    ) {
+                        continue;
+                    }
+
+                    const frames = candidatePage.frames();
+
+                    // Sabhi frames ek saath check honge.
+                    const frameChecks = frames.map(async (frame) => {
+                        let timeoutId;
+
+                        try {
+                            const qrFound = await Promise.race([
+                                frame.evaluate(() => {
+                                    const selectors = [
+                                        'img[alt*="qr" i]',
+                                        'img[src*="qr" i]',
+                                        'img[src^="blob:"]',
+                                        'canvas'
+                                    ];
+
+                                    for (const selector of selectors) {
+                                        for (const el of document.querySelectorAll(selector)) {
+                                            const rect = el.getBoundingClientRect();
+                                            const style = getComputedStyle(el);
+
+                                            const visible =
+                                                rect.width >= 100 &&
+                                                rect.height >= 100 &&
+                                                style.display !== 'none' &&
+                                                style.visibility !== 'hidden' &&
+                                                Number(style.opacity) !== 0;
+
+                                            if (!visible) continue;
+
+                                            if (
+                                                el instanceof HTMLImageElement &&
+                                                el.complete &&
+                                                el.naturalWidth >= 100 &&
+                                                el.naturalHeight >= 100
+                                            ) {
+                                                return true;
+                                            }
+
+                                            if (
+                                                el instanceof HTMLCanvasElement &&
+                                                el.width >= 100 &&
+                                                el.height >= 100
+                                            ) {
+                                                return true;
+                                            }
+                                        }
+                                    }
+
+                                    return false;
+                                }),
+
+                                new Promise((_, reject) => {
+                                    timeoutId = setTimeout(() => {
+                                        reject(new Error('Frame QR check timeout'));
+                                    }, 700);
+                                })
+                            ]);
+
+                            if (qrFound === true) {
+                                return true;
+                            }
+
+                            throw new Error('QR not found in this frame');
+                        } catch (_) {
+                            return false;
+                        } finally {
+                            clearTimeout(timeoutId);
+                        }
+                    });
+
+                    // Pehla valid QR milte hi wait khatam.
+                    const firstQr = await Promise.any(
+                        frameChecks.map(async (check) => {
+                            const found = await check;
+
+                            if (!found) {
+                                throw new Error('QR not found');
+                            }
+
+                            return true;
+                        })
+                    ).catch(() => false);
+
+                    if (firstQr) {
+                        razorpayQrVerified = true;
+                        razorpayVerifiedUrl = candidatePage.url();
+
+                        console.log(
+                            '[RAZORPAY] QR verified immediately:',
+                            razorpayVerifiedUrl
+                        );
+
+                        break;
+                    }
+                }
+            } catch (error) {
+                console.warn(
+                    '[RAZORPAY] QR verification retry:',
+                    error.message
+                );
+            }
+
+            if (razorpayQrVerified) {
+                paymentPageState = {
+                    url: razorpayVerifiedUrl,
+                    ready: 'complete',
+                    text: '',
+                    actualQrReady: true,
+                    qrType: 'RAZORPAY QR'
+                };
+
+                console.log(
+                    '[PAYMENT NAVIGATION] Razorpay QR verified:',
+                    razorpayVerifiedUrl
+                );
+
+                break;
+            }
+        }
+
+
+        const state = await this.page.evaluate(
+            (expectedPayment) => {
+
+                function visible(el) {
+                    return !!(
+                        el &&
+                        el.isConnected &&
+                        el.offsetParent !== null
+                    );
+                }
+
+                function normalize(text) {
+                    return String(text || '')
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                        .toLowerCase();
+                }
+
+                function validImage(el) {
+                    return (
+                        visible(el) &&
+                        el.complete &&
+                        el.naturalWidth >= 100 &&
+                        el.naturalHeight >= 100
+                    );
+                }
+
+                function validCanvas(el) {
+                    return (
+                        visible(el) &&
+                        el.width >= 100 &&
+                        el.height >= 100
+                    );
+                }
+
+                function findClickableByText(predicate) {
+                    const elements = Array.from(
+                        document.querySelectorAll(
+                            'button, a, label, [role="button"], ' +
+                            '[role="tab"], [role="radio"], ' +
+                            'input[type="radio"], div, span'
+                        )
+                    );
+
+                    for (const el of elements) {
+                        if (!visible(el)) {
+                            continue;
+                        }
+
+                        const text = normalize(
+                            el.innerText || el.textContent
+                        );
+
+                        if (!text || !predicate(text)) {
+                            continue;
+                        }
+
+                        const clickable = el.closest(
+                            'button, a, label, [role="button"], ' +
+                            '[role="tab"], [role="radio"]'
+                        );
+
+                        if (
+                            clickable &&
+                            visible(clickable) &&
+                            !clickable.disabled &&
+                            clickable.getAttribute('aria-disabled') !== 'true'
+                        ) {
+                            return clickable;
+                        }
+                    }
+
+                    return null;
+                }
+
         let actualQrReady = false;
         let qrType = '';
 
-        if (expectedPayment.startsWith('IPAY')) {
-
-            // STEP 1: UPI option dhoondo.
-            const upiOption = findClickableByText(
-                text => text === 'upi'
-            );
-
-            if (upiOption) {
-
-                const alreadySelected =
-                    upiOption.getAttribute('aria-selected') === 'true' ||
-                    upiOption.getAttribute('aria-checked') === 'true' ||
-                    upiOption.getAttribute('aria-pressed') === 'true' ||
-                    upiOption.checked === true ||
-                    upiOption.classList.contains('active') ||
-                    upiOption.classList.contains('selected');
-
-                if (!alreadySelected) {
-                    upiOption.click();
-                    clickedUpi = true;
-                }
-            }
-
-            // STEP 2: UPI select hone ke baad QR CTA dhoondo.
-            const qrButton = findClickableByText(
-                text =>
-                    text.includes('click here to pay using qr') ||
-                    text.includes('pay using qr')
-            );
-
-            if (qrButton) {
-                qrButton.click();
-                clickedQrButton = true;
-            }
-
-            // STEP 3: "Click here to show QR"
-// QR isi page par khulta hai, isliye page ko
-// dobara navigate nahi karna hai.
-const showQrButton = findClickableByText(
-    text => text.includes('click here to show qr')
-);
-
-let clickedShowQr = false;
-
-if (showQrButton) {
-    showQrButton.click();
-    clickedShowQr = true;
-}
-
-// STEP 4: Actual iPay QR verify karo.
- const canvas = document.querySelector(
-   '#irctcDynamicQrCanvas'
- );
-
-            actualQrReady = validCanvas(canvas);
-
-            if (actualQrReady) {
-                qrType = 'IRCTC IPAY QR';
-            }
-
-        } else if (expectedPayment.startsWith('PAYTM')) {
+        if (expectedPayment.startsWith('PAYTM')) {
 
             const el = document.querySelector(
                 'img[data-key="qr-code"]'
@@ -6983,7 +6882,20 @@ if (showQrButton) {
                 qrType = 'PAYTM QR';
             }
 
-        
+
+} else if (expectedPayment.startsWith('RAZORPAY')) {
+
+    const razorpayImage = document.querySelector(
+        'img[alt="UPI QR Code"]'
+    );
+
+    actualQrReady = validImage(razorpayImage);
+
+    if (actualQrReady) {
+        qrType = 'RAZORPAY QR';
+    }
+
+
 } else if (expectedPayment.startsWith('PHONEPE')) {
 
     // Actual PhonePe payment URL verify karo.
@@ -7062,31 +6974,18 @@ if (showQrButton) {
         ).slice(0, 15000);
 
         return {
-            url: window.location.href,
-            ready: document.readyState,
-            text: text,
-            actualQrReady: actualQrReady,
-            qrType: qrType,
-            clickedUpi: clickedUpi,
-            clickedQrButton: clickedQrButton
-        };
+    url: window.location.href,
+    ready: document.readyState,
+    text: text,
+    actualQrReady: actualQrReady,
+    qrType: qrType,
+    providerUrlVerified:
+        typeof phonePeUrlVerified !== 'undefined'
+            ? phonePeUrlVerified
+            : false
+};
     },
     expectedPayment
-);
-
-console.log(
-    '[IPAY RECOVERY] UPI clicked:',
-    state.clickedUpi
-);
-
-console.log(
-    '[IPAY RECOVERY] QR button clicked:',
-    state.clickedQrButton
-);
-
-console.log(
-    '[IPAY RECOVERY] QR ready:',
-    state.actualQrReady
 );
 
             const hasIrctcError =
@@ -7110,8 +7009,23 @@ if (
 }
 
         } catch (pageCheckError) {
-            // Navigation ke dauran dobara check hoga.
-        }
+    const message = String(
+        pageCheckError?.message || pageCheckError
+    );
+
+    const isNavigationError =
+        /Execution context was destroyed|Cannot find context with specified id|Inspected target navigated or closed/i
+            .test(message);
+
+    if (!isNavigationError) {
+        console.warn(
+            '[PAYMENT NAVIGATION] QR check error:',
+            message
+        );
+    }
+
+    // Navigation errors par existing retry loop continue karega.
+}
 
         await new Promise(function(resolve) {
             setTimeout(resolve, 500);
@@ -7645,7 +7559,6 @@ const isTatkalOrPremium =
             }
 
 // ==========================================
-// IPAY QR FLOW
 // QR recovery mein pehle hi handle ho chuka hai.
 // Yahan UPI/QR buttons dobara click nahi karne hain.
 // ==========================================
@@ -7702,14 +7615,14 @@ var paymentValue = String(
 
 var qrSelector = null;
 
-if (paymentValue.startsWith('IPAY')) {
-    qrSelector = '#irctcDynamicQrCanvas';
-} else if (paymentValue.startsWith('PAYTM')) {
+if (paymentValue.startsWith('PAYTM')) {
     qrSelector = 'img[data-key="qr-code"]';
 } else if (paymentValue.startsWith('PHONEPE')) {
-    // PhonePe: broad selector ko seedha QR na maanein.
     qrSelector =
         'img[src*="qr" i], img[alt*="qr" i], img[src^="blob:"], canvas';
+} else if (paymentValue.startsWith('RAZORPAY')) {
+    qrSelector =
+        'img[src*="qr" i], img[alt*="qr" i], canvas';
 }
 
 if (!qrSelector) {
@@ -7719,63 +7632,47 @@ if (!qrSelector) {
     );
 }
 
+
 try {
-    await this.page.waitForFunction(
-        (selector, provider) => {
-            const elements = Array.from(
-                document.querySelectorAll(selector)
-            );
+    if (!paymentValue.startsWith('RAZORPAY')) {
+        await this.page.waitForFunction(
+            selector => {
+                const elements = Array.from(
+                    document.querySelectorAll(selector)
+                );
 
-            return elements.some(el => {
-                const rect = el.getBoundingClientRect();
+                return elements.some(el => {
+                    const rect = el.getBoundingClientRect();
 
-                if (
-                    rect.width < 100 ||
-                    rect.height < 100 ||
-                    rect.width === 0 ||
-                    rect.height === 0
-                ) {
+                    if (
+                        rect.width < 100 ||
+                        rect.height < 100
+                    ) {
+                        return false;
+                    }
+
+                    if (el instanceof HTMLImageElement) {
+                        return (
+                            el.complete &&
+                            el.naturalWidth >= 100 &&
+                            el.naturalHeight >= 100
+                        );
+                    }
+
+                    if (el instanceof HTMLCanvasElement) {
+                        return (
+                            el.width >= 100 &&
+                            el.height >= 100
+                        );
+                    }
+
                     return false;
-                }
-
-                if (provider.startsWith('IPAY')) {
-                    return (
-                        el instanceof HTMLCanvasElement &&
-                        el.width >= 100 &&
-                        el.height >= 100
-                    );
-                }
-
-                if (el instanceof HTMLImageElement) {
-                    return (
-                        el.complete &&
-                        el.naturalWidth >= 100 &&
-                        el.naturalHeight >= 100
-                    );
-                }
-
-                if (el instanceof HTMLCanvasElement) {
-                    return (
-                        el.width >= 100 &&
-                        el.height >= 100
-                    );
-                }
-
-                return false;
-            });
-        },
-        {
-            timeout: 60000
-        },
-        qrSelector,
-        paymentValue
-    );
-
-    console.log(
-        '[QR] Ready QR element detected for:',
-        paymentValue
-    );
-
+                });
+            },
+            { timeout: 60000 },
+            qrSelector
+        );
+    }
 } catch (e) {
     throw new Error(
         paymentValue +
@@ -7783,6 +7680,7 @@ try {
         e.message
     );
 }
+
 
 console.log(
     '[QR] ' +
@@ -7813,33 +7711,7 @@ try {
                 throw new Error('Payment page closed.');
             }
 
-            if (paymentValue.startsWith('IPAY')) {
-                qrElement = await this.page.$(
-                    '#irctcDynamicQrCanvas'
-                );
-
-                if (qrElement) {
-                    const canvasInfo = await qrElement.evaluate(el => ({
-                        width: el.width,
-                        height: el.height
-                    }));
-
-                    if (
-                        canvasInfo.width >= 100 &&
-                        canvasInfo.height >= 100
-                    ) {
-                        qrImage = await qrElement.evaluate(
-                            el => el.toDataURL('image/png')
-                        );
-
-                        qrReady =
-                            !!qrImage &&
-                            qrImage.startsWith('data:image/png') &&
-                            qrImage.length > 2000;
-                    }
-                }
-
-            } else if (paymentValue.startsWith('PAYTM')) {
+          if (paymentValue.startsWith('PAYTM')) {
                 qrElement = await this.page.$(
                     'img[data-key="qr-code"]'
                 );
@@ -7924,34 +7796,260 @@ try {
                             el => el.toDataURL('image/png')
                         );
                     } else {
-                        if (info.src.startsWith('data:image/')) {
-                            qrImage = info.src;
-                        } else {
-                            const base64 =
-                                await candidate.screenshot({
-                                    encoding: 'base64'
-                                });
+                        if (info.src.startsWith('data:image/png;base64,')) {
+    // Original Razorpay PNG ko bina screenshot ke use karo
+    qrImage = info.src;
+} else if (info.tag === 'IMG') {
+    // Original image resolution par PNG banane ki koshish
+    qrImage = await candidate.evaluate(el => {
+        try {
+            const canvas = document.createElement('canvas');
 
-                            if (base64 && base64.length > 2000) {
-                                qrImage =
-                                    'data:image/png;base64,' + base64;
-                            }
-                        }
-                    }
+            canvas.width = el.naturalWidth;
+            canvas.height = el.naturalHeight;
 
-                    if (
-                        qrImage &&
-                        qrImage.startsWith('data:image/') &&
-                        qrImage.length > 2000
-                    ) {
-                        qrElement = candidate;
-                        qrReady = true;
-                        break;
-                    }
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(el, 0, 0, el.naturalWidth, el.naturalHeight);
+
+            return canvas.toDataURL('image/png');
+        } catch (_) {
+            return null;
+        }
+    });
+
+    // Fallback: existing screenshot method
+    if (!qrImage) {
+        const base64 = await candidate.screenshot({
+            encoding: 'base64'
+        });
+
+        if (base64 && base64.length > 2000) {
+            qrImage = 'data:image/png;base64,' + base64;
+        }
+    }
+}
+}
+
+if (
+    qrImage &&
+    qrImage.startsWith('data:image/') &&
+    qrImage.length > 2000
+) {
+    qrElement = candidate;
+    qrReady = true;
+
+    break;
+}
 
                     qrImage = null;
                 }
+
+           
+
+            } else if (paymentValue.startsWith('RAZORPAY')) {
+
+                // Razorpay hosted page ko directly scan karo.
+                const browserPages = await this.page.browser().pages();
+
+                for (const candidatePage of browserPages) {
+                    if (
+                        candidatePage.isClosed() ||
+                        !candidatePage.url().startsWith(
+                            'https://checkout-hosted.razorpay.com/orders/'
+                        )
+                    ) {
+                        continue;
+                    }
+
+                    for (const frame of candidatePage.frames()) {
+                        let candidates = [];
+                        const rankedCandidates = [];
+try {
+    candidates = await frame.$$(
+        'img[alt="UPI QR Code"], ' +
+        'img[alt*="qr" i], ' +
+        'img[src*="qr" i], ' +
+        'img[src^="blob:"], ' +
+        'img[src^="data:image/"], ' +
+        'canvas'
+    );
+                            // Candidate details parallel mein lo, ek-ek karke nahi.
+                            const infos = await Promise.all(
+                                candidates.map(async candidate => {
+                                    try {
+                                        return await candidate.evaluate(el => {
+                                            const rect = el.getBoundingClientRect();
+                                            const style = getComputedStyle(el);
+                                            const isImg = el instanceof HTMLImageElement;
+                                            const isCanvas = el instanceof HTMLCanvasElement;
+
+                                            const width = isImg
+                                                ? el.naturalWidth
+                                                : (isCanvas ? el.width : 0);
+
+                                            const height = isImg
+                                                ? el.naturalHeight
+                                                : (isCanvas ? el.height : 0);
+
+                                            return {
+                                                tag: el.tagName,
+                                                visible:
+                                                    rect.width >= 100 &&
+                                                    rect.height >= 100 &&
+                                                    style.display !== 'none' &&
+                                                    style.visibility !== 'hidden' &&
+                                                    Number(style.opacity) !== 0,
+                                                complete: isImg ? el.complete : true,
+                                                width,
+                                                height,
+                                                src: isImg
+                                                    ? (el.currentSrc || el.src || '')
+                                                    : '',
+                                                square:
+                                                    width > 0 &&
+                                                    height > 0 &&
+                                                    width / height >= 0.75 &&
+                                                    width / height <= 1.25
+                                            };
+                                        });
+                                    } catch (_) {
+                                        return null;
+                                    }
+                                })
+                            );
+
+                            for (let i = 0; i < infos.length; i++) {
+                                const info = infos[i];
+
+                                if (
+                                    info &&
+                                    info.visible &&
+                                    info.complete &&
+                                    info.square &&
+                                    info.width >= 100 &&
+                                    info.height >= 100
+                                ) {
+                                    rankedCandidates.push({
+                                        candidate: candidates[i],
+                                        info
+                                    });
+                                }
+                            }
+
+                            // Highest native resolution QR first.
+                            rankedCandidates.sort((a, b) =>
+                                (b.info.width * b.info.height) -
+                                (a.info.width * a.info.height)
+                            );
+
+                            for (const item of rankedCandidates) {
+                                const candidate = item.candidate;
+                                const info = item.info;
+                                let candidateImage = null;
+
+                                try {
+                                    if (
+                                        info.tag === 'IMG' &&
+                                        info.src.startsWith('data:image/')
+                                    ) {
+                                        // Original image data: no resize.
+                                        candidateImage = info.src;
+
+                                    } else if (info.tag === 'CANVAS') {
+                                        // PhonePe jaisa original canvas export.
+                                        candidateImage = await candidate.evaluate(
+                                            el => el.toDataURL('image/png')
+                                        );
+
+                                    } else if (info.tag === 'IMG') {
+                                        // Original intrinsic dimensions par HD conversion.
+                                        candidateImage = await candidate.evaluate(el => {
+                                            try {
+                                                const canvas =
+                                                    document.createElement('canvas');
+
+                                                canvas.width = el.naturalWidth;
+                                                canvas.height = el.naturalHeight;
+
+                                                const ctx = canvas.getContext('2d');
+
+                                                if (
+                                                    !ctx ||
+                                                    !canvas.width ||
+                                                    !canvas.height
+                                                ) {
+                                                    return null;
+                                                }
+
+                                                ctx.drawImage(
+                                                    el,
+                                                    0,
+                                                    0,
+                                                    el.naturalWidth,
+                                                    el.naturalHeight
+                                                );
+
+                                                return canvas.toDataURL('image/png');
+                                            } catch (_) {
+                                                return null;
+                                            }
+                                        });
+
+                                        // Cross-origin conversion fail: screenshot fallback.
+                                        if (!candidateImage) {
+                                            const base64 =
+                                                await candidate.screenshot({
+                                                    encoding: 'base64'
+                                                });
+
+                                            if (base64 && base64.length > 2000) {
+                                                candidateImage =
+                                                    'data:image/png;base64,' + base64;
+                                            }
+                                        }
+                                    }
+
+                                    if (
+                                        candidateImage &&
+                                        candidateImage.startsWith('data:image/') &&
+                                        candidateImage.length > 2000
+                                    ) {
+                                        qrImage = candidateImage;
+                                        qrElement = candidate;
+                                        qrReady = true;                           
+
+                                        break;
+                                    }
+                                } catch (captureError) {
+                                    console.warn(
+                                        '[RAZORPAY QR] Capture failed:',
+                                        captureError.message
+                                    );
+                                }
+                            }
+                        } catch (frameError) {
+                            console.warn(
+                                '[RAZORPAY QR] Frame scan failed:',
+                                frameError.message
+                            );
+                        } finally {
+                            for (const candidate of candidates) {
+                                if (candidate !== qrElement) {
+                                    try {
+                                        await candidate.dispose();
+                                    } catch (_) {}
+                                }
+                            }
+                        }
+
+                        if (qrReady) break;
+                    }
+
+                    if (qrReady) break;
+                }
+
             }
+
 
             if (qrReady && qrImage) {
                 console.log(
@@ -7968,7 +8066,7 @@ try {
             );
         }
 
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 200));
     }
 
     if (!qrReady || !qrImage) {
@@ -7982,77 +8080,132 @@ try {
     // FIND LIVE IRCTC PAYMENT TIMER
     // ------------------------------------------
 
-    let remainingTime = '00:00';
 
-    try {
+let remainingTime = null;
 
-        remainingTime =
-            await this.page.evaluate(() => {
+try {
+    const paymentValue = String(
+        bookingData.payment ||
+        bookingData.paymentType ||
+        bookingData.paymentMethod ||
+        ''
+    ).trim().toUpperCase();
 
-                const elements =
-                    Array.from(
-                        document.querySelectorAll('*')
-                    );
+    if (paymentValue.startsWith('RAZORPAY')) {
+        const browserPages = await this.page.browser().pages();
 
-                for (
-                    const element of elements
-                ) {
+        for (const candidatePage of browserPages) {
+            if (
+                candidatePage.isClosed() ||
+                !candidatePage.url().startsWith(
+                    'https://checkout-hosted.razorpay.com/orders/'
+                )
+            ) {
+                continue;
+            }
 
-                    const text =
-                        String(
-                            element.innerText || ''
-                        ).trim();
+            for (const frame of candidatePage.frames()) {
+                try {
+                    const timer = await frame.evaluate(() => {
+                        const elements = Array.from(
+                            document.querySelectorAll('span')
+                        );
 
-                    if (
-                        /^\d{1,2}:\d{2}$/.test(text)
-                    ) {
+                        for (const element of elements) {
+                            const text = String(
+                                element.innerText || ''
+                            ).trim();
 
-                        const parts =
-                            text.split(':');
+                            if (!/^\d{1,2}:\d{2}$/.test(text)) {
+                                continue;
+                            }
 
-                        const minutes =
-                            parseInt(
-                                parts[0],
-                                10
-                            );
+                            const [minutes, seconds] =
+                                text.split(':').map(Number);
 
-                        const seconds =
-                            parseInt(
-                                parts[1],
-                                10
-                            );
-
-                        if (
-                            !isNaN(minutes) &&
-                            !isNaN(seconds) &&
-                            minutes >= 0 &&
-                            minutes <= 60 &&
-                            seconds >= 0 &&
-                            seconds <= 59
-                        ) {
-
-                            return (
-                                String(minutes).padStart(2, '0') +
-                                ':' +
-                                String(seconds).padStart(2, '0')
-                            );
+                            if (
+                                Number.isInteger(minutes) &&
+                                Number.isInteger(seconds) &&
+                                minutes >= 0 &&
+                                minutes <= 60 &&
+                                seconds >= 0 &&
+                                seconds <= 59
+                            ) {
+                                return (
+                                    String(minutes).padStart(2, '0') +
+                                    ':' +
+                                    String(seconds).padStart(2, '0')
+                                );
+                            }
                         }
+
+                        return null;
+                    });
+
+                    if (timer) {
+                        remainingTime = timer;
+                        break;
                     }
+                } catch (_) {
+                    // Frame navigation ho to agla frame check karein.
                 }
+            }
 
-                return '00:00';
+            if (remainingTime) break;
+        }
+    } else {
+        // Non-Razorpay payment methods ka existing timer logic.
+        remainingTime = await this.page.evaluate(() => {
+            const elements = Array.from(
+                document.querySelectorAll('*')
+            );
 
-            });
+            for (const element of elements) {
+                const text = String(
+                    element.innerText || ''
+                ).trim();
 
-    } catch (timerError) {
+                const timerMatch = text.match(
+    /^(\d{1,2})\s*min\s*:\s*(\d{1,2})\s*sec$/i
+);
 
-        console.warn(
-            '[QR] Payment timer read failed:',
-            timerError.message
-        );
+let minutes;
+let seconds;
 
+if (timerMatch) {
+    minutes = Number(timerMatch[1]);
+    seconds = Number(timerMatch[2]);
+} else if (/^\d{1,2}:\d{2}$/.test(text)) {
+    [minutes, seconds] = text.split(':').map(Number);
+} else {
+    continue;
+}
+
+                if (
+                    Number.isInteger(minutes) &&
+                    Number.isInteger(seconds) &&
+                    minutes >= 0 &&
+                    minutes <= 60 &&
+                    seconds >= 0 &&
+                    seconds <= 59
+                ) {
+                    return (
+                        String(minutes).padStart(2, '0') +
+                        ':' +
+                        String(seconds).padStart(2, '0')
+                    );
+                }
+            }
+
+            return '00:00';
+        });
     }
-
+} catch (timerError) {
+    console.warn(
+        '[QR] Payment timer read failed:',
+        timerError.message
+    );
+}
 
     // ------------------------------------------
     // SEND QR TO MINI WINDOW - FAST DISPLAY
@@ -8063,21 +8216,16 @@ try {
         this.win &&
         !this.win.isDestroyed()
     ) {
-        if (
-            paymentValue.startsWith('IPAY') &&
-            remainingTime === '00:00'
-        ) {
-            remainingTime = '03:00';
-        }
-
+        
         if (
             this.qrCallbacks &&
             typeof this.qrCallbacks.showQR === 'function'
         ) {
             const qrPayload = {
-                image: qrImage,
-                remainingTime: remainingTime
-            };
+    image: qrImage,
+    remainingTime: remainingTime,
+    paymentType: paymentValue
+};
 
             // Send immediately
             this.qrCallbacks.showQR(qrPayload);
@@ -8143,6 +8291,106 @@ console.log(
     '[PAYMENT] QR detected. Waiting for actual payment confirmation.'
 );
 
+// ==========================================
+// RAZORPAY LIVE TIMER UPDATER
+// ==========================================
+
+if (paymentValue.startsWith('RAZORPAY')) {
+    let razorpayTimerStopped = false;
+
+    const razorpayTimerInterval = setInterval(async () => {
+        try {
+            if (
+                razorpayTimerStopped ||
+                !this.page ||
+                this.page.isClosed() ||
+                !this.win ||
+                this.win.isDestroyed() ||
+                !this.qrCallbacks ||
+                typeof this.qrCallbacks.updateQRTimer !== 'function'
+            ) {
+                return;
+            }
+
+            const pages = await this.page.browser().pages();
+            let remainingTime = null;
+
+            for (const page of pages) {
+                if (
+                    page.isClosed() ||
+                    !page.url().startsWith(
+                        'https://checkout-hosted.razorpay.com/orders/'
+                    )
+                ) {
+                    continue;
+                }
+
+                for (const frame of page.frames()) {
+                    try {
+                        const timer = await frame.evaluate(() => {
+                            for (const el of document.querySelectorAll('span')) {
+                                const text = (el.innerText || '').trim();
+
+                                if (!/^\d{1,2}:\d{2}$/.test(text)) {
+                                    continue;
+                                }
+
+                                const [m, s] = text.split(':').map(Number);
+
+                                if (
+                                    Number.isInteger(m) &&
+                                    Number.isInteger(s) &&
+                                    m >= 0 && m <= 60 &&
+                                    s >= 0 && s <= 59
+                                ) {
+                                    return (
+                                        String(m).padStart(2, '0') +
+                                        ':' +
+                                        String(s).padStart(2, '0')
+                                    );
+                                }
+                            }
+
+                            return null;
+                        });
+
+                        if (timer) {
+                            remainingTime = timer;
+                            break;
+                        }
+                    } catch (_) {
+                        // Frame navigate ho to agle frame ko check karein.
+                    }
+                }
+
+                if (remainingTime) break;
+            }
+
+            // Timer milne par hi update karo.
+// Missing timer ko 00:00 mat bhejo.
+if (
+    remainingTime &&
+    /^\d{2}:\d{2}$/.test(remainingTime) &&
+    remainingTime !== '00:00'
+) {
+    this.qrCallbacks.updateQRTimer({
+        remainingTime
+    });
+}
+        } catch (error) {
+            console.warn(
+                '[QR] Razorpay timer update failed:',
+                error.message
+            );
+        }
+    }, 500);
+
+    // Safety cleanup: 3 minutes baad interval band.
+    setTimeout(() => {
+        razorpayTimerStopped = true;
+        clearInterval(razorpayTimerInterval);
+    }, 180000);
+}
 
 // ==========================================
 // WAIT FOR PAYMENT BEFORE VERIFICATION
@@ -8160,29 +8408,6 @@ console.log(
 
 // Payment verification ko QR detect hote hi immediately call nahi karna.
 // Pehle payment page ko success/confirmation state mein aane denge.
-
-// ==========================================
-// NAVIGATION-SAFE PAYMENT CONFIRMATION LOOP
-// ==========================================
-
-
-const ipayTimerEnd = Date.now() + 180000;
-
-function getIPAYRemainingTime() {
-    const remaining = Math.max(
-        0,
-        Math.ceil((ipayTimerEnd - Date.now()) / 1000)
-    );
-
-    const minutes = Math.floor(remaining / 60);
-    const seconds = remaining % 60;
-
-    return (
-        String(minutes).padStart(2, '0') +
-        ':' +
-        String(seconds).padStart(2, '0')
-    );
-}
 
 let paymentCompleted = false;
 let paymentFailed = false;
@@ -8250,21 +8475,41 @@ const success =
             body.includes('payment failure')
         );
 
-    let remainingTime = '00:00';
+        // ==========================================
+        // READ LIVE PAYMENT TIMER
+        // Supports both MM:SS and "06 min : 46 sec"
+        // ==========================================
 
-    const elements = Array.from(
-        document.querySelectorAll('*')
-    );
+        let remainingTime = '00:00';
 
-    for (const element of elements) {
-        const text = String(
-            element.innerText || ''
-        ).trim();
+        const elements = Array.from(
+            document.querySelectorAll('*')
+        );
 
-        if (/^\d{1,2}:\d{2}$/.test(text)) {
-            const parts = text.split(':');
-            const minutes = parseInt(parts[0], 10);
-            const seconds = parseInt(parts[1], 10);
+        for (const element of elements) {
+            const text = String(
+                element.innerText || ''
+            ).trim();
+
+            let minutes;
+            let seconds;
+
+            // Format: 06 min : 46 sec
+            const timerMatch = text.match(
+                /^(\d{1,2})\s*min\s*:\s*(\d{1,2})\s*sec$/i
+            );
+
+            // Format: 06:46
+            if (timerMatch) {
+                minutes = Number(timerMatch[1]);
+                seconds = Number(timerMatch[2]);
+            } else if (/^\d{1,2}:\d{2}$/.test(text)) {
+                const parts = text.split(':');
+                minutes = Number(parts[0]);
+                seconds = Number(parts[1]);
+            } else {
+                continue;
+            }
 
             if (
                 Number.isInteger(minutes) &&
@@ -8282,17 +8527,16 @@ const success =
                 break;
             }
         }
-    }
 
-    return {
-        success,
-        failed,
-        remainingTime,
-        bookingConfirmed,
-        pnr,
-        url
-    };
-});
+        return {
+            success,
+            failed,
+            remainingTime,
+            bookingConfirmed,
+            pnr,
+            url
+        };
+    });
 
 
     } catch (e) {
@@ -8319,21 +8563,16 @@ const success =
     // ==========================================
 
     try {
-
         if (
+            !paymentValue.startsWith('RAZORPAY') &&
             this.qrCallbacks &&
             typeof this.qrCallbacks.updateQRTimer === 'function'
         ) {
-
             this.qrCallbacks.updateQRTimer({
-    remainingTime: paymentValue.startsWith('IPAY')
-        ? getIPAYRemainingTime()
-        : paymentState.remainingTime
-});
+                remainingTime: paymentState.remainingTime
+            });
         }
-
     } catch (timerUpdateError) {
-
         console.warn(
             '[QR] Live payment timer update failed:',
             timerUpdateError.message

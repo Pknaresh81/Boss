@@ -5,6 +5,30 @@ const {
     session,
 } = require('electron');
 
+
+const { app: electronApp } = require('electron');
+
+app.on('browser-window-created', (_event, win) => {
+    win.on('unresponsive', () => {
+        console.error(
+            '[FREEZE DEBUG] Window unresponsive:',
+            win.getTitle(),
+            'ID:',
+            win.id
+        );
+    });
+
+    win.on('responsive', () => {
+        console.log(
+            '[FREEZE DEBUG] Window responsive again:',
+            win.getTitle(),
+            'ID:',
+            win.id
+        );
+    });
+});
+
+
 const {
     verifyLicense
 } = require('./licenseManager');
@@ -27,7 +51,7 @@ let miniAutomationWindowsByBrowser = new Map();
 
 let licenseVerified = false;
 
-function createQRPaymentWindow(browserType = 'WEB') {
+function createQRPaymentWindow(browserType = 'WEB', targetMiniWin = null) {
 
     const type =
         String(browserType || 'WEB')
@@ -52,8 +76,10 @@ function createQRPaymentWindow(browserType = 'WEB') {
     if (
         typeof miniAutomationWindows !== 'undefined'
     ) {
-        const miniWin =
-    miniAutomationWindowsByBrowser.get(type);
+    const miniWin =
+    targetMiniWin && !targetMiniWin.isDestroyed()
+        ? targetMiniWin
+        : miniAutomationWindowsByBrowser.get(type);
 
         if (
             miniWin &&
@@ -131,24 +157,31 @@ function createQRPaymentWindow(browserType = 'WEB') {
         }
     );
 
-    if (
-    typeof miniAutomationWindows !== 'undefined'
+const miniWin =
+    targetMiniWin && !targetMiniWin.isDestroyed()
+        ? targetMiniWin
+        : miniAutomationWindowsByBrowser.get(type);
+
+if (
+    miniWin &&
+    !miniWin.isDestroyed()
 ) {
-    const miniWin =
-    miniAutomationWindowsByBrowser.get(type);
+    const [miniX, miniY] =
+        miniWin.getPosition();
 
-    if (
-        miniWin &&
-        !miniWin.isDestroyed()
-    ) {
-        const [miniX, miniY] =
-            miniWin.getPosition();
+    qrWindow.setPosition(
+        miniX,
+        miniY
+    );
 
-        qrWindow.setPosition(
-            miniX,
-            miniY
-        );
-    }
+    console.log(
+        `[QR WINDOW ${type}] Positioned beside target mini window`,
+        miniWin.id
+    );
+} else {
+    console.warn(
+        `[QR WINDOW ${type}] Target mini window not available`
+    );
 }
 
 qrWindow.show();
@@ -1675,7 +1708,7 @@ if (
         showQR: (data) => {
 
     const qrWindow =
-    createQRPaymentWindow(config.type);
+    createQRPaymentWindow(config.type, miniWin)
 
     if (
         !qrWindow ||
@@ -2950,7 +2983,7 @@ try {
             const apiEngine =
     new APIEngine(
         page,
-        win,
+        miniWin,
         null,
         config.type,
         {
@@ -2964,8 +2997,8 @@ console.log(
     miniAutomationWindowsByBrowser.has(config.type)
 );
 
-                const qrWindow =
-    createQRPaymentWindow(config.type);
+    const qrWindow =
+    createQRPaymentWindow(config.type, miniWin)
 
                 if (
                     !qrWindow ||

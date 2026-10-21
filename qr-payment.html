@@ -78,6 +78,12 @@ body {
     display: block;
 }
 
+/* Razorpay QR: sharper nearest-neighbour scaling */
+#qr-payment-image.razorpay-qr {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
 /* =========================================
    TIMER
 ========================================= */
@@ -201,6 +207,14 @@ body {
                             String(image.src || '').length
                         );
                     };
+
+                    image.classList.toggle(
+    'razorpay-qr',
+    String(qrData.paymentType || '')
+        .trim()
+        .toUpperCase()
+        .startsWith('RAZORPAY')
+);
 
                     image.src = qrData.image;
 
