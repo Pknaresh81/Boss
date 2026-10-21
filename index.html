@@ -3507,15 +3507,7 @@ function resizeDashboardWindow() {
     height: finalHeight
 });
 
-requestAnimationFrame(() => {
-    document.body.style.transform = 'translateZ(0)';
-
-    requestAnimationFrame(() => {
-        document.body.style.transform = '';
-    });
-});
 }
-
 
 function minimizeDashboardWindow() {
 

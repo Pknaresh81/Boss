@@ -5,6 +5,8 @@ const {
     session,
 } = require('electron');
 
+app.disableHardwareAcceleration();
+
 const {
     verifyLicense
 } = require('./licenseManager');
