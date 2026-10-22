@@ -127,42 +127,6 @@ prepareBrowsers: () =>
                 size
             ),
 
-         // ==========================================
-// AUTO UPDATE
-// ==========================================
-
-onAppUpdateAvailable: (callback) =>
-    ipcRenderer.on(
-        'app-update-available',
-        (
-            event,
-            data
-        ) => callback(data)
-    ),
-
-onAppUpdateProgress: (callback) =>
-    ipcRenderer.on(
-        'app-update-progress',
-        (
-            event,
-            data
-        ) => callback(data)
-    ),
-
-onAppUpdateDownloaded: (callback) =>
-    ipcRenderer.on(
-        'app-update-downloaded',
-        (
-            event,
-            data
-        ) => callback(data)
-    ),
-
-    installAppUpdate: () =>
-    ipcRenderer.send(
-        'install-app-update'
-    ),
-
         // ==========================================
         // LICENSE
         // ==========================================

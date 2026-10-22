@@ -843,6 +843,17 @@ async function launchBrowser(
             `[LAUNCH ${config.type}] PROFILE: ${config.userDataDir}`
         );
 
+        const { screen } = require('electron');
+
+const workArea = screen.getPrimaryDisplay().workAreaSize;
+
+const browserWidth = 450;
+const browserHeight = 600;
+
+const y = Math.min(
+    160,
+    Math.max(0, workArea.height - browserHeight)
+);
 
        const child = spawn(
     config.exePath,
@@ -850,7 +861,7 @@ async function launchBrowser(
         `--remote-debugging-port=${config.port}`,
         `--user-data-dir=${config.userDataDir}`,
         '--window-size=450,600', // <-- Specific width aur height force karein
-        `--window-position=${config.port === 9222 ? 0 : config.port === 9223 ? 455 : config.port === 9224 ? 910 : 0},140`, // <-- Screen position set karein
+        `--window-position=${config.port === 9222 ? 0 : config.port === 9223 ? 455 : config.port === 9224 ? 910 : 0},${y}`, // <-- Screen position set karein
         '--no-default-browser-check',
         '--disable-sync',
         targetUrl
@@ -1548,7 +1559,7 @@ while (retries > 0) {
                     browser =
     await puppeteer.connect({
         browserURL:
-            `http://localhost:${port}`,
+    `http://127.0.0.1:${port}`,
         defaultViewport: null,
         protocolTimeout: 10 * 60 * 1000
     });
@@ -2797,7 +2808,7 @@ ipcMain.handle(
                     browser =
     await puppeteer.connect({
         browserURL:
-            `http://localhost:${port}`,
+    `http://127.0.0.1:${port}`,
         defaultViewport: null,
         protocolTimeout: 10 * 60 * 1000
     });
