@@ -94,6 +94,10 @@ body {
             flex-wrap: wrap;
             gap: 15px;
             z-index: 9999;
+            pointer-events: none;
+        }
+
+        #floating-windows-layer > * {
             pointer-events: auto;
         }
 
@@ -269,6 +273,20 @@ body {
 #tab-book > div > div > div.grid > div > label,
 #tab-book > div > div > div.border-t > div > label {
     display: none !important;
+}
+
+/* FIX: keep form controls directly clickable and editable.
+   The dashboard uses user-select:none globally, so explicitly restore
+   normal text interaction for every form control, not only passengers. */
+.main-container input,
+.main-container select,
+.main-container textarea {
+    pointer-events: auto !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -webkit-app-region: no-drag !important;
+    position: relative;
+    z-index: 1001;
 }
 
 /* ALL INPUTS / SELECTS */
@@ -598,7 +616,48 @@ body {
     background: #287aa8;
 }
 
-    </style>
+    
+/* BOSS_NON_BLOCKING_ALERT_FIX: notifications must never block the renderer or trap form focus */
+#boss-toast-notification {
+  position: fixed; top: 50%; bottom: auto; left: 50%; transform: translate(-50%, -50%);
+  z-index: 2147483647; max-width: min(520px, calc(100vw - 32px));
+  padding: 12px 18px; border-radius: 10px;
+  background: #10243a; color: #ffff00; border: 1px solid #38bdf8;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  font: 600 13px/1.45 sans-serif; white-space: pre-line;
+  pointer-events: none; user-select: none; display: none;
+}
+
+</style>
+
+<script id="BOSS_NON_BLOCKING_ALERT_FIX">
+/* Replace blocking native alert() dialogs with a non-blocking toast.
+   Native modal alerts can leave Electron renderer focus/input interaction stuck. */
+(() => {
+  let toastTimer = null;
+  window.alert = function (message) {
+    try {
+      let toast = document.getElementById('boss-toast-notification');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'boss-toast-notification';
+        toast.setAttribute('role', 'status');
+        toast.setAttribute('aria-live', 'polite');
+        (document.body || document.documentElement).appendChild(toast);
+      }
+      toast.textContent = String(message ?? '');
+      toast.style.display = 'block';
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toast.style.display = 'none';
+      }, 3200);
+    } catch (error) {
+      console.error('[Boss notification] Could not show toast:', error);
+    }
+  };
+})();
+</script>
+
 </head>
 
 <body>
@@ -608,6 +667,7 @@ body {
 ========================================== -->
 
 <div id="appUpdatePopup"
+     style="display:none; pointer-events:none;"
      class="fixed inset-0 z-[99999] hidden items-center justify-center bg-black/40">
 
     <div class="bg-white rounded-xl shadow-2xl border border-slate-200 w-[360px] p-5">
@@ -1808,6 +1868,12 @@ function saveTicketToQueue() {
             new Date().toISOString()
     };
 
+    if (!mobile.trim()) {
+    alert('Please enter mobile number before saving ticket!');
+    document.getElementById('mobileNumber').focus();
+    return;
+}
+
     if (editingTicketIndex >= 0) {
 
         ticketsQueue[editingTicketIndex] = ticket;
@@ -2052,7 +2118,89 @@ function editTicket(idx) {
    DELETE TICKET
 ========================================================= */
 
-function removeTicket(idx) {
+function showBossConfirm(message) {
+    return new Promise((resolve) => {
+        const oldPopup = document.getElementById('boss-confirm-popup');
+        if (oldPopup) oldPopup.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'boss-confirm-popup';
+
+        Object.assign(overlay.style, {
+            position: 'fixed',
+            inset: '0',
+            zIndex: '2147483647',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.45)'
+        });
+
+        const box = document.createElement('div');
+
+        Object.assign(box.style, {
+            background: '#10243a',
+            border: '1px solid #38bdf8',
+            borderRadius: '12px',
+            padding: '22px',
+            width: 'min(360px, calc(100vw - 32px))',
+            boxSizing: 'border-box',
+            textAlign: 'center',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.4)'
+        });
+
+        const text = document.createElement('div');
+        text.textContent = message;
+
+        Object.assign(text.style, {
+            color: 'yellow',
+            font: '600 14px/1.5 sans-serif',
+            marginBottom: '20px',
+            overflowWrap: 'anywhere'
+        });
+
+        const buttons = document.createElement('div');
+
+        Object.assign(buttons.style, {
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '12px'
+        });
+
+        function makeButton(label, color) {
+            const button = document.createElement('button');
+            button.textContent = label;
+
+            Object.assign(button.style, {
+                background: color,
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '7px',
+                padding: '9px 22px',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+            });
+
+            button.addEventListener('click', () => {
+                overlay.remove();
+                resolve(label === 'YES');
+            });
+
+            return button;
+        }
+
+        buttons.append(
+            makeButton('YES', '#16a34a'),
+            makeButton('NO', '#dc2626')
+        );
+
+        box.append(text, buttons);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+    });
+}
+
+async function removeTicket(idx) {
 
     if (
         idx < 0 ||
@@ -2066,13 +2214,15 @@ function removeTicket(idx) {
         ticketsQueue[idx];
 
 
-    if (
-        !confirm(
-            `Delete ticket ${removed.train} ${removed.from} → ${removed.to}?`
-        )
-    ) {
-        return;
-    }
+    
+const confirmed = await showBossConfirm(
+    `Delete ticket ${removed.train} ${removed.from} → ${removed.to}?`
+);
+
+if (!confirmed) {
+    return;
+}
+
 
 
     ticketsQueue.splice(idx, 1);
@@ -3673,15 +3823,11 @@ function toggleTab(tabName, startup = false) {
 
 
     // Wait for layout, then resize
-    requestAnimationFrame(() => {
-
-        requestAnimationFrame(() => {
-
-            resizeDashboardWindow();
-
-        });
-
-    });
+  requestAnimationFrame(() => {
+    if (dashboardIsExpanded) {
+        resizeDashboardWindow();
+    }
+});
 }
 
 

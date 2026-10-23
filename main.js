@@ -210,7 +210,7 @@ ipcMain.handle(
         maximizable: false,
         fullscreenable: false,
 
-        alwaysOnTop: false,
+        alwaysOnTop: true,
         show: true,
 
                     webPreferences: {
@@ -219,10 +219,12 @@ ipcMain.handle(
                             'preload.js'
                         ),
                         nodeIntegration: false,
-                        contextIsolation: true
+                        contextIsolation: true,
+                        backgroundThrottling: false
                     }
 
                 });
+                
 
             miniAutomationWindows.set(
                 windowId,
