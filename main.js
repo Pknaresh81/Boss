@@ -2381,37 +2381,31 @@ app.on('window-all-closed', () => {
 // RESIZE WINDOW
 // ==========================================
 
-ipcMain.on(
-    'resize-window',
-    (event, size = {}) => {
 
-        if (
-            !win ||
-            win.isDestroyed()
-        ) {
-            return;
-        }
+ipcMain.on('resize-window', (event, size = {}) => {
+    if (!win || win.isDestroyed()) return;
 
-        const width =
-            Number(size.width);
+    const width = Number(size.width);
+    const height = Number(size.height);
 
-        const height =
-            Number(size.height);
-
-        if (
-            Number.isFinite(width) &&
-            Number.isFinite(height) &&
-            width > 0 &&
-            height > 0
-        ) {
-
-            win.setSize(
-                Math.round(width),
-                Math.round(height)
-            );
-        }
+    if (
+        !Number.isFinite(width) ||
+        !Number.isFinite(height) ||
+        width <= 0 ||
+        height <= 0
+    ) {
+        return;
     }
-);
+
+    const oldBounds = win.getBounds();
+
+    win.setBounds({
+        x: oldBounds.x,
+        y: oldBounds.y,
+        width: Math.round(width),
+        height: Math.round(height)
+    });
+});
 
 // ==========================================
 // CAPTCHA STATE - PER BROWSER

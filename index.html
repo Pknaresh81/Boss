@@ -628,6 +628,33 @@ body {
   pointer-events: none; user-select: none; display: none;
 }
 
+
+/* FIX: transparent Electron dashboard must not paint the whole root container.
+   Paint only the header while collapsed and the content panel while expanded. */
+#mainWindow.main-container {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+}
+#mainWindow:not(.dashboard-expanded) > #windowHeader {
+    border: 1px solid rgba(65, 170, 255, 0.30) !important;
+    border-radius: 10px !important;
+    box-sizing: border-box;
+}
+#mainWindow.dashboard-expanded > #windowHeader {
+    border: 1px solid rgba(65, 170, 255, 0.30) !important;
+    border-bottom: 1px solid rgba(65, 170, 255, 0.22) !important;
+    border-radius: 10px 10px 0 0 !important;
+    box-sizing: border-box;
+}
+#mainWindow.dashboard-expanded > main {
+    border: 1px solid rgba(65, 170, 255, 0.30) !important;
+    border-top: 0 !important;
+    border-radius: 0 0 10px 10px !important;
+    box-sizing: border-box;
+}
+
 </style>
 
 <script id="BOSS_NON_BLOCKING_ALERT_FIX">
@@ -2118,35 +2145,31 @@ function editTicket(idx) {
    DELETE TICKET
 ========================================================= */
 
+
 function showBossConfirm(message) {
     return new Promise((resolve) => {
         const oldPopup = document.getElementById('boss-confirm-popup');
         if (oldPopup) oldPopup.remove();
 
-        const overlay = document.createElement('div');
-        overlay.id = 'boss-confirm-popup';
-
-        Object.assign(overlay.style, {
-            position: 'fixed',
-            inset: '0',
-            zIndex: '2147483647',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(0,0,0,0.45)'
-        });
-
+        // No full-screen overlay: only the popup itself is clickable.
         const box = document.createElement('div');
+        box.id = 'boss-confirm-popup';
 
         Object.assign(box.style, {
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: '2147483647',
             background: '#10243a',
             border: '1px solid #38bdf8',
-            borderRadius: '12px',
-            padding: '22px',
-            width: 'min(360px, calc(100vw - 32px))',
+            borderRadius: '9px',
+            padding: '12px 14px',
+            width: 'min(290px, calc(100vw - 32px))',
             boxSizing: 'border-box',
             textAlign: 'center',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.4)'
+            boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
+            pointerEvents: 'auto'
         });
 
         const text = document.createElement('div');
@@ -2154,8 +2177,8 @@ function showBossConfirm(message) {
 
         Object.assign(text.style, {
             color: 'yellow',
-            font: '600 14px/1.5 sans-serif',
-            marginBottom: '20px',
+            font: '600 12px/1.4 sans-serif',
+            marginBottom: '10px',
             overflowWrap: 'anywhere'
         });
 
@@ -2164,25 +2187,28 @@ function showBossConfirm(message) {
         Object.assign(buttons.style, {
             display: 'flex',
             justifyContent: 'center',
-            gap: '12px'
+            gap: '8px'
         });
 
         function makeButton(label, color) {
             const button = document.createElement('button');
             button.textContent = label;
+            button.type = 'button';
 
             Object.assign(button.style, {
                 background: color,
                 color: '#ffffff',
                 border: 'none',
-                borderRadius: '7px',
-                padding: '9px 22px',
+                borderRadius: '5px',
+                padding: '5px 12px',
+                fontSize: '11px',
+                fontWeight: 'bold',
                 cursor: 'pointer',
-                fontWeight: 'bold'
+                pointerEvents: 'auto'
             });
 
             button.addEventListener('click', () => {
-                overlay.remove();
+                box.remove();
                 resolve(label === 'YES');
             });
 
@@ -2195,10 +2221,10 @@ function showBossConfirm(message) {
         );
 
         box.append(text, buttons);
-        overlay.appendChild(box);
-        document.body.appendChild(overlay);
+        document.body.appendChild(box);
     });
 }
+
 
 async function removeTicket(idx) {
 
@@ -3618,14 +3644,15 @@ let activeDashboardTab = null;
 let dashboardIsExpanded = false;
 
 
-function resizeDashboardWindow() {
 
+function resizeDashboardWindow() {
     if (!window.electronAPI) return;
 
     const header = document.getElementById('windowHeader');
     const mainContent = document.querySelector('#mainWindow > main');
+    const mainWindow = document.getElementById('mainWindow');
 
-    if (!header || !mainContent) return;
+    if (!header || !mainContent || !mainWindow) return;
 
     const headerHeight = Math.ceil(
         header.getBoundingClientRect().height
@@ -3637,32 +3664,48 @@ function resizeDashboardWindow() {
 
     const finalHeight = headerHeight + contentHeight + 2;
 
+    // Root container transparent rahe; expanded panel apna background paint kare.
+    mainWindow.classList.add('dashboard-expanded');
+    mainWindow.style.height = `${finalHeight}px`;
+
     console.log('[UI] Expanding Dashboard:', finalHeight);
 
     window.electronAPI.resizeWindow({
-    width: 900,
-    height: finalHeight
-});
-
+        width: 900,
+        height: finalHeight
+    });
 }
 
 function minimizeDashboardWindow() {
-
     if (!window.electronAPI) return;
 
     const header = document.getElementById('windowHeader');
+    const mainWindow = document.getElementById('mainWindow');
 
-    if (!header) return;
+    if (!header || !mainWindow) return;
 
     const headerHeight = Math.ceil(
         header.getBoundingClientRect().height
     );
+
+    // Collapsed state: root transparent, sirf header visible/interactive.
+    mainWindow.classList.remove('dashboard-expanded');
+    mainWindow.style.height = `${headerHeight}px`;
 
     console.log('[UI] Minimizing Dashboard:', headerHeight);
 
     window.electronAPI.resizeWindow({
         width: 900,
         height: headerHeight
+    });
+
+    // Transparent Electron window mein repaint trigger karo.
+    requestAnimationFrame(() => {
+        document.body.style.transform = 'translateZ(0)';
+
+        requestAnimationFrame(() => {
+            document.body.style.transform = '';
+        });
     });
 }
 
@@ -3822,12 +3865,17 @@ function toggleTab(tabName, startup = false) {
     dashboardIsExpanded = true;
 
 
+
     // Wait for layout, then resize
-  requestAnimationFrame(() => {
-    if (dashboardIsExpanded) {
-        resizeDashboardWindow();
-    }
-});
+    requestAnimationFrame(() => {
+
+        requestAnimationFrame(() => {
+
+            resizeDashboardWindow();
+
+        });
+
+    });
 }
 
 
