@@ -5,6 +5,8 @@ const {
     session,
 } = require('electron');
 
+const pendingWLDecisions = new Map();
+
 const {
     verifyLicense
 } = require('./licenseManager');
@@ -23,6 +25,7 @@ let licenseWindow = null;
 const qrPaymentWindows = new Map();
 let miniAutomationWindows = new Map();
 let miniAutomationWindowsByBrowser = new Map();
+const managedBrowserInstances = new Map();
 
 
 let licenseVerified = false;
@@ -407,7 +410,14 @@ const BROWSER_CONFIG = {
             BOSS_BROWSER_ROOT,
             'Brave'
         )
-    }
+    },
+
+    WEB4: {
+    type: 'WEB4',
+    name: 'Chromium',
+    port: 9225,
+    userDataDir: path.join(BOSS_BROWSER_ROOT, 'Chromium')
+}
 
 };
 
@@ -661,6 +671,49 @@ function getInstalledBrowserPath(type) {
 
     }
 
+     if (type === 'WEB4') {
+    return findExistingBrowserPath([
+        path.join(
+            programFiles,
+            'Chromium',
+            'Application',
+            'chrome.exe'
+        ),
+
+        path.join(
+            programFilesX86,
+            'Chromium',
+            'Application',
+            'chrome.exe'
+        ),
+
+        path.join(
+            localAppData,
+            'Chromium',
+            'Application',
+            'chrome.exe'
+        ),
+
+        path.join(
+            programFiles,
+            'Chromium',
+            'chrome.exe'
+        ),
+
+        path.join(
+            programFilesX86,
+            'Chromium',
+            'chrome.exe'
+        ),
+
+        path.join(
+            localAppData,
+            'Chromium',
+            'chrome.exe'
+        )
+    ]);
+}
+
     return null;
 }
 
@@ -668,6 +721,7 @@ function getInstalledBrowserPath(type) {
 // ==========================================
 // GET BROWSER CONFIG
 // ==========================================
+
 
 function getBrowserConfig(browser) {
 
@@ -694,15 +748,21 @@ function getBrowserConfig(browser) {
 
         type = 'WEB3';
 
-    }
+    } else if (
+        value === 'WEB4' ||
+        value === 'WEB 4' ||
+        value === 'CHROMIUM'
+    ) {
 
+        type = 'WEB4';
+
+    }
 
     const baseConfig =
         BROWSER_CONFIG[type];
 
     const exePath =
         getInstalledBrowserPath(type);
-
 
     return {
         ...baseConfig,
@@ -711,6 +771,7 @@ function getBrowserConfig(browser) {
     };
 
 }
+
 
 // ==========================================
 // CHECK REMOTE DEBUGGING STATUS
@@ -847,7 +908,9 @@ async function launchBrowser(
 
 const workArea = screen.getPrimaryDisplay().workAreaSize;
 
-const browserWidth = 450;
+const isChromiumWEB4 = config.type === 'WEB4';
+
+const browserWidth = isChromiumWEB4 ? 450 : 450;
 const browserHeight = 600;
 
 const y = Math.min(
@@ -860,8 +923,8 @@ const y = Math.min(
     [
         `--remote-debugging-port=${config.port}`,
         `--user-data-dir=${config.userDataDir}`,
-        '--window-size=450,600', // <-- Specific width aur height force karein
-        `--window-position=${config.port === 9222 ? 0 : config.port === 9223 ? 455 : config.port === 9224 ? 910 : 0},${y}`, // <-- Screen position set karein
+        `--window-size=${browserWidth},${browserHeight}`, // <-- Specific width aur height force karein
+        `--window-position=${config.port === 9222 ? 0 : config.port === 9223 ? 455 : config.port === 9224 ? 910 : config.port === 9225 ? 0 : 0},${y}`, // <-- Screen position set karein
         '--no-default-browser-check',
         '--disable-sync',
         targetUrl
@@ -1450,6 +1513,39 @@ ipcMain.handle(
 );
 
 // ==========================================
+// WL PROCEED / CANCEL RESPONSE
+// ==========================================
+ipcMain.handle(
+    'wl-decision-response',
+    async (event, payload = {}) => {
+
+        const windowId = String(payload.windowId || '');
+        const decision = String(payload.decision || '').toLowerCase();
+
+        const pending = pendingWLDecisions.get(windowId);
+
+        if (!pending) {
+            return {
+                success: false,
+                error: 'WL decision request nahi mila.'
+            };
+        }
+
+        if (decision !== 'proceed' && decision !== 'cancel') {
+            return {
+                success: false,
+                error: 'Invalid WL decision.'
+            };
+        }
+
+        pendingWLDecisions.delete(windowId);
+        pending(decision);
+
+        return { success: true };
+    }
+);
+
+// ==========================================
 // START BOOKING HANDLER
 // ==========================================
 
@@ -1523,7 +1619,9 @@ try {
                 config.userDataDir;
 
             const targetUrl =
-                'https://www.irctc.co.in/nget/train-search';
+    config.type === 'WEB4'
+        ? 'https://www.irctc.co.in/eticket/train-search'
+        : 'https://www.irctc.co.in/nget/train-search';
 
             console.log(
                 `[${config.type}] Port=${port} Profile=${userDataDir}`
@@ -1556,13 +1654,13 @@ while (retries > 0) {
 
                 try {
 
-                    browser =
-    await puppeteer.connect({
-        browserURL:
-    `http://127.0.0.1:${port}`,
-        defaultViewport: null,
-        protocolTimeout: 10 * 60 * 1000
-    });
+    
+browser = await puppeteer.connect({
+    browserURL: `http://127.0.0.1:${port}`,
+    defaultViewport: null,
+    protocolTimeout: 10 * 60 * 1000
+});
+
 
                     break;
 
@@ -1617,15 +1715,32 @@ try {
         `[${config.type}] Using existing browser page...`
     );
 
-    const pages =
-        await browser.pages();
 
-    page =
-        pages.find(
-            p =>
-                p.url().includes('irctc.co.in')
-        ) ||
-        pages[0];
+
+const pages = await browser.pages();
+
+page =
+    pages.find(p => {
+        const url = p.url() || '';
+        return url.includes('irctc.co.in');
+    }) ||
+    pages[0] ||
+    await browser.newPage();
+
+if (!page) {
+    throw new Error(
+        `${config.name} mein naya browser page nahi ban saka.`
+    );
+}
+
+if (!page.url() || page.url() === 'about:blank') {
+    await page.goto(targetUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: 60000
+    });
+}
+
+
 
     if (!page) {
 
@@ -1778,6 +1893,78 @@ if (
         'payment-qr-timer',
         data
     );
+},
+
+        // ==========================================
+// WL CONFIRMATION REQUEST
+// ==========================================
+requestWLDecision: (wlNumber) => {
+
+    return new Promise((resolve) => {
+
+        const id = String(windowId || '');
+
+        const wlMiniWin = id
+            ? miniAutomationWindows.get(id)
+            : null;
+
+        if (
+            !id ||
+            !wlMiniWin ||
+            wlMiniWin.isDestroyed()
+        ) {
+            console.error('[WL] Mini window unavailable.');
+            resolve('cancel');
+            return;
+        }
+
+        const oldRequest =
+            pendingWLDecisions.get(id);
+
+        if (oldRequest) {
+            oldRequest('cancel');
+            pendingWLDecisions.delete(id);
+        }
+
+        pendingWLDecisions.set(id, resolve);
+
+        const sendWLRequest = () => {
+
+            if (
+                wlMiniWin.isDestroyed() ||
+                !pendingWLDecisions.has(id)
+            ) {
+                pendingWLDecisions.delete(id);
+                resolve('cancel');
+                return;
+            }
+
+            wlMiniWin.webContents.send(
+                'wl-decision-request',
+                {
+                    windowId: id,
+                    wlNumber: wlNumber
+                }
+            );
+
+            console.log(
+                '[WL] Confirmation popup sent:',
+                wlNumber
+            );
+        };
+
+        if (wlMiniWin.webContents.isLoading()) {
+
+            wlMiniWin.webContents.once(
+                'did-finish-load',
+                sendWLRequest
+            );
+
+        } else {
+
+            sendWLRequest();
+        }
+    });
 }
     }
 );
@@ -2785,8 +2972,12 @@ ipcMain.handle(
             const userDataDir =
                 config.userDataDir;
 
-            const targetUrl =
-                'https://www.irctc.co.in/nget/train-search';
+            
+const targetUrl =
+    config.type === 'WEB4'
+        ? 'https://www.irctc.co.in/eticket/train-search'
+        : 'https://www.irctc.co.in/nget/train-search';
+
 
             console.log(
                 `[${config.type}] Port=${port} Profile=${userDataDir}`
@@ -2799,13 +2990,13 @@ ipcMain.handle(
 
                 try {
 
-                    browser =
-    await puppeteer.connect({
-        browserURL:
-    `http://127.0.0.1:${port}`,
-        defaultViewport: null,
-        protocolTimeout: 10 * 60 * 1000
-    });
+
+browser = await puppeteer.connect({
+    browserURL: `http://127.0.0.1:${port}`,
+    defaultViewport: null,
+    protocolTimeout: 10 * 60 * 1000
+});
+
 
                     break;
 
@@ -2862,19 +3053,16 @@ try {
 
     const pages = await browser.pages();
 
-    page =
-        pages.find(
-            p => {
-                const url = p.url() || '';
-                return url.includes('irctc.co.in');
-            }
-        ) || pages[0];
+page =
+    pages.find(p => (p.url() || '').includes('irctc.co.in')) ||
+    pages[0] ||
+    await browser.newPage();
 
-    if (!page) {
-        throw new Error(
-            `${config.name} mein koi browser page available nahi hai.`
-        );
-    }
+if (!page) {
+    throw new Error(
+        `${config.name} mein naya browser page nahi ban saka.`
+    );
+}
 
     console.log(
         `[${config.type}] Existing page selected: ${await page.url()}`
@@ -3131,8 +3319,12 @@ ipcMain.handle(
             const config =
                 getBrowserConfig(browserType);
 
-            const targetUrl =
-                'https://www.irctc.co.in/nget/train-search';
+            
+const targetUrl =
+    config.type === 'WEB4'
+        ? 'https://www.irctc.co.in/eticket/train-search'
+        : 'https://www.irctc.co.in/nget/train-search';
+
 
             console.log(
                 `[OPEN ${config.type}] ` +

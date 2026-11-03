@@ -473,6 +473,9 @@ async typeHumanLike(selector, text, minDelay = 20, maxDelay = 60) {
 // ==========================================
 async autoLogin(username, password) {
 
+    const isChromiumWEB4 =
+        String(this.browserType).toUpperCase() === 'WEB4';
+
     if (!this.page || this.page.isClosed()) {
         throw new Error(
             `[${this.browserType}] Browser page available nahi hai.`
@@ -483,25 +486,66 @@ async autoLogin(username, password) {
         `[AUTO LOGIN ${this.browserType}] Opening IRCTC page...`
     );
 
-    const currentUrl = this.page.url();
 
-if (!currentUrl.includes('/nget/train-search')) {
-    await this.page.goto(
-        'https://www.irctc.co.in/nget/train-search',
-        {
-            waitUntil: 'domcontentloaded',
-            timeout: 30000
-        }
-    );
+const currentUrl = this.page.url();
+
+const targetLoginUrl =
+    String(this.browserType).toUpperCase() === 'WEB4'
+        ? 'https://www.irctc.co.in/eticket/train-search'
+        : 'https://www.irctc.co.in/nget/train-search';
+
+if (!currentUrl.includes(new URL(targetLoginUrl).pathname)) {
+    await this.page.goto(targetLoginUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000
+    });
 } else {
     console.log(
         `[AUTO LOGIN ${this.browserType}] Train-search page already open. Skipping reload.`
     );
 }
 
+
     console.log(
         `[AUTO LOGIN ${this.browserType}] IRCTC page loaded.`
     );
+
+  
+   // ==========================================
+// WEB4 ONLY - CLOSE VIGILANCE AWARENESS BANNER
+// ==========================================
+if (isChromiumWEB4) {
+    console.log(
+        '[AUTO LOGIN WEB4] Vigilance banner close kar rahe hain...'
+    );
+
+    try {
+        const closeButton = await this.page.waitForSelector(
+            'button.vigilance-banner-close[aria-label="Dismiss vigilance awareness banner"]',
+            {
+                visible: true,
+                timeout: 5000
+            }
+        );
+
+        if (closeButton) {
+            await closeButton.click();
+
+            console.log(
+                '[AUTO LOGIN WEB4] Vigilance banner close button click kiya.'
+            );
+
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    } catch (popupError) {
+        console.log(
+            '[AUTO LOGIN WEB4] Vigilance banner nahi mila ya pehle se band hai:',
+            popupError.message
+        );
+    }
+}
+
+if (!isChromiumWEB4) {
 
     // ==========================================
 // CLOSE IRCTC WELCOME / LANGUAGE POPUP
@@ -580,6 +624,7 @@ try {
         `[AUTO LOGIN ${this.browserType}] Welcome popup not detected or already closed.`
     );
 }
+}
 
     // ------------------------------------------
     // WAIT FOR PAGE TO SETTLE
@@ -588,154 +633,214 @@ try {
         setTimeout(resolve, 500)
     );
 
-    // ==========================================
-    // STEP 1
-    // CHECK LOGIN FORM ALREADY OPEN
-    // ==========================================
-    const loginFormAlreadyOpen =
-        await this.page.$(
-            'input[formcontrolname="userid"]'
-        );
 
-    if (!loginFormAlreadyOpen) {
+        // ==========================================
+        // STEP 1
+        // CHECK LOGIN FORM ALREADY OPEN
+        // ==========================================
 
-        console.log(
-            `[AUTO LOGIN ${this.browserType}] Login form not open. Detecting screen layout...`
-        );
+        const loginFormAlreadyOpen =
+            await this.page.$(
+                'input[formcontrolname="userid"]'
+            );
 
-        // ======================================
-        // SMALL SCREEN
-        // HAMBURGER MENU
-        // ======================================
-        const menuButton =
-    await this.page.$(
-        'i.fa.fa-align-justify'
-    );
+        if (!loginFormAlreadyOpen) {
 
-if (menuButton) {
+            console.log(
+                `[AUTO LOGIN ${this.browserType}] Login form not open. Detecting screen layout...`
+            );
 
-    console.log(
-        `[AUTO LOGIN ${this.browserType}] Small screen detected. Opening menu...`
-    );
+            // ======================================
+            // WEB4 Chromium - IRCTC BETA LOGIN
+            // ======================================
+            if (isChromiumWEB4) {
 
-    try {
-
-        await this.page.evaluate(() => {
-
-            const icon =
-                document.querySelector(
-                    'i.fa.fa-align-justify'
+                console.log(
+                    '[AUTO LOGIN WEB4] IRCTC BETA LOGIN button dhoondh rahe hain...'
                 );
 
-            if (!icon) {
-                throw new Error(
-                    'Hamburger icon not found.'
-                );
+                try {
+
+                    await this.page.waitForSelector(
+                        'button.btn-login',
+                        {
+                            visible: true,
+                            timeout: 10000
+                        }
+                    );
+
+                    const betaLoginButton =
+                        await this.page.$('button.btn-login');
+
+                    if (!betaLoginButton) {
+                        throw new Error(
+                            'Beta LOGIN button nahi mila.'
+                        );
+                    }
+
+                    const buttonText =
+                        await betaLoginButton.evaluate(
+                            el => (el.innerText || el.textContent || '').trim()
+                        );
+
+                    if (buttonText.toUpperCase() !== 'LOGIN') {
+                        throw new Error(
+                            `Unexpected beta button: ${buttonText}`
+                        );
+                    }
+
+                    await betaLoginButton.click();
+
+                    console.log(
+                        '[AUTO LOGIN WEB4] BETA LOGIN button click ho gaya.'
+                    );
+
+                } catch (betaLoginError) {
+
+                    console.error(
+                        '[AUTO LOGIN WEB4] Beta LOGIN click failed:',
+                        betaLoginError.message
+                    );
+
+                    throw new Error(
+                        `[WEB4] IRCTC BETA LOGIN open nahi hua: ${betaLoginError.message}`
+                    );
+                }
+
+            } else {
+
+                // ======================================
+                // OTHER BROWSERS - SMALL SCREEN MENU
+                // ======================================
+                const menuButton =
+                    await this.page.$(
+                        'i.fa.fa-align-justify'
+                    );
+
+                if (menuButton) {
+
+                    console.log(
+                        `[AUTO LOGIN ${this.browserType}] Small screen detected. Opening menu...`
+                    );
+
+                    try {
+
+                        await this.page.evaluate(() => {
+
+                            const icon =
+                                document.querySelector(
+                                    'i.fa.fa-align-justify'
+                                );
+
+                            if (!icon) {
+                                throw new Error(
+                                    'Hamburger icon not found.'
+                                );
+                            }
+
+                            const clickable =
+                                icon.closest(
+                                    'button, a, div'
+                                ) || icon;
+
+                            clickable.dispatchEvent(
+                                new MouseEvent(
+                                    'click',
+                                    {
+                                        bubbles: true,
+                                        cancelable: true,
+                                        view: window
+                                    }
+                                )
+                            );
+                        });
+
+                        console.log(
+                            `[AUTO LOGIN ${this.browserType}] Menu click triggered.`
+                        );
+
+                    } catch (menuError) {
+
+                        console.error(
+                            `[AUTO LOGIN ${this.browserType}] Menu click failed:`,
+                            menuError.message
+                        );
+
+                        throw new Error(
+                            `[${this.browserType}] IRCTC menu open nahi ho saka.`
+                        );
+                    }
+
+                    await new Promise(resolve =>
+                        setTimeout(resolve, 500)
+                    );
+
+                } else {
+
+                    console.log(
+                        `[AUTO LOGIN ${this.browserType}] Hamburger menu not found.`
+                    );
+                }
+
+                // ======================================
+                // OTHER BROWSERS - LOGIN / REGISTER
+                // ======================================
+                const loginRegisterButton =
+                    await this.page.$(
+                        'button.search_btn'
+                    );
+
+                if (loginRegisterButton) {
+
+                    console.log(
+                        `[AUTO LOGIN ${this.browserType}] LOGIN / REGISTER button found.`
+                    );
+
+                    await loginRegisterButton.click();
+
+                    await new Promise(resolve =>
+                        setTimeout(resolve, 1000)
+                    );
+
+                } else {
+
+                    console.log(
+                        `[AUTO LOGIN ${this.browserType}] LOGIN / REGISTER button not found.`
+                    );
+                }
             }
 
-            const clickable =
-                icon.closest(
-                    'button, a, div'
-                ) || icon;
+            // ======================================
+            // AFTER CLICK - FIND LOGIN FORM
+            // ======================================
+            try {
 
-            clickable.dispatchEvent(
-                new MouseEvent(
-                    'click',
+                await this.page.waitForSelector(
+                    'input[formcontrolname="userid"]',
                     {
-                        bubbles: true,
-                        cancelable: true,
-                        view: window
+                        visible: true,
+                        timeout: 10000
                     }
-                )
-            );
-        });
+                );
 
-        console.log(
-            `[AUTO LOGIN ${this.browserType}] Menu click triggered.`
-        );
+                console.log(
+                    `[AUTO LOGIN ${this.browserType}] Login window opened successfully.`
+                );
 
-    } catch (menuError) {
+            } catch (error) {
 
-        console.error(
-            `[AUTO LOGIN ${this.browserType}] Menu click failed:`,
-            menuError.message
-        );
-
-        throw new Error(
-            `[${this.browserType}] IRCTC menu open nahi ho saka.`
-        );
-    }
-
-    await new Promise(resolve =>
-        setTimeout(resolve, 500)
-    );
-
-} else {
-
-    console.log(
-        `[AUTO LOGIN ${this.browserType}] Hamburger menu not found.`
-    );
-}
-
-        // ======================================
-        // LARGE SCREEN
-        // LOGIN / REGISTER BUTTON
-        // ======================================
-        const loginRegisterButton =
-            await this.page.$(
-                'button.search_btn'
-            );
-
-        if (loginRegisterButton) {
-
-            console.log(
-                `[AUTO LOGIN ${this.browserType}] LOGIN / REGISTER button found.`
-            );
-
-            await loginRegisterButton.click();
-
-            await new Promise(resolve =>
-                setTimeout(resolve, 1000)
-            );
-
-        } else {
-
-            console.log(
-                `[AUTO LOGIN ${this.browserType}] LOGIN / REGISTER button not found.`
-            );
+                throw new Error(
+                    `[${this.browserType}] Login window open nahi hua. Username field ka selector verify karein.`
+                );
+            }
         }
 
-        // ======================================
-        // AFTER MENU / BUTTON CLICK
-        // FIND LOGIN FORM
-        // ======================================
-        try {
-
-            await this.page.waitForSelector(
-                'input[formcontrolname="userid"]',
-                {
-                    visible: true,
-                    timeout: 10000
-                }
-            );
-
-            console.log(
-                `[AUTO LOGIN ${this.browserType}] Login window opened successfully.`
-            );
-
-        } catch (error) {
-
-            throw new Error(
-                `[${this.browserType}] Login window open nahi hua.`
-            );
-        }
-    }
-
-this.sendBookingStatus(
-    'IRCTC par login ho rahe hai...',
-    'IRCTC LOGIN',
-    10
-);
+        this.sendBookingStatus(
+            'IRCTC par login ho rahe hai...',
+            'IRCTC LOGIN',
+            10
+        );
+    
 
 // ==========================================
 // CLEAR OLD LOGIN CREDENTIALS
@@ -892,12 +997,15 @@ console.log(
     `[AUTO LOGIN ${this.browserType}] Username/password filled.`
 );
 
-// ==========================================
-// CLICK SIGN IN
-// ==========================================
 
-const signInSelector =
-    'button.search_btn.train_Search.train_Search_custom_hover';
+ // ==========================================
+ // CLICK SIGN IN
+ // ==========================================
+
+const signInSelector = isChromiumWEB4
+    ? 'button.button-primary.active[type="submit"]'
+    : 'button.search_btn.train_Search.train_Search_custom_hover';
+
 
 await this.page.waitForSelector(
     signInSelector,
@@ -912,83 +1020,72 @@ console.log(
 );
 
 try {
+    const button = await this.page.$(signInSelector);
 
-    await this.page.evaluate(
-        (selector) => {
+    if (!button) {
+        throw new Error('SIGN IN button not found.');
+    }
 
-            const button =
-                document.querySelector(selector);
+    await button.evaluate((el) => {
+        el.scrollIntoView({
+            block: 'center',
+            inline: 'center'
+        });
+    });
 
-            if (!button) {
-                throw new Error(
-                    'SIGN IN button not found.'
-                );
-            }
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-            button.scrollIntoView({
-                block: 'center',
-                inline: 'center'
-            });
-
-            button.dispatchEvent(
-                new MouseEvent(
-                    'click',
-                    {
-                        bubbles: true,
-                        cancelable: true,
-                        view: window
-                    }
-                )
-            );
-        },
-        signInSelector
+    const isDisabled = await button.evaluate(
+        el => el.disabled ||
+            el.getAttribute('aria-disabled') === 'true'
     );
+
+    if (isDisabled) {
+        throw new Error('SIGN IN button is disabled.');
+    }
+
+    await button.click();
 
     console.log(
-        `[AUTO LOGIN ${this.browserType}] SIGN IN clicked.`
+        `[AUTO LOGIN ${this.browserType}] SIGN IN click sent.`
     );
 
-// ==========================================
-// WAIT FOR IRCTC LOGIN TO COMPLETE
-// ==========================================
+    // ==========================================
+    // WAIT FOR IRCTC LOGIN TO COMPLETE
+    // ==========================================
 
-try {
-
-    await this.page.waitForFunction(
-        () => {
-            const loginInput =
-                document.querySelector(
+    try {
+        await this.page.waitForFunction(
+            () => {
+                const loginInput = document.querySelector(
                     'input[formcontrolname="userid"]'
                 );
 
-            return !loginInput;
-        },
-        {
-            timeout: 30000
-        }
-    );
+                return !loginInput;
+            },
+            {
+                timeout: 30000
+            }
+        );
 
-    console.log(
-        `[AUTO LOGIN ${this.browserType}] IRCTC login completed.`
-    );
+        console.log(
+            `[AUTO LOGIN ${this.browserType}] IRCTC login completed.`
+        );
 
-    this.sendBookingStatus(
-        'IRCTC login successful.',
-        'LOGIN SUCCESS',
-        15
-    );
+        this.sendBookingStatus(
+            'IRCTC login successful.',
+            'LOGIN SUCCESS',
+            15
+        );
 
-} catch (loginWaitError) {
-
-    console.warn(
-        `[AUTO LOGIN ${this.browserType}] Login completion wait timeout:`,
-        loginWaitError.message
-    );
-
-}
+    } catch (loginWaitError) {
+        console.warn(
+            `[AUTO LOGIN ${this.browserType}] Login completion wait timeout:`,
+            loginWaitError.message
+        );
+    }
 
 } catch (signInError) {
-
     console.error(
         `[AUTO LOGIN ${this.browserType}] SIGN IN click failed:`,
         signInError.message
@@ -1000,8 +1097,6 @@ try {
 }
 
 }
-
-
 
     // ==========================================
     // LOAD SESSION
@@ -1398,9 +1493,14 @@ this.sendBookingStatus(
 );
         
         const url = 'https://www.irctc.co.in/eticketing/protected/rcs/trainlitchk';
-        const headers = await this.getHeaders(
+   const isChromiumWEB4 =
+    String(this.browserType).toUpperCase() === 'WEB4';
+
+const headers = await this.getHeaders(
     cookies,
-    'https://www.irctc.co.in/nget/booking/train-list'
+    isChromiumWEB4
+        ? 'https://www.irctc.co.in/eticket/train-search'
+        : 'https://www.irctc.co.in/nget/booking/train-list'
 );
 
         let response = null;
@@ -1831,6 +1931,7 @@ result = await this.page.evaluate(script);
 
     const rawPayload = JSON.stringify({
     targetTrainNo: targetTrainNo,
+    browserType: this.browserType,
     passengers: passengers,
     realFare: backendRealFare,
     fromStation: bookingData.fromStation || '',
@@ -1958,21 +2059,36 @@ async function liveProgress(step, message, percentage) {
 }
 
         try {
-            var currentUrl = window.location.href;
-            diagnosticLogs.push("Current Browser URL: " + currentUrl);
+            
+var currentUrl = window.location.href;
+diagnosticLogs.push("Current Browser URL: " + currentUrl);
 
-            // --- YAHAN FIX KAREIN ---
-            // Agar browser IRCTC par nahi hai, toh pehle wahan jayein aur wait karein
-            if (window.location.href.indexOf('irctc.co.in') === -1) {
-                diagnosticLogs.push("Navigating to IRCTC train search page...");
-                window.location.href = "https://www.irctc.co.in/nget/train-search";
-                
-                // Page load hone ke liye 5-6 second ka proper wait karein
-                await new Promise(function(r) { setTimeout(r, 2000); });
-            } else {
-                // Agar pehle se IRCTC par hai, tab bhi thoda sthir hone ka wait dein
-                await new Promise(function(r) { setTimeout(r, 500); });
-            }
+// Chromium Beta (WEB4) par eticket page hi rakhein.
+// Baaki browsers ka existing nget flow nahi badlega.
+var isChromiumWEB4 =
+    String(payload.browserType || '').toUpperCase() === 'WEB4';
+
+var trainSearchUrl = isChromiumWEB4
+    ? 'https://www.irctc.co.in/eticket/train-search'
+    : 'https://www.irctc.co.in/nget/train-search';
+
+if (window.location.hostname !== 'www.irctc.co.in') {
+    diagnosticLogs.push(
+        "Navigating to IRCTC train search page: " + trainSearchUrl
+    );
+
+    window.location.href = trainSearchUrl;
+
+    await new Promise(function(r) {
+        setTimeout(r, 2000);
+    });
+
+} else {
+    await new Promise(function(r) {
+        setTimeout(r, 500);
+    });
+}
+
 
 await liveProgress(
     'TRAIN SEARCH',
@@ -1980,79 +2096,196 @@ await liveProgress(
     22
 );
 
-// 1. Fill Stations 
-diagnosticLogs.push("Filling From/To station details..."); 
-var stationInputs = Array.from(document.querySelectorAll('p-autocomplete input')); 
-if (stationInputs.length < 2) { 
-    stationInputs = Array.from(document.querySelectorAll('input')).filter(function(input) { 
-        var ph = (input.getAttribute('placeholder') || '').toUpperCase(); 
-        var ar = (input.getAttribute('aria-label') || '').toUpperCase(); 
-        return ph.indexOf('FROM') !== -1 || ph.indexOf('TO') !== -1 || ar.indexOf('FROM') !== -1 || ar.indexOf('TO') !== -1; 
-    }); 
-} 
 
-if (stationInputs[0] && payload.fromStation) { 
-    stationInputs[0].click(); 
-    stationInputs[0].focus(); 
-    stationInputs[0].value = '';
+            // 1. Fill Stations
+            diagnosticLogs.push("Filling From/To station details...");
 
-    for (var i = 0; i < payload.fromStation.length; i++) {
-        stationInputs[0].value += payload.fromStation.charAt(i);
+            var isChromiumWEB4Stations =
+                String(payload.browserType || '').toUpperCase() === 'WEB4';
 
-        stationInputs[0].dispatchEvent(
-            new Event('input', { bubbles: true })
-        );
+            if (isChromiumWEB4Stations) {
+                async function selectChromiumWEB4Station(label, stationCode) {
+                    var combo = document.querySelector(
+                        'app-jp-input [role="combobox"][aria-label="' + label + '"]'
+                    );
 
-        stationInputs[0].dispatchEvent(
-            new Event('keyup', { bubbles: true })
-        );
+                    if (!combo) {
+                        throw new Error('Chromium ' + label + ' field nahi mila.');
+                    }
 
-        await new Promise(function(r) { 
-            setTimeout(r, 80); 
-        });
-    }
+                    combo.click();
+                    await new Promise(function(r) { setTimeout(r, 250); });
 
-    await new Promise(function(r) { setTimeout(r, 300); }); 
-     
-    var panel = document.querySelector('ul.ui-autocomplete-items, ul.p-autocomplete-items, .ui-autocomplete-panel, .p-autocomplete-panel'); 
-    if (panel) { 
-        var firstItem = panel.querySelector('li'); 
-        if (firstItem) firstItem.click(); 
-    } 
-    await new Promise(function(r) { setTimeout(r, 300); }); 
-} 
+                    var searchInput = Array.from(
+                        document.querySelectorAll('input[placeholder="Type to search..."]')
+                    ).find(function(input) {
+                        return input.getClientRects().length > 0;
+                    });
 
-var targetToInput = stationInputs[1] || stationInputs[0]; 
-if (targetToInput && payload.toStation) { 
-    targetToInput.click(); 
-    targetToInput.focus(); 
-    targetToInput.value = '';
+                    if (!searchInput) {
+                        throw new Error('Chromium ' + label + ' search input nahi mila.');
+                    }
 
-    for (var j = 0; j < payload.toStation.length; j++) {
-        targetToInput.value += payload.toStation.charAt(j);
+                    searchInput.focus();
+                    searchInput.value = stationCode;
+                    searchInput.dispatchEvent(
+                        new Event('input', { bubbles: true })
+                    );
 
-        targetToInput.dispatchEvent(
-            new Event('input', { bubbles: true })
-        );
+                    await new Promise(function(r) { setTimeout(r, 500); });
 
-        targetToInput.dispatchEvent(
-            new Event('keyup', { bubbles: true })
-        );
+                    var options = Array.from(
+                        document.querySelectorAll('[role="option"]')
+                    ).filter(function(el) {
+                        return el.getClientRects().length > 0;
+                    });
 
-        await new Promise(function(r) { 
-            setTimeout(r, 80); 
-        });
-    }
+                    var wantedCode = stationCode.trim().toUpperCase();
 
-    await new Promise(function(r) { setTimeout(r, 300); }); 
+                    var match = options.find(function(el) {
+                        var text = (el.innerText || el.textContent || '')
+                            .trim().toUpperCase();
 
-    var panel2 = document.querySelector('ul.ui-autocomplete-items, ul.p-autocomplete-items, .ui-autocomplete-panel, .p-autocomplete-panel'); 
-    if (panel2) { 
-        var firstItem2 = panel2.querySelector('li'); 
-        if (firstItem2) firstItem2.click(); 
-    } 
-    await new Promise(function(r) { setTimeout(r, 300); }); 
-}
+                        return text === wantedCode ||
+                            new RegExp(
+                                '(^|[^A-Z])' + wantedCode + '([^A-Z]|$)'
+                            ).test(text);
+                    });
+
+                    if (!match) {
+                        diagnosticLogs.push(
+                            'Chromium ' + label + ' options: ' +
+                            options.map(function(el) {
+                                return (el.innerText || el.textContent || '').trim();
+                            }).join(' | ')
+                        );
+
+                        throw new Error(
+                            label + ' station code option nahi mila: ' + stationCode
+                        );
+                    }
+
+                    diagnosticLogs.push(
+                        label + ' option selecting: ' +
+                        (match.innerText || match.textContent || '').trim()
+                    );
+
+                    match.click();
+                    await new Promise(function(r) { setTimeout(r, 400); });
+                }
+
+                try {
+                    if (payload.fromStation) {
+                        await selectChromiumWEB4Station(
+                            'From station',
+                            payload.fromStation
+                        );
+                    }
+
+                    if (payload.toStation) {
+                        await selectChromiumWEB4Station(
+                            'To station',
+                            payload.toStation
+                        );
+                    }
+
+                    diagnosticLogs.push('Chromium From/To stations selected.');
+                } catch (e) {
+                    diagnosticLogs.push(
+                        'Chromium station selection FAILED: ' + e.message
+                    );
+
+                    return {
+                        success: false,
+                        error: e.message,
+                        logs: diagnosticLogs
+                    };
+                }
+
+            } else {
+                // Existing station logic for WEB, WEB2 and WEB3
+                // Keep this logic unchanged.
+
+                var stationInputs = Array.from(
+                    document.querySelectorAll('p-autocomplete input')
+                );
+
+                if (stationInputs.length < 2) {
+                    stationInputs = Array.from(
+                        document.querySelectorAll('input')
+                    ).filter(function(input) {
+                        var ph = (
+                            input.getAttribute('placeholder') || ''
+                        ).toUpperCase();
+
+                        var ar = (
+                            input.getAttribute('aria-label') || ''
+                        ).toUpperCase();
+
+                        return ph.indexOf('FROM') !== -1 ||
+                            ph.indexOf('TO') !== -1 ||
+                            ar.indexOf('FROM') !== -1 ||
+                            ar.indexOf('TO') !== -1;
+                    });
+                }
+
+                if (stationInputs[0] && payload.fromStation) {
+                    stationInputs[0].click();
+                    stationInputs[0].focus();
+                    stationInputs[0].value = payload.fromStation;
+
+                    stationInputs[0].dispatchEvent(
+                        new Event('input', { bubbles: true })
+                    );
+
+                    stationInputs[0].dispatchEvent(
+                        new Event('keyup', { bubbles: true })
+                    );
+
+                    await new Promise(function(r) { setTimeout(r, 400); });
+
+                    var panel = document.querySelector(
+                        'ul.ui-autocomplete-items, ul.p-autocomplete-items, .ui-autocomplete-panel, .p-autocomplete-panel'
+                    );
+
+                    if (panel) {
+                        var firstItem = panel.querySelector('li');
+                        if (firstItem) firstItem.click();
+                    }
+
+                    await new Promise(function(r) { setTimeout(r, 400); });
+                }
+
+                var targetToInput = stationInputs[1] || stationInputs[0];
+
+                if (targetToInput && payload.toStation) {
+                    targetToInput.click();
+                    targetToInput.focus();
+                    targetToInput.value = payload.toStation;
+
+                    targetToInput.dispatchEvent(
+                        new Event('input', { bubbles: true })
+                    );
+
+                    targetToInput.dispatchEvent(
+                        new Event('keyup', { bubbles: true })
+                    );
+
+                    await new Promise(function(r) { setTimeout(r, 400); });
+
+                    var panel2 = document.querySelector(
+                        'ul.ui-autocomplete-items, ul.p-autocomplete-items, .ui-autocomplete-panel, .p-autocomplete-panel'
+                    );
+
+                    if (panel2) {
+                        var firstItem2 = panel2.querySelector('li');
+                        if (firstItem2) firstItem2.click();
+                    }
+
+                    await new Promise(function(r) { setTimeout(r, 400); });
+                }
+            }
+
 
             await liveProgress(
     'JOURNEY DATE',
@@ -2099,7 +2332,31 @@ if (targetToInput && payload.toStation) {
                 if (targetYear && !isNaN(targetMonthIndex) && !isNaN(targetDay)) {
                     diagnosticLogs.push("Target: Day " + targetDay + ", Month index " + targetMonthIndex + ", Year " + targetYear);
 
-                    var calendarTrigger = document.querySelector('p-calendar button') || document.querySelector('p-calendar input') || document.querySelector('.ui-calendar button');
+                    var isChromiumWEB4 =
+    String(payload.browserType || '').trim().toUpperCase() === 'WEB4';
+
+var calendarTrigger;
+
+if (isChromiumWEB4) {
+    calendarTrigger = Array.from(
+        document.querySelectorAll('.field-inner')
+    ).find(function(field) {
+        var label = field.querySelector('.field-label');
+
+        return label &&
+            (label.innerText || label.textContent || '')
+                .trim().toLowerCase() === 'date';
+    });
+} else {
+    calendarTrigger =
+        document.querySelector('p-calendar button') ||
+        document.querySelector('p-calendar input') ||
+        document.querySelector('.ui-calendar button');
+}
+
+diagnosticLogs.push(
+    'Journey Date: calendar trigger found = ' + !!calendarTrigger
+);
                     if (calendarTrigger) {
                         calendarTrigger.click();
                         await new Promise(function(r) { setTimeout(r, 500); });
@@ -2171,52 +2428,113 @@ else if (wanted === "GN")
 
 diagnosticLogs.push("Selecting Quota: " + wanted);
 
+
 try {
-    var quotaDropdown =
-        document.querySelector('p-dropdown[formcontrolname="journeyQuota"]') ||
-        document.querySelector('p-dropdown[formcontrolname="quota"]') ||
-        document.querySelector('#journeyQuota');
+    var quotaDropdown = null;
+    var isChromiumWEB4 = String(payload.browserType || '')
+        .toUpperCase() === 'WEB4';
 
-    if (!quotaDropdown) throw new Error("Quota dropdown nahi mila.");
+    if (isChromiumWEB4) {
+        quotaDropdown = document.querySelector(
+            'app-jp-input [role="combobox"][aria-label="Quota"]'
+        );
 
-    (quotaDropdown.querySelector('.p-dropdown, .ui-dropdown') || quotaDropdown).click();
-    await new Promise(r => setTimeout(r, 300));
+        if (!quotaDropdown) {
+            throw new Error('Chromium ka Quota field nahi mila.');
+        }
 
-    var items = Array.from(document.querySelectorAll(
-        '.p-dropdown-panel li, .ui-dropdown-panel li, .p-dropdown-item, .ui-dropdown-item'
-    ));
+        quotaDropdown.click();
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 300);
+        });
 
-    var target = items.find(el =>
-        (el.innerText || el.textContent || "").trim().toUpperCase() === wanted
-    );
+        var target = Array.from(
+            document.querySelectorAll('[role="option"]')
+        ).find(function(el) {
+            return (el.innerText || el.textContent || '')
+                .trim().toUpperCase() === wanted;
+        });
 
-    if (!target) throw new Error("Option nahi mila: " + wanted);
+        if (!target) {
+            throw new Error('Quota option nahi mila: ' + wanted);
+        }
 
-    target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-    target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-    target.click();
+        target.click();
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 400);
+        });
 
-    await new Promise(r => setTimeout(r, 300));
+        var selected = (
+            quotaDropdown.innerText ||
+            quotaDropdown.textContent ||
+            ''
+        ).toUpperCase();
 
-    var selected =
-        (quotaDropdown.querySelector('.p-dropdown-label, .ui-dropdown-label')?.innerText || "")
-        .trim().toUpperCase();
+        diagnosticLogs.push(
+            'Chromium quota selected value: ' + selected.trim()
+        );
 
-    diagnosticLogs.push("Quota selected value: " + selected);
+        if (!selected.includes(wanted)) {
+            throw new Error('Quota select verify nahi hua.');
+        }
+    } else {
+        // WEB, WEB2 aur WEB3 ka existing logic yahan rehna chahiye.
+        quotaDropdown =
+            document.querySelector('p-dropdown[formcontrolname="journeyQuota"]') ||
+            document.querySelector('p-dropdown[formcontrolname="quota"]') ||
+            document.querySelector('#journeyQuota');
 
-    if (!selected.includes(wanted))
-        throw new Error("Quota select verify nahi hua.");
+        if (!quotaDropdown) {
+            throw new Error('Quota dropdown nahi mila.');
+        }
 
-    diagnosticLogs.push("Quota successfully selected: " + wanted);
+        (quotaDropdown.querySelector('.p-dropdown, .ui-dropdown') ||
+            quotaDropdown).click();
+
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 300);
+        });
+
+        var items = Array.from(document.querySelectorAll(
+            '.p-dropdown-panel li, .ui-dropdown-panel li, .p-dropdown-item, .ui-dropdown-item'
+        ));
+
+        var oldTarget = items.find(function(el) {
+            return (el.innerText || el.textContent || '')
+                .trim().toUpperCase() === wanted;
+        });
+
+        if (!oldTarget) {
+            throw new Error('Option nahi mila: ' + wanted);
+        }
+
+        oldTarget.click();
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 300);
+        });
+
+        var oldSelected = (
+            quotaDropdown.querySelector(
+                '.p-dropdown-label, .ui-dropdown-label'
+            )?.innerText || ''
+        ).trim().toUpperCase();
+
+        if (!oldSelected.includes(wanted)) {
+            throw new Error('Quota select verify nahi hua.');
+        }
+    }
+
+    diagnosticLogs.push('Quota successfully selected: ' + wanted);
 
 } catch (e) {
-    diagnosticLogs.push("Quota selection FAILED: " + e.message);
+    diagnosticLogs.push('Quota selection FAILED: ' + e.message);
     return {
         success: false,
-        error: "Quota select nahi hua: " + e.message,
+        error: 'Quota select nahi hua: ' + e.message,
         logs: diagnosticLogs
     };
 }
+
 
 await liveProgress(
     'SEARCH BUTTON',
@@ -2314,9 +2632,14 @@ await liveProgress(
     42
 );
 
+
 var bookNowClicked = false;
-var targetCard = null; 
+var targetCard = null;
 var classSelectionCompleted = false;
+
+// WEB4 (Chromium / IRCTC Beta) availability state
+var chromiumAvailabilityOpened = false;
+
 
 attempts = 0;
 
@@ -2424,29 +2747,51 @@ while (attempts < 60 && !bookNowClicked) {
         "FIND TRAIN: Exact target train found."
     );
 
-    await liveProgress(
-    'TATKAL WAIT',
-    'Tatkal opening time check ho raha hain...',
-    32
-);
-
+   
         // =========================================================
-// TATKAL OPENING-TIME WAIT
-// =========================================================
+        // TATKAL OPENING-TIME WAIT
+        // WEB4-ONLY STATUS FIX
+        // =========================================================
 
-var quotaForTiming = String(
-    payload.quota || ''
-).trim().toUpperCase();
+        var quotaForTiming = String(
+            payload.quota || ''
+        ).trim().toUpperCase();
 
-var classForTiming = String(
-    payload.trainClass || 'SL'
-).trim().toUpperCase();
+        var classForTiming = String(
+            payload.trainClass || 'SL'
+        ).trim().toUpperCase();
 
-var isTatkalQuota =
-    quotaForTiming === 'TQ' ||
-    quotaForTiming === 'PT' ||
-    quotaForTiming === 'TATKAL' ||
-    quotaForTiming === 'PREMIUM TATKAL';
+        var isTatkalQuota =
+            quotaForTiming === 'TQ' ||
+            quotaForTiming === 'PT' ||
+            quotaForTiming === 'TATKAL' ||
+            quotaForTiming === 'PREMIUM TATKAL';
+
+        var isWEB4Beta =
+            String(payload.browserType || '')
+                .trim()
+                .toUpperCase() === 'WEB4';
+
+        // WEB, WEB2 aur WEB3 ka purana behavior same rahega.
+        // WEB4 mein Tatkal status sirf Tatkal quota par.
+        if (!isWEB4Beta || isTatkalQuota) {
+
+            await liveProgress(
+                'TATKAL WAIT',
+                'Tatkal opening time check ho raha hain...',
+                32
+            );
+
+        } else {
+
+            // WEB4 + GENERAL quota
+            await liveProgress(
+                'TRAIN FOUND',
+                'General quota: train select kar rahe hain...',
+                32
+            );
+        }
+
 
 if (isTatkalQuota) {
 
@@ -2613,343 +2958,652 @@ if (secs !== window.__bossTatkalLastSecond) {
             await new Promise(function(r) { setTimeout(r, 500); });
         }
 
+        // =========================================================
+        // WEB4 IRCTC BETA: CLICK CHECK AVAILABILITY FIRST
+        // =========================================================
 
-        // =================================================
-        // SELECT REQUESTED TRAIN CLASS
-        // =================================================
+        var isChromiumWEB4 =
+            String(payload.browserType || '')
+                .trim()
+                .toUpperCase() === 'WEB4';
 
-        var targetClass = String(payload.trainClass || '').trim().toUpperCase();
-if (!targetClass) return { success:false, error:'trainClass missing from payload', logs:diagnosticLogs };
+        if (isChromiumWEB4) {
+            var availabilityButton = targetCard
+                ? Array.from(
+                    targetCard.querySelectorAll('button')
+                ).find(function(btn) {
+                    var text = (
+                        btn.innerText ||
+                        btn.textContent ||
+                        ''
+                    ).replace(/\s+/g, ' ').trim().toUpperCase();
 
-        diagnosticLogs.push(
-            "Looking for target class: " +
-            targetClass
-        );
+                    return text.includes('CHECK AVAILABILITY');
+                })
+                : null;
+
+            if (availabilityButton) {
+                diagnosticLogs.push(
+                    'WEB4 Beta: Check Availability button found.'
+                );
+
+                try {
+                    availabilityButton.scrollIntoView({
+                        behavior: 'auto',
+                        block: 'center'
+                    });
+                } catch (e) {}
+
+                availabilityButton.click();
+
+                diagnosticLogs.push(
+                    'WEB4 Beta: Check Availability click sent.'
+                );
+
+                // Wait for Beta class cards to render
+                var betaClassesLoaded = false;
+
+                for (var waitIndex = 0; waitIndex < 20; waitIndex++) {
+                    await new Promise(function(resolve) {
+                        setTimeout(resolve, 250);
+                    });
+
+                    // Check inside the exact train card first
+                    var currentClassCards = targetCard
+                        ? targetCard.querySelectorAll('.class-card')
+                        : [];
+
+                    if (currentClassCards.length > 0) {
+                        betaClassesLoaded = true;
+                        break;
+                    }
+                }
+
+                diagnosticLogs.push(
+                    'WEB4 Beta: Class cards after availability click = ' +
+                    (targetCard
+                        ? targetCard.querySelectorAll('.class-card').length
+                        : 0)
+                );
+
+                if (!betaClassesLoaded) {
+                    diagnosticLogs.push(
+                        'WEB4 Beta: Classes did not appear after Check Availability.'
+                    );
+                }
+            } else {
+                diagnosticLogs.push(
+                    'WEB4 Beta: Check Availability button not found inside targetCard.'
+                );
+            }
+        }
+
+
+        var targetClass = String(
+            payload.trainClass || ''
+        ).trim().toUpperCase();
+
+        if (!targetClass) {
+            return {
+                success: false,
+                error: 'trainClass missing from payload',
+                logs: diagnosticLogs
+            };
+        }
+
+        var isChromiumWEB4 =
+            String(payload.browserType || '')
+                .trim()
+                .toUpperCase() === 'WEB4';
 
         var classNames = {
-
-            "SL": "SLEEPER",
-
-            "3E": "AC 3 ECONOMY",
-
-            "3A": "AC 3 TIER",
-
-            "2A": "AC 2 TIER",
-
-            "1A": "AC FIRST CLASS"
+            'SL': 'SLEEPER',
+            '3E': 'AC 3 ECONOMY',
+            '3A': 'AC 3 TIER',
+            '2A': 'AC 2 TIER',
+            '1A': 'AC FIRST CLASS'
         };
 
         var wantedClassName =
-            classNames[targetClass] ||
-            targetClass;
+            classNames[targetClass] || targetClass;
 
         var matchedClassBox = null;
 
+        if (isChromiumWEB4) {
 
-        // -------------------------------------------------
-        // Find smallest actual class element
-        // -------------------------------------------------
-
-        var classCandidates = Array.from(
-            targetCard.querySelectorAll(
-                'button, a, label, span, div'
-            )
-        );
-
-        for (
-            var ci = 0;
-            ci < classCandidates.length;
-            ci++
-        ) {
-
-            var el = classCandidates[ci];
-
-            var text = (
-                el.innerText ||
-                el.textContent ||
-                ''
-            )
-            .replace(/\s+/g, ' ')
-            .trim()
-            .toUpperCase();
-
-
-            var exactClassText =
-                text.indexOf(
-                    wantedClassName
-                ) !== -1 &&
-                text.indexOf(
-                    '(' + targetClass + ')'
-                ) !== -1;
-
-            if (!exactClassText) {
-                continue;
-            }
-
-
-            // Parent/container nahi chahiye
-            var smallerChildren =
-                Array.from(
-                    el.querySelectorAll(
-                        'button, a, label, span, div'
-                    )
-                )
-                .filter(function(child) {
-
-                    var childText = (
-                        child.innerText ||
-                        child.textContent ||
-                        ''
-                    )
-                    .replace(/\s+/g, ' ')
-                    .trim()
-                    .toUpperCase();
-
-                    return (
-                        childText.indexOf(
-                            wantedClassName
-                        ) !== -1 &&
-                        childText.indexOf(
-                            '(' + targetClass + ')'
-                        ) !== -1
-                    );
-                });
-
-
-            if (
-                smallerChildren.length > 0
-            ) {
-                continue;
-            }
-
-
-            matchedClassBox = el;
-            break;
-        }
-
-
-        // -------------------------------------------------
-        // CLASS NOT FOUND
-        // -------------------------------------------------
-
-        if (!matchedClassBox) {
-
-            diagnosticLogs.push(
-                "Class not found yet. Retrying train card..."
+            // Beta page par har class ek .class-card hai.
+            var betaClassCards = Array.from(
+                targetCard.querySelectorAll('.class-card')
             );
 
-            await new Promise(function(r) {
-                setTimeout(r, 400);
+            matchedClassBox = betaClassCards.find(function(card) {
+                var code = card.querySelector('.class-code');
+
+                var text = (
+                    code
+                        ? (code.innerText || code.textContent || '')
+                        : ''
+                ).replace(/\s+/g, ' ').trim().toUpperCase();
+
+                return text === wantedClassName + ' (' + targetClass + ')';
             });
 
-            attempts++;
-            continue;
-        }
-
-
-        // -------------------------------------------------
-        // REAL CLASS ELEMENT FOUND
-        // -------------------------------------------------
-
-        diagnosticLogs.push(
-            "REAL class element found: " +
-            (
-                matchedClassBox.innerText ||
-                matchedClassBox.textContent ||
-                ''
-            )
-            .replace(/\s+/g, ' ')
-            .trim()
-        );
-
-        
-
-        try {
-
-            matchedClassBox.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center'
-            });
-
-        } catch (e) {}
-
-
-        await new Promise(function(r) {
-            setTimeout(r, 100);
-        });
-
-
-        // -------------------------------------------------
-        // CLICK CLASS ONLY ONCE
-        // -------------------------------------------------
-
-        diagnosticLogs.push(
-            "Clicking class only once: " +
-            targetClass
-        );
-
-        matchedClassBox.dispatchEvent(
-    new MouseEvent('mousedown', {
-        bubbles: true,
-        cancelable: true,
-        view: window
-    })
-);
-
-matchedClassBox.dispatchEvent(
-    new MouseEvent('mouseup', {
-        bubbles: true,
-        cancelable: true,
-        view: window
-    })
-);
-
-matchedClassBox.dispatchEvent(
-    new MouseEvent('click', {
-        bubbles: true,
-        cancelable: true,
-        view: window
-    })
-);
-
-        diagnosticLogs.push(
-            "Class click sent successfully: " +
-            targetClass
-        );
-
-
-        await new Promise(function(r) {
-            setTimeout(r, 300);
-        });
-
-
-                    // -------------------------------------------------
-        // VERIFY CLASS / AVAILABILITY
-        // -------------------------------------------------
-
-        var selected = false;
-        var parentSelected = false;
-
-        // Check clicked element + parents
-        var checkNode = matchedClassBox;
-
-        for (var level = 0; level < 5 && checkNode; level++) {
-
-            var nodeClass = String(
-                checkNode.className || ''
-            ).toLowerCase();
-
-            var ariaSelected =
-                checkNode.getAttribute &&
-                checkNode.getAttribute('aria-selected') === 'true';
-
-            var ariaChecked =
-                checkNode.getAttribute &&
-                checkNode.getAttribute('aria-checked') === 'true';
-
-            var nodeSelected =
-                nodeClass.indexOf('active') !== -1 ||
-                nodeClass.indexOf('selected') !== -1 ||
-                ariaSelected ||
-                ariaChecked;
-
-            if (nodeSelected) {
-
-                if (level === 0) {
-                    selected = true;
-                } else {
-                    parentSelected = true;
-                }
-
-                break;
-            }
-
-            checkNode = checkNode.parentElement;
-        }
-
-
-        // -------------------------------------------------
-        // ADDITIONAL CHECK:
-        // Look for selected/active class element containing
-        // the exact requested class inside target card.
-        // -------------------------------------------------
-
-        if (!selected && !parentSelected) {
-
-            var selectedElements =
-                Array.from(
-                    targetCard.querySelectorAll(
-                        '.active, .selected, [aria-selected="true"], [aria-checked="true"]'
-                    )
+            if (!matchedClassBox) {
+                diagnosticLogs.push(
+                    'WEB4 Beta: Requested class card not found: ' +
+                    targetClass
                 );
 
-            for (
-                var si = 0;
-                si < selectedElements.length;
-                si++
-            ) {
+                diagnosticLogs.push(
+                    'WEB4 Beta classes visible: ' +
+                    betaClassCards.map(function(card) {
+                        var code = card.querySelector('.class-code');
+                        return code
+                            ? (code.innerText || code.textContent || '').trim()
+                            : '(class name missing)';
+                    }).join(' | ')
+                );
 
-                var selectedText = (
-                    selectedElements[si].innerText ||
-                    selectedElements[si].textContent ||
-                    ''
-                )
-                .replace(/\s+/g, ' ')
-                .trim()
-                .toUpperCase();
-
-                if (
-                    selectedText.indexOf(
-                        '(' + targetClass + ')'
-                    ) !== -1
-                ) {
-
-                    parentSelected = true;
-
-                    diagnosticLogs.push(
-                        "Selected state found on class container: " +
-                        targetClass
-                    );
-
-                    break;
-                }
+                attempts++;
+                await new Promise(function(resolve) {
+                    setTimeout(resolve, 500);
+                });
+                continue;
             }
-        }
 
+            diagnosticLogs.push(
+                'WEB4 Beta: Exact class card found: ' + targetClass
+            );
 
-        // -------------------------------------------------
-        // AVAILABILITY CHECK
-        // -------------------------------------------------
+            // Beta class card mein dedicated selected-state HTML
+            // abhi supplied snippet mein nahi hai. BOOK button ki
+            // availability ko class card ke saath verify karte hain.
+            var betaBookButton = matchedClassBox.querySelector(
+                'button.btn-book'
+            );
 
-        var availabilityVisible = false;
+            if (!betaBookButton) {
+                diagnosticLogs.push(
+                    'WEB4 Beta: Class card mila, lekin BOOK button abhi nahi hai.'
+                );
 
-        for (
-            var vi = 0;
-            vi < 15;
-            vi++
-        ) {
+                attempts++;
+                await new Promise(function(resolve) {
+                    setTimeout(resolve, 500);
+                });
+                continue;
+            }
 
-            var visibleText = (
-                targetCard.innerText ||
-                targetCard.textContent ||
+            // WEB4: Scroll ko minimum rakho; page ko baar-baar move mat karo.
+try {
+    matchedClassBox.scrollIntoView({
+        behavior: 'instant',
+        block: 'nearest',
+        inline: 'nearest'
+    });
+} catch (e) {}
+
+await new Promise(function(resolve) {
+    setTimeout(resolve, 200);
+});
+
+// Card ka exact class code dobara verify karo.
+var verifyClassCode = matchedClassBox.querySelector('.class-code');
+
+var verifyClassText = (
+    verifyClassCode
+        ? (verifyClassCode.innerText || verifyClassCode.textContent || '')
+        : ''
+).replace(/\s+/g, ' ').trim().toUpperCase();
+
+if (verifyClassText !== wantedClassName + ' (' + targetClass + ')') {
+    diagnosticLogs.push(
+        'WEB4: Class changed before click. Expected ' +
+        wantedClassName + ' (' + targetClass + '), found ' +
+        verifyClassText
+    );
+
+    attempts++;
+    await new Promise(function(resolve) {
+        setTimeout(resolve, 500);
+    });
+    continue;
+}
+
+// Class card par click karo.
+matchedClassBox.click();
+
+await new Promise(function(resolve) {
+    setTimeout(resolve, 500);
+});
+
+diagnosticLogs.push(
+    'WEB4: Click sent to exact class card ' + targetClass
+);
+
+            // Card re-render ho sakta hai; fresh card locate karo.
+            var refreshedBetaCards = Array.from(
+                document.querySelectorAll('.class-card')
+            );
+
+            matchedClassBox = refreshedBetaCards.find(function(card) {
+                var code = card.querySelector('.class-code');
+
+                var text = (
+                    code
+                        ? (code.innerText || code.textContent || '')
+                        : ''
+                ).replace(/\s+/g, ' ').trim().toUpperCase();
+
+                return text === wantedClassName + ' (' + targetClass + ')';
+            }) || matchedClassBox;
+
+            betaBookButton = matchedClassBox
+                ? matchedClassBox.querySelector('button.btn-book')
+                : null;
+
+            if (!betaBookButton) {
+                diagnosticLogs.push(
+                    'WEB4 Beta: Class card refresh ke baad BOOK button nahi mila.'
+                );
+
+                attempts++;
+                await new Promise(function(resolve) {
+                    setTimeout(resolve, 500);
+                });
+                continue;
+            }
+
+            
+            // Exact class card ke andar BOOK button click karo.
+            var betaBookButton = matchedClassBox.querySelector(
+                'button.btn-book'
+            );
+
+            if (!betaBookButton) {
+                diagnosticLogs.push(
+                    'WEB4 Beta: BOOK button not found for ' + targetClass
+                );
+
+                attempts++;
+                await new Promise(function(resolve) {
+                    setTimeout(resolve, 500);
+                });
+                continue;
+            }
+
+            // Click se pehle exact class aur button verify karo.
+            var finalCodeEl = matchedClassBox.querySelector('.class-code');
+
+            var finalCodeText = (
+                finalCodeEl
+                    ? (finalCodeEl.innerText || finalCodeEl.textContent || '')
+                    : ''
+            ).replace(/\s+/g, ' ').trim().toUpperCase();
+
+            var bookText = (
+                betaBookButton.innerText ||
+                betaBookButton.textContent ||
                 ''
-            ).toUpperCase();
+            ).trim().toUpperCase();
 
             if (
-                visibleText.indexOf('AVL') !== -1 ||
-                visibleText.indexOf('WL') !== -1 ||
-                visibleText.indexOf('AVAILABLE') !== -1
+                finalCodeText !== wantedClassName + ' (' + targetClass + ')' ||
+                !bookText.includes('BOOK') ||
+                betaBookButton.disabled
             ) {
+                diagnosticLogs.push(
+                    'WEB4 Beta: BOOK click blocked. Class=' +
+                    finalCodeText + ', Button=' + bookText
+                );
 
-                availabilityVisible = true;
+                attempts++;
+                await new Promise(function(resolve) {
+                    setTimeout(resolve, 500);
+                });
+                continue;
+            }
+
+            // Unnecessary scrolling se bacho.
+            try {
+                matchedClassBox.scrollIntoView({
+                    behavior: 'auto',
+                    block: 'nearest'
+                });
+            } catch (e) {}
+
+            await new Promise(function(resolve) {
+                setTimeout(resolve, 200);
+            });
+
+            // DOM re-render hua ho to fresh exact class aur button lo.
+            var freshClassCards = Array.from(
+                targetCard.querySelectorAll('.class-card')
+            );
+
+            var freshMatchedCard = freshClassCards.find(function(card) {
+                var code = card.querySelector('.class-code');
+
+                var text = (
+                    code
+                        ? (code.innerText || code.textContent || '')
+                        : ''
+                ).replace(/\s+/g, ' ').trim().toUpperCase();
+
+                return text === wantedClassName + ' (' + targetClass + ')';
+            });
+
+            var freshBookButton = freshMatchedCard
+                ? freshMatchedCard.querySelector('button.btn-book')
+                : null;
+
+            if (!freshMatchedCard || !freshBookButton || freshBookButton.disabled) {
+                diagnosticLogs.push(
+                    'WEB4 Beta: Fresh class card/BOOK button unavailable.'
+                );
+
+                attempts++;
+                await new Promise(function(resolve) {
+                    setTimeout(resolve, 500);
+                });
+                continue;
+            }
+
+            diagnosticLogs.push(
+                'WEB4 Beta: Clicking BOOK inside exact class ' + targetClass
+            );
+
+            freshBookButton.click();
+
+            await new Promise(function(resolve) {
+                setTimeout(resolve, 700);
+            });
+
+            diagnosticLogs.push(
+                'WEB4 Beta: BOOK click dispatched for ' + targetClass
+            );
+
+            // WEB4: Book click ke baad passenger form ka wait karo.
+var web4PassengerFormReady = false;
+
+for (var web4Wait = 0; web4Wait < 40; web4Wait++) {
+    await new Promise(function(resolve) {
+        setTimeout(resolve, 250);
+    });
+
+    var web4NewPassengerButton = document.querySelector(
+        'button.btn.btn-new-passenger'
+    );
+
+    var web4PassengerName = document.querySelector(
+        'input[formcontrolname="passengerName"], ' +
+        'input[placeholder*="Full Name"], ' +
+        'input[placeholder*="Govt"]'
+    );
+
+    if (web4NewPassengerButton || web4PassengerName) {
+        web4PassengerFormReady = true;
+        break;
+    }
+}
+
+if (web4PassengerFormReady) {
+    bookNowClicked = true;
+
+    diagnosticLogs.push(
+        'WEB4: Passenger form confirmed after class BOOK click.'
+    );
+} else {
+    diagnosticLogs.push(
+        'WEB4: Passenger form abhi confirm nahi hua.'
+    );
+}
+
+            classSelectionCompleted = true;
+
+} else {
+
+
+    // WEB / WEB2 / WEB3: ORIGINAL CLASS-SELECTION LOGIC
+
+var classCandidates = Array.from(
+    targetCard.querySelectorAll(
+        'button, a, label, span, div'
+    )
+);
+
+for (
+    var ci = 0;
+    ci < classCandidates.length;
+    ci++
+) {
+    var el = classCandidates[ci];
+
+    var text = (
+        el.innerText ||
+        el.textContent ||
+        ''
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+
+    var exactClassText =
+        text.indexOf(wantedClassName) !== -1 &&
+        text.indexOf('(' + targetClass + ')') !== -1;
+
+    if (!exactClassText) {
+        continue;
+    }
+
+    var smallerChildren = Array.from(
+        el.querySelectorAll(
+            'button, a, label, span, div'
+        )
+    ).filter(function(child) {
+        var childText = (
+            child.innerText ||
+            child.textContent ||
+            ''
+        )
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toUpperCase();
+
+        return (
+            childText.indexOf(wantedClassName) !== -1 &&
+            childText.indexOf('(' + targetClass + ')') !== -1
+        );
+    });
+
+    if (smallerChildren.length > 0) {
+        continue;
+    }
+
+    matchedClassBox =
+        el.closest(
+            'button, a, label, [role="button"], [role="radio"]'
+        ) || el;
+
+    break;
+}
+
+if (!matchedClassBox) {
+    diagnosticLogs.push(
+        'Class not found yet. Retrying train card...'
+    );
+
+    await new Promise(function(r) {
+        setTimeout(r, 700);
+    });
+
+    attempts++;
+    continue;
+}
+
+try {
+    matchedClassBox.scrollIntoView({
+        behavior: 'auto',
+        block: 'center'
+    });
+} catch (e) {}
+
+await new Promise(function(r) {
+    setTimeout(r, 150);
+});
+
+diagnosticLogs.push(
+    'CLICKING REQUESTED CLASS: ' + targetClass
+);
+
+try {
+    matchedClassBox.click();
+
+    diagnosticLogs.push(
+        'CLASS CLICK SENT: ' + targetClass
+    );
+} catch (classClickError) {
+    diagnosticLogs.push(
+        'CLASS CLICK FAILED: ' +
+        (classClickError.message || classClickError)
+    );
+
+    classSelectionCompleted = false;
+    attempts++;
+    continue;
+}
+
+await new Promise(function(r) {
+    setTimeout(r, 500);
+});
+
+// VERIFY CLASS / AVAILABILITY
+
+var selected = false;
+var parentSelected = false;
+var checkNode = matchedClassBox;
+
+for (var level = 0; level < 5 && checkNode; level++) {
+    var nodeClass = String(
+        checkNode.className || ''
+    ).toLowerCase();
+
+    var ariaSelected =
+        checkNode.getAttribute &&
+        checkNode.getAttribute('aria-selected') === 'true';
+
+    var ariaChecked =
+        checkNode.getAttribute &&
+        checkNode.getAttribute('aria-checked') === 'true';
+
+    var nodeSelected =
+        nodeClass.indexOf('active') !== -1 ||
+        nodeClass.indexOf('selected') !== -1 ||
+        ariaSelected ||
+        ariaChecked;
+
+    if (nodeSelected) {
+        if (level === 0) {
+            selected = true;
+        } else {
+            parentSelected = true;
+        }
+
+        break;
+    }
+
+    checkNode = checkNode.parentElement;
+}
+
+if (!selected && !parentSelected) {
+    var selectedElements = Array.from(
+        targetCard.querySelectorAll(
+            '.active, .selected, [aria-selected="true"], [aria-checked="true"]'
+        )
+    );
+
+    for (var si = 0; si < selectedElements.length; si++) {
+        var selectedText = (
+            selectedElements[si].innerText ||
+            selectedElements[si].textContent ||
+            ''
+        )
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toUpperCase();
+
+        if (selectedText.indexOf('(' + targetClass + ')') !== -1) {
+            parentSelected = true;
+
+            diagnosticLogs.push(
+                'Selected state found on class container: ' +
+                targetClass
+            );
+
+            break;
+        }
+    }
+}
+
+}
+
+// FINAL CLASS STATE RECHECK
+
+if (!selected && !parentSelected) {
+    diagnosticLogs.push(
+        'Class state not detected yet. Rechecking target class...'
+    );
+
+    for (var classRetry = 1; classRetry <= 3; classRetry++) {
+        await new Promise(function(r) {
+            setTimeout(r, 500);
+        });
+
+        var retryNode = matchedClassBox;
+
+        for (
+            var retryLevel = 0;
+            retryLevel < 5 && retryNode;
+            retryLevel++
+        ) {
+            var retryClass = String(
+                retryNode.className || ''
+            ).toLowerCase();
+
+            var retryAriaSelected =
+                retryNode.getAttribute &&
+                retryNode.getAttribute('aria-selected') === 'true';
+
+            var retryAriaChecked =
+                retryNode.getAttribute &&
+                retryNode.getAttribute('aria-checked') === 'true';
+
+            if (
+                retryClass.indexOf('active') !== -1 ||
+                retryClass.indexOf('selected') !== -1 ||
+                retryAriaSelected ||
+                retryAriaChecked
+            ) {
+                selected = true;
+
+                diagnosticLogs.push(
+                    'FINAL RECHECK: ' +
+                    targetClass +
+                    ' selection confirmed on retry #' +
+                    classRetry
+                );
+
                 break;
             }
 
-            await new Promise(function(r) {
-                setTimeout(r, 100);
-            });
+            retryNode = retryNode.parentElement;
         }
 
+        if (selected || parentSelected) {
+            break;
+        }
+    }
+}
 
         // =================================================
         // HARD CLASS SELECTION GATE
@@ -3017,6 +3671,28 @@ matchedClassBox.dispatchEvent(
 var journeyDateSelected = false;
 
 try {
+
+    // WEB4: Class ke BOOK button par click ho chuka hai.
+// Is page par alag journey-date card search mat karo.
+var isChromiumWEB4DateFlow =
+    String(payload.browserType || '')
+        .trim()
+        .toUpperCase() === 'WEB4';
+
+if (isChromiumWEB4DateFlow && classSelectionCompleted) {
+    journeyDateSelected = true;
+
+    diagnosticLogs.push(
+        'WEB4: Class BOOK button click ho chuka hai; ' +
+        'journey-date card search skip ki ja rahi hai.'
+    );
+
+    await liveProgress(
+        'CLASS BOOK CLICKED',
+        'Selected class ka Book button click ho gaya.',
+        38
+    );
+} else {
 
 await liveProgress(
     'JOURNEY DATE',
@@ -3292,6 +3968,7 @@ await liveProgress(
             );
         }
     }
+}
 
 } catch (dateError) {
 
@@ -3350,6 +4027,19 @@ if (!classSelectionCompleted) {
 diagnosticLogs.push(
     "Class selection confirmed. Book Now is now allowed."
 );
+
+// WEB4 ka class BOOK click hi booking ko aage le jata hai.
+// Passenger form confirm ho chuka hai, isliye purana retry loop skip karo.
+if (
+    String(payload.browserType || '').trim().toUpperCase() === 'WEB4' &&
+    bookNowClicked
+) {
+    diagnosticLogs.push(
+        'WEB4: Passenger form ready; skipping old Book Now retry loop.'
+    );
+
+    break;
+}
 
         diagnosticLogs.push(
             "Searching for Book Now button..."
@@ -3574,35 +4264,83 @@ var retryDateEl = Array.from(
     await new Promise(function(r) { setTimeout(r, 200); });
 }
 
+            
             // -------------------------------------------------
-            // Find Book Now
+            // Find Book Now (WEB4 Beta + Other Browsers)
             // -------------------------------------------------
 
-            var bookBtn =
-                targetCard
-                    ? Array.from(
-                        targetCard.querySelectorAll(
-                            'button, a'
-                        )
-                    )
-                    .find(function(b) {
+            var bookBtn = null;
 
-                        var t = (
-                            b.innerText ||
-                            b.textContent ||
-                            ''
-                        )
-                        .trim()
-                        .toUpperCase();
+            var isChromiumWEB4 =
+                String(payload.browserType || '')
+                    .trim()
+                    .toUpperCase() === 'WEB4';
 
-                        return (
-                            t.indexOf(
-                                'BOOK NOW'
-                            ) !== -1
-                        );
-                    })
-                    : null;
+            if (isChromiumWEB4 && targetCard) {
 
+                var betaWantedClass = String(
+                    payload.trainClass || ''
+                ).trim().toUpperCase();
+
+                var betaClassNames = {
+                    'SL': 'SLEEPER',
+                    '3E': 'AC 3 ECONOMY',
+                    '3A': 'AC 3 TIER',
+                    '2A': 'AC 2 TIER',
+                    '1A': 'AC FIRST CLASS'
+                };
+
+                var betaWantedName =
+                    betaClassNames[betaWantedClass] ||
+                    betaWantedClass;
+
+                var betaClassCard = Array.from(
+                    targetCard.querySelectorAll('.class-card')
+                ).find(function(card) {
+
+                    var code = card.querySelector('.class-code');
+
+                    var text = (
+                        code
+                            ? (code.innerText || code.textContent || '')
+                            : ''
+                    ).replace(/\s+/g, ' ').trim().toUpperCase();
+
+                    return text ===
+                        betaWantedName + ' (' + betaWantedClass + ')';
+                });
+
+                if (betaClassCard) {
+                    bookBtn = betaClassCard.querySelector('button.btn-book');
+
+                    diagnosticLogs.push(
+                        bookBtn
+                            ? 'WEB4 Beta: Target class ka BOOK button mila.'
+                            : 'WEB4 Beta: Target class card mila, BOOK button nahi mila.'
+                    );
+                } else {
+                    diagnosticLogs.push(
+                        'WEB4 Beta: Target class card nahi mila: ' +
+                        betaWantedClass
+                    );
+                }
+
+            } else if (targetCard) {
+
+                // Existing Chrome / Edge / Brave logic unchanged
+                bookBtn = Array.from(
+                    targetCard.querySelectorAll('button, a')
+                ).find(function(b) {
+
+                    var t = (
+                        b.innerText ||
+                        b.textContent ||
+                        ''
+                    ).trim().toUpperCase();
+
+                    return t.indexOf('BOOK NOW') !== -1;
+                });
+            }
 
             // -------------------------------------------------
             // Check disabled
@@ -3838,29 +4576,95 @@ diagnosticLogs.push(
     "Waiting for passenger input form to load..."
 );
 
+
+var isChromiumWEB4 =
+    String(payload.browserType || '').toUpperCase() === 'WEB4';
+
 var navSuccess = false;
 var nameInputs = [];
 
-for (var i = 0; i < 60; i++) {
+if (isChromiumWEB4) {
+    // WEB4: pehle passenger page ka wait karo
+    diagnosticLogs.push("WEB4: Waiting for passenger page...");
 
-    await new Promise(function(r) {
-        setTimeout(r, 500);
-    });
+    for (var w = 0; w < 60; w++) {
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 500);
+        });
 
-    var currentUrl = window.location.href;
+        if (window.location.href.indexOf('psgninput') !== -1) {
+            navSuccess = true;
+            break;
+        }
+    }
 
-    nameInputs = Array.from(
-        document.querySelectorAll(
-            'input[formcontrolname="passengerName"], input[placeholder*="Full Name"], input[placeholder*="Govt"]'
-        )
+    if (!navSuccess) {
+        return {
+            success: false,
+            error: 'WEB4: Passenger page nahi mila.',
+            logs: diagnosticLogs
+        };
+    }
+
+    diagnosticLogs.push("WEB4: Passenger page opened.");
+
+    // Exact New Passenger button click karo
+    var newPassengerBtn = document.querySelector(
+        'button.btn.btn-new-passenger'
     );
 
-    if (
-        currentUrl.indexOf('psgninput') !== -1 &&
-        nameInputs.length > 0
-    ) {
-        navSuccess = true;
-        break;
+    if (newPassengerBtn) {
+        newPassengerBtn.click();
+        diagnosticLogs.push("WEB4: New Passenger button clicked.");
+    } else {
+        return {
+            success: false,
+            error: 'WEB4: New Passenger button nahi mila.',
+            logs: diagnosticLogs
+        };
+    }
+
+    // Form ke inputs ka wait karo
+    for (var f = 0; f < 40; f++) {
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 250);
+        });
+
+        nameInputs = Array.from(
+            document.querySelectorAll(
+                'input[formcontrolname="passengerName"], input[placeholder*="Full Name"], input[placeholder*="Govt"]'
+            )
+        );
+
+        if (nameInputs.length > 0) {
+            break;
+        }
+    }
+
+    navSuccess = nameInputs.length > 0;
+
+} else {
+    // WEB / WEB2 / WEB3: existing logic
+    for (var i = 0; i < 60; i++) {
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 500);
+        });
+
+        var currentUrl = window.location.href;
+
+        nameInputs = Array.from(
+            document.querySelectorAll(
+                'input[formcontrolname="passengerName"], input[placeholder*="Full Name"], input[placeholder*="Govt"]'
+            )
+        );
+
+        if (
+            currentUrl.indexOf('psgninput') !== -1 &&
+            nameInputs.length > 0
+        ) {
+            navSuccess = true;
+            break;
+        }
     }
 }
 
@@ -3872,9 +4676,7 @@ if (!navSuccess || nameInputs.length === 0) {
     };
 }
 
-diagnosticLogs.push(
-    "Passenger page + form ready."
-);
+diagnosticLogs.push("Passenger page + form ready.");
 
 await liveProgress(
     'PASSENGER DETAILS',
@@ -3896,28 +4698,90 @@ diagnosticLogs.push(
      var p = passengers[i];
 
      // 1. Agar pehla passenger nahi hai, toh "Add Passenger" button par click karein taaki naya row aaye
-     if (i > 0) {
-         var addBtn = document.querySelector('span.add-passenger, a.add-passenger, span.fa-plus-circle, button[label*="Add Passenger"]');
-         // Fallback text search for Add Passenger button
-         if (!addBtn) {
-             var clickableElements = document.querySelectorAll('span, a, button');
-             for (var ce = 0; ce < clickableElements.length; ce++) {
-                 var txt = (clickableElements[ce].innerText || '').trim().toLowerCase();
-                 if (txt === 'add passenger' || txt.indexOf('add passenger') !== -1) {
-                     addBtn = clickableElements[ce];
-                     break;
-                 }
-             }
-         }
+// WEB4: Har agle passenger ke liye New Passenger click karo
+if (i > 0) {
 
-         if (addBtn) {
-             addBtn.click();
-             diagnosticLogs.push("Clicked 'Add Passenger' for row " + (i + 1));
-             await new Promise(function(r) { setTimeout(r, 300); }); // Naye row ke load hone ka wait
-         } else {
-             diagnosticLogs.push("Warning: 'Add Passenger' button nahi mila, checking existing inputs...");
-         }
-     }
+    if (
+        String(payload.browserType || '').trim().toUpperCase() === 'WEB4'
+    ) {
+        var web4NewPassengerBtn = Array.from(
+            document.querySelectorAll('button, a, span')
+        ).find(function (el) {
+            var txt = (
+                el.innerText ||
+                el.textContent ||
+                ''
+            ).replace(/\s+/g, ' ').trim().toLowerCase();
+
+            return (
+                txt === 'new passenger' &&
+                el.getClientRects().length > 0
+            );
+        });
+
+        if (web4NewPassengerBtn) {
+            web4NewPassengerBtn.click();
+
+            diagnosticLogs.push(
+                'WEB4: New Passenger clicked for passenger ' +
+                (i + 1)
+            );
+
+            await new Promise(function (resolve) {
+                setTimeout(resolve, 400);
+            });
+        } else {
+            diagnosticLogs.push(
+                'WEB4 ERROR: New Passenger button nahi mila, passenger ' +
+                (i + 1)
+            );
+
+            break;
+        }
+
+    } else {
+        // Baaki browsers ka existing code
+        var addBtn = document.querySelector(
+            'span.add-passenger, a.add-passenger, ' +
+            'span.fa-plus-circle, button[label*="Add Passenger"]'
+        );
+
+        if (!addBtn) {
+            var clickableElements =
+                document.querySelectorAll('span, a, button');
+
+            for (var ce = 0; ce < clickableElements.length; ce++) {
+                var txt = (
+                    clickableElements[ce].innerText || ''
+                ).trim().toLowerCase();
+
+                if (
+                    txt === 'add passenger' ||
+                    txt.indexOf('add passenger') !== -1
+                ) {
+                    addBtn = clickableElements[ce];
+                    break;
+                }
+            }
+        }
+
+        if (addBtn) {
+            addBtn.click();
+
+            diagnosticLogs.push(
+                "Clicked 'Add Passenger' for row " + (i + 1)
+            );
+
+            await new Promise(function (resolve) {
+                setTimeout(resolve, 300);
+            });
+        } else {
+            diagnosticLogs.push(
+                "Warning: 'Add Passenger' button nahi mila."
+            );
+        }
+    }
+}
 
      // Har iteration par fresh inputs query karein taaki naye rows detect ho sakein
      var nameInputs = Array.from(document.querySelectorAll('input[formcontrolname="passengerName"], input[placeholder*="Full Name"], input[placeholder*="Govt"]'));
@@ -3925,7 +4789,11 @@ diagnosticLogs.push(
      var genderControls = document.querySelectorAll('select[formcontrolname="passengerGender"]');
 
      // 2. Passenger Name (Human-like Typing Simulation)
-     var nameInput = nameInputs[i];
+     var nameInput = nameInputs[
+    String(payload.browserType || '').trim().toUpperCase() === 'WEB4'
+        ? 0
+        : i
+];
      if (nameInput) {
          nameInput.focus();
          var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
@@ -3952,7 +4820,11 @@ diagnosticLogs.push(
      }
 
      // 3. Passenger Age
-     var ageInput = ageInputs[i];
+     var ageInput = ageInputs[
+    String(payload.browserType || '').trim().toUpperCase() === 'WEB4'
+        ? 0
+        : i
+];
      if (ageInput) {
          ageInput.focus();
          var nativeAgeValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
@@ -3998,9 +4870,35 @@ try {
     // FIND NATIVE SELECT
     // ---------------------------------------------------------
 
-    var genderSelect = null;
+  var genderSelect = null;
 
-    // First: exact passengerGender control
+var isChromiumWEB4Gender =
+    String(payload.browserType || '')
+        .trim()
+        .toUpperCase() === 'WEB4';
+
+if (isChromiumWEB4Gender) {
+
+    var web4GenderDropdowns = document.querySelectorAll(
+        'p-dropdown[formcontrolname="passengerGender"]'
+    );
+
+    var web4GenderDropdown = web4GenderDropdowns[0];
+
+    if (web4GenderDropdown) {
+        diagnosticLogs.push(
+            'WEB4: Custom gender dropdown found for passenger ' +
+            (i + 1)
+        );
+    } else {
+        diagnosticLogs.push(
+            'WEB4 ERROR: Custom gender dropdown nahi mila.'
+        );
+    }
+
+} else {
+
+    // Baaki browsers ka existing native SELECT code
     var genderControls = document.querySelectorAll(
         'select[formcontrolname="passengerGender"]'
     );
@@ -4012,6 +4910,7 @@ try {
             "Gender SELECT found using passengerGender"
         );
     }
+}
 
     // Second: any SELECT with passengerGender attribute
     if (!genderSelect) {
@@ -4076,7 +4975,159 @@ try {
     // SELECT NOT FOUND
     // ---------------------------------------------------------
 
-    if (!genderSelect) {
+    // WEB4 ONLY: PrimeNG custom Gender dropdown
+if (
+    String(payload.browserType || '').trim().toUpperCase() === 'WEB4'
+) {
+    var web4GenderDropdowns = document.querySelectorAll(
+        'p-dropdown[formcontrolname="passengerGender"]'
+    );
+
+    var web4GenderDropdown = web4GenderDropdowns[0];
+
+    var web4GenderLabel = wantedGender === 'F'
+        ? 'Female'
+        : wantedGender === 'T'
+            ? 'Transgender'
+            : 'Male';
+
+    if (!web4GenderDropdown) {
+        diagnosticLogs.push(
+            'WEB4 ERROR: Gender dropdown nahi mila passenger ' +
+            (i + 1)
+        );
+    } else {
+        web4GenderDropdown.scrollIntoView({
+            behavior: 'auto',
+            block: 'center'
+        });
+
+        await new Promise(function (resolve) {
+            setTimeout(resolve, 200);
+        });
+
+        var web4CurrentLabel = web4GenderDropdown.querySelector(
+            '.ui-dropdown-label'
+        );
+
+        var web4CurrentText = web4CurrentLabel
+            ? (web4CurrentLabel.innerText || '').trim()
+            : '';
+
+        if (web4CurrentText.toUpperCase() !== web4GenderLabel.toUpperCase()) {
+            var web4DropdownTrigger = web4GenderDropdown.querySelector(
+                '.ui-dropdown-trigger'
+            );
+
+            if (web4DropdownTrigger) {
+                web4DropdownTrigger.click();
+            }
+
+            await new Promise(function (resolve) {
+                setTimeout(resolve, 300);
+            });
+
+            var web4GenderOptions = Array.from(
+                web4GenderDropdown.querySelectorAll(
+                    'li[role="option"]'
+                )
+            );
+
+            var web4WantedOption = web4GenderOptions.find(
+                function (option) {
+                    var optionText = (
+                        option.getAttribute('aria-label') ||
+                        option.innerText ||
+                        option.textContent ||
+                        ''
+                    ).trim().toUpperCase();
+
+                    return optionText === web4GenderLabel.toUpperCase();
+                }
+            );
+
+            if (web4WantedOption) {
+                web4WantedOption.click();
+
+                await new Promise(function (resolve) {
+                    setTimeout(resolve, 350);
+                });
+
+                var web4VerifyLabel = web4GenderDropdown.querySelector(
+                    '.ui-dropdown-label'
+                );
+
+                var web4VerifyText = web4VerifyLabel
+                    ? (web4VerifyLabel.innerText || '').trim()
+                    : '';
+
+                diagnosticLogs.push(
+                    'WEB4 Gender result passenger ' + (i + 1) +
+                    ': requested=' + web4GenderLabel +
+                    ' | selected=' + web4VerifyText
+                );
+
+               if (
+    web4VerifyText.toUpperCase() ===
+    web4GenderLabel.toUpperCase()
+) {
+    diagnosticLogs.push(
+        'WEB4: Gender verified. Add button click kar rahe hain.'
+    );
+
+    await new Promise(function (resolve) {
+        setTimeout(resolve, 250);
+    });
+
+    var web4AddButton = Array.from(
+        document.querySelectorAll('button.ap-add-btn')
+    ).find(function (button) {
+        return (
+            (button.innerText || button.textContent || '')
+                .trim()
+                .toUpperCase() === 'ADD' &&
+            !button.disabled &&
+            button.getClientRects().length > 0
+        );
+    });
+
+    if (web4AddButton) {
+        web4AddButton.scrollIntoView({
+            behavior: 'auto',
+            block: 'center'
+        });
+
+        web4AddButton.click();
+
+        diagnosticLogs.push(
+            'WEB4: Add button clicked after gender selection.'
+        );
+    } else {
+        diagnosticLogs.push(
+            'WEB4 ERROR: Visible enabled Add button nahi mila.'
+        );
+    }
+
+} else {
+    diagnosticLogs.push(
+        'WEB4 ERROR: Gender verify nahi hua; Add button click nahi kiya.'
+    );
+}
+            } else {
+                diagnosticLogs.push(
+                    'WEB4 ERROR: Option nahi mila: ' +
+                    web4GenderLabel
+                );
+            }
+        } else {
+            diagnosticLogs.push(
+                'WEB4: Gender pehle se selected hai: ' +
+                web4CurrentText
+            );
+        }
+    }
+
+} else if (!genderSelect) {
 
         diagnosticLogs.push(
             "ERROR: Native gender SELECT nahi mila passenger " +
@@ -4621,74 +5672,132 @@ await new Promise(function(r) { setTimeout(r, 2000); });
 
         
 // =================================================
-// FIRST CONTINUE
+// FIRST CONTINUE / WEB4 CALCULATE FARE
 // =================================================
 
-var continueBtn1 = Array.from(
-    document.querySelectorAll('button')
-).find(function(b) {
-
-    var t = (b.innerText || '')
+var isChromiumWEB4PaymentCalculateFare =
+    String(payload.browserType || '')
         .trim()
-        .toLowerCase();
+        .toUpperCase() === 'WEB4';
 
-    return (
-        t.indexOf('continue') !== -1 &&
-        b.offsetParent !== null &&
-        !b.disabled
+if (isChromiumWEB4PaymentCalculateFare) {
+
+    // WEB4 ONLY: Calculate Fare button
+    var calculateFareBtn = Array.from(
+        document.querySelectorAll('button.btn-calc-fare')
+    ).find(function (b) {
+        return (
+            (b.innerText || b.textContent || '')
+                .trim()
+                .toLowerCase() === 'calculate fare' &&
+            b.offsetParent !== null &&
+            !b.disabled
+        );
+    });
+
+    if (!calculateFareBtn) {
+        return {
+            success: false,
+            error: 'WEB4: Calculate Fare button nahi mila.',
+            logs: diagnosticLogs
+        };
+    }
+
+    await new Promise(function (resolve) {
+        setTimeout(resolve, 500);
+    });
+
+    // Click se pehle button ko dobara check karein
+    calculateFareBtn = Array.from(
+        document.querySelectorAll('button.btn-calc-fare')
+    ).find(function (b) {
+        return (
+            (b.innerText || b.textContent || '')
+                .trim()
+                .toLowerCase() === 'calculate fare' &&
+            b.offsetParent !== null &&
+            !b.disabled
+        );
+    });
+
+    if (!calculateFareBtn) {
+        return {
+            success: false,
+            error: 'WEB4: Calculate Fare button click se pehle nahi mila.',
+            logs: diagnosticLogs
+        };
+    }
+
+    calculateFareBtn.click();
+
+    diagnosticLogs.push(
+        'WEB4: Calculate Fare button clicked.'
     );
-});
 
-if (!continueBtn1) {
+} else {
 
-    return {
-        success: false,
-        error: 'First continue button nahi mila.',
-        logs: diagnosticLogs
-    };
-}
+    // WEB / WEB2 / WEB3: PURANA LOGIC SAME
+    var continueBtn1 = Array.from(
+        document.querySelectorAll('button')
+    ).find(function (b) {
 
-// Passenger + confirmation + payment selection ke baad
-// Angular form state ko settle hone ka short wait.
-await new Promise(function(r) {
-    setTimeout(r, 500);
-});
+        var t = (b.innerText || '')
+            .trim()
+            .toLowerCase();
 
-// Button ko fresh DOM se dobara locate karo.
-continueBtn1 = Array.from(
-    document.querySelectorAll('button')
-).find(function(b) {
+        return (
+            t.indexOf('continue') !== -1 &&
+            b.offsetParent !== null &&
+            !b.disabled
+        );
+    });
 
-    var t = (b.innerText || '')
-        .trim()
-        .toLowerCase();
+    if (!continueBtn1) {
+        return {
+            success: false,
+            error: 'First continue button nahi mila.',
+            logs: diagnosticLogs
+        };
+    }
 
-    return (
-        t.indexOf('continue') !== -1 &&
-        b.offsetParent !== null &&
-        !b.disabled
+    await new Promise(function (r) {
+        setTimeout(r, 500);
+    });
+
+    // Button ko fresh DOM se dobara locate karo
+    continueBtn1 = Array.from(
+        document.querySelectorAll('button')
+    ).find(function (b) {
+
+        var t = (b.innerText || '')
+            .trim()
+            .toLowerCase();
+
+        return (
+            t.indexOf('continue') !== -1 &&
+            b.offsetParent !== null &&
+            !b.disabled
+        );
+    });
+
+    if (!continueBtn1) {
+        return {
+            success: false,
+            error: 'First continue button 500ms state wait ke baad nahi mila.',
+            logs: diagnosticLogs
+        };
+    }
+
+    continueBtn1.click();
+
+    diagnosticLogs.push(
+        'First Continue button clicked after 500ms state-settling wait.'
     );
-});
 
-if (!continueBtn1) {
-
-    return {
-        success: false,
-        error: 'First continue button 500ms state wait ke baad nahi mila.',
-        logs: diagnosticLogs
-    };
+    diagnosticLogs.push(
+        'First Continue button clicked.'
+    );
 }
-
-continueBtn1.click();
-
-diagnosticLogs.push(
-    "First Continue button clicked after 500ms state-settling wait."
-);
-
-diagnosticLogs.push(
-    "First Continue button clicked."
-);
-
 
 // ==========================================
 // HELPER: EXACT IRCTC ERROR FOR MINI WINDOW
@@ -5000,6 +6109,70 @@ if (close2) {
     }
 }
 
+// =============================================
+// WL CONFIRMATION - REVIEW PAGE
+// SECOND CONTINUE SE PEHLE
+// =============================================
+
+var reviewPageText = document.body.innerText || '';
+
+var isReviewPage =
+    /passenger details/i.test(reviewPageText);
+
+var wlMatch = isReviewPage
+    ? reviewPageText.match(
+        /\b((?:TQWL|GNWL|RLWL|PQWL|RQWL|RSWL|WL)\s*\d+\s*\/\s*(?:WL\s*)?\d+)\b/i
+      )
+    : null;
+
+if (wlMatch) {
+
+    var detectedWL = wlMatch[1].replace(/\s+/g, '');
+
+    diagnosticLogs.push(
+        'WL detected on review page: ' + detectedWL
+    );
+
+    if (
+        typeof window.__bossRequestWLDecision !== 'function'
+    ) {
+        return {
+            success: false,
+            cancelled: true,
+            error: 'WL confirmation popup bridge missing. Booking stopped.',
+            logs: diagnosticLogs
+        };
+    }
+
+    var wlDecision = 'cancel';
+
+    try {
+        wlDecision = await window.__bossRequestWLDecision(
+            detectedWL
+        );
+    } catch (wlError) {
+        diagnosticLogs.push(
+            'WL decision error: ' + wlError.message
+        );
+    }
+
+    if (wlDecision !== 'proceed') {
+        diagnosticLogs.push(
+            'User cancelled WL booking. Continue not clicked.'
+        );
+
+        return {
+            success: false,
+            cancelled: true,
+            error: 'Booking cancelled by user at WL confirmation.',
+            logs: diagnosticLogs
+        };
+    }
+
+    diagnosticLogs.push(
+        'User approved WL booking. Proceeding to second Continue.'
+    );
+}
 
 continueBtn2.click();
 
@@ -5285,6 +6458,24 @@ if (!paymentIsPaytm && !paymentIsPhonePe && !paymentIsRazorpay ) {
 
 var providerName = paymentIsPaytm ? 'PAYTM' : paymentIsPhonePe ? 'PHONEPE' : 'RAZORPAY';
 
+// WEB4 ONLY: Chromium Beta payment selection
+var isChromiumWEB4Payment =
+    String(payload.browserType || '')
+        .trim()
+        .toUpperCase() === 'WEB4';
+
+var web4PaymentAlt = paymentIsPaytm
+    ? 'Paytm'
+    : paymentIsPhonePe
+        ? 'PhonePe'
+        : 'Razorpay';
+
+if (isChromiumWEB4Payment) {
+    diagnosticLogs.push(
+        'WEB4: Multiple Payment Service already available; skipping its selection.'
+    );
+}
+
 diagnosticLogs.push(
     "Normalized payment: " +
     (paymentIsPaytm ? 'PAYTM QR' : paymentIsPhonePe ? 'PHONEPE QR' : 'RAZORPAY QR')
@@ -5305,14 +6496,16 @@ diagnosticLogs.push(
     providerName + " QR selected."
 );
 
-diagnosticLogs.push(
-    "STEP 1: Pehle Multiple Payment Service select karenge."
-);
-
+if (!isChromiumWEB4Payment) {
+    diagnosticLogs.push(
+        "STEP 1: Pehle Multiple Payment Service select karenge."
+    );
+}
 
 // =================================================
 // FIND MULTIPLE PAYMENT SERVICE
 // =================================================
+if (!isChromiumWEB4Payment) {
 
 var multiplePaymentService = null;
 var multiPaymentDeadline = Date.now() + 60000;
@@ -5578,17 +6771,19 @@ if (multipleVerified) {
     );
 }
 
+}
 
 // =================================================
 // PROVIDER SEARCH
 // =================================================
 
-
-diagnosticLogs.push(
-    "STEP 3: Ab " +
-    providerName +
-    " side option search karenge."
-);
+if (!isChromiumWEB4Payment) {
+    diagnosticLogs.push(
+        "STEP 3: Ab " +
+        providerName +
+        " side option search karenge."
+    );
+}
 
 var providerElement = null;
 var providerDeadline = Date.now() + 60000;
@@ -5624,24 +6819,46 @@ while (Date.now() < providerDeadline) {
             return ariaDisabled !== 'true';
         }
 
-        providerElement = providerElements.find(function(el) {
 
-            if (!isUsableProviderElement(el)) {
-                return false;
+        if (isChromiumWEB4Payment) {
+
+            // WEB4 ONLY: payment logo ke alt se option dhoondho
+            var web4PaymentLogo = Array.from(
+                document.querySelectorAll(
+                    '.bank-card img.bank-logo'
+                )
+            ).find(function(img) {
+
+                if (
+                    !img ||
+                    !img.isConnected ||
+                    img.offsetParent === null
+                ) {
+                    return false;
+                }
+
+                var alt = String(
+                    img.getAttribute('alt') || ''
+                ).trim();
+
+                return alt === web4PaymentAlt;
+            });
+
+            if (web4PaymentLogo) {
+                var web4Card = web4PaymentLogo.closest('.bank-card');
+
+                if (
+                    web4Card &&
+                    web4Card.isConnected &&
+                    web4Card.offsetParent !== null
+                ) {
+                    providerElement = web4Card;
+                }
             }
 
-            var txt = String(
-                el.innerText || el.textContent || ''
-            )
-                .replace(/\s+/g, ' ')
-                .trim()
-                .toUpperCase();
+        } else {
 
-            return txt === providerName;
-        });
-
-        if (!providerElement) {
-
+            // OLD WEB / WEB2 / WEB3 CODE — unchanged
             providerElement = providerElements.find(function(el) {
 
                 if (!isUsableProviderElement(el)) {
@@ -5655,12 +6872,32 @@ while (Date.now() < providerDeadline) {
                     .trim()
                     .toUpperCase();
 
-                return (
-                    txt.indexOf(providerName) !== -1 &&
-                    txt.length <= 80
-                );
+                return txt === providerName;
             });
+
+            if (!providerElement) {
+
+                providerElement = providerElements.find(function(el) {
+
+                    if (!isUsableProviderElement(el)) {
+                        return false;
+                    }
+
+                    var txt = String(
+                        el.innerText || el.textContent || ''
+                    )
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                        .toUpperCase();
+
+                    return (
+                        txt.indexOf(providerName) !== -1 &&
+                        txt.length <= 80
+                    );
+                });
+            }
         }
+
 
         if (providerElement) {
             diagnosticLogs.push(
@@ -5827,6 +7064,7 @@ async function reselectRequestedPayment() {
     // =============================================
     // MULTIPLE PAYMENT SERVICE
     // =============================================
+if (!isChromiumWEB4Payment) {
 
     var multiOption = null;
     var multiDeadline = Date.now() + 15000;
@@ -5874,6 +7112,7 @@ async function reselectRequestedPayment() {
             setTimeout(r, 500);
         });
     }
+}
 
     // =============================================
     // RESELECT THE SAME REQUESTED PROVIDER
@@ -5888,41 +7127,83 @@ async function reselectRequestedPayment() {
 
     while (Date.now() < providerDeadline) {
 
-        retryProvider = Array.from(
-            document.querySelectorAll(
-                '.border-all.link, .col-pad a, ' +
-                '.col-pad button, .bank-type'
-            )
-        ).find(function(el) {
+
+        if (isChromiumWEB4Payment) {
+
+            // WEB4 ONLY: retry mein bhi same logo select karo
+            var retryWeb4Logo = Array.from(
+                document.querySelectorAll(
+                    '.bank-card img.bank-logo'
+                )
+            ).find(function(img) {
+
+                if (
+                    !img ||
+                    !img.isConnected ||
+                    img.offsetParent === null
+                ) {
+                    return false;
+                }
+
+                return String(
+                    img.getAttribute('alt') || ''
+                ).trim() === web4PaymentAlt;
+            });
+
+            retryProvider = retryWeb4Logo
+                ? retryWeb4Logo.closest('.bank-card')
+                : null;
 
             if (
-                !el ||
-                !el.isConnected ||
-                el.offsetParent === null ||
-                el.disabled === true
+                retryProvider &&
+                (
+                    !retryProvider.isConnected ||
+                    retryProvider.offsetParent === null
+                )
             ) {
-                return false;
+                retryProvider = null;
             }
 
-            var ariaDisabled = String(
-                el.getAttribute('aria-disabled') || ''
-            ).trim().toLowerCase();
+        } else {
 
-            if (ariaDisabled === 'true') return false;
-
-            var txt = String(
-                el.innerText || el.textContent || ''
-            ).replace(/\s+/g, ' ').trim().toUpperCase();
-
-            return (
-                txt === wantedProvider ||
-                (
-                    wantedProvider.length > 0 &&
-                    txt.includes(wantedProvider) &&
-                    txt.length <= 80
+            // OLD WEB / WEB2 / WEB3 RETRY SEARCH — unchanged
+            retryProvider = Array.from(
+                document.querySelectorAll(
+                    '.border-all.link, .col-pad a, ' +
+                    '.col-pad button, .bank-type'
                 )
-            );
-        });
+            ).find(function(el) {
+
+                if (
+                    !el ||
+                    !el.isConnected ||
+                    el.offsetParent === null ||
+                    el.disabled === true
+                ) {
+                    return false;
+                }
+
+                var ariaDisabled = String(
+                    el.getAttribute('aria-disabled') || ''
+                ).trim().toLowerCase();
+
+                if (ariaDisabled === 'true') return false;
+
+                var txt = String(
+                    el.innerText || el.textContent || ''
+                ).replace(/\s+/g, ' ').trim().toUpperCase();
+
+                return (
+                    txt === wantedProvider ||
+                    (
+                        wantedProvider.length > 0 &&
+                        txt.includes(wantedProvider) &&
+                        txt.length <= 80
+                    )
+                );
+            });
+        }
+
 
         if (retryProvider) break;
 
@@ -6421,6 +7702,59 @@ if (!this.page || this.page.isClosed()) {
         `[${this.browserType}] External browser page available nahi hai.`
     );
 }
+
+    // =====================================================
+    // WL CONFIRMATION BRIDGE
+    // BROWSER PAGE -> NODE -> MINI WINDOW
+    // =====================================================
+
+    await this.page.exposeFunction(
+        '__bossRequestWLDecision',
+        async (wlNumber) => {
+
+            console.log(
+                `[WL BRIDGE] Decision request received: ${wlNumber}`
+            );
+
+            if (
+                !this.qrCallbacks ||
+                typeof this.qrCallbacks.requestWLDecision !== 'function'
+            ) {
+                console.error(
+                    '[WL BRIDGE] requestWLDecision callback missing.'
+                );
+
+                return 'cancel';
+            }
+
+            try {
+                const decision =
+                    await this.qrCallbacks.requestWLDecision(wlNumber);
+
+                console.log(
+                    '[WL BRIDGE] User decision received:',
+                    decision
+                );
+
+                return decision === 'proceed'
+                    ? 'proceed'
+                    : 'cancel';
+
+            } catch (error) {
+
+                console.error(
+                    '[WL BRIDGE] Decision failed:',
+                    error.message
+                );
+
+                return 'cancel';
+            }
+        }
+    );
+
+    console.log(
+        `[WL BRIDGE] Confirmation bridge ready for ${this.browserType}.`
+    );
 
 // =====================================================
 // LIVE BOOKING PROGRESS BRIDGE
@@ -9038,7 +10372,7 @@ this.sendBookingStatus(
 );
 
 this.sendBookingStatus(
-    'booking sucessful by BOSS...',
+    'Booking sucessful by BOSS...',
     'BOOKING SUCCESS',
     100
 );

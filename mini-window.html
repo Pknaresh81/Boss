@@ -360,34 +360,8 @@
             background: #f97316;
         }
 
-        .app-btn {
+        .web4-btn {
             background: #a21caf;
-        }
-
-        /* =========================================
-           BETA
-        ========================================== */
-
-        .beta-row {
-            display: flex;
-
-            justify-content: center;
-
-            align-items: center;
-
-            gap: 4px;
-
-            margin-bottom: 6px;
-
-            font-size: 10px;
-
-            color: #8fa8c2;
-        }
-
-        .beta-label {
-            font-weight: bold;
-
-            color: #e8f3ff;
         }
 
         /* =========================================
@@ -605,7 +579,7 @@
             id="web-btn"
             class="browser-btn web-btn">
 
-            🌐 WEB
+            🌐 WEB (CHROME)
 
         </button>
 
@@ -613,7 +587,7 @@
             id="web2-btn"
             class="browser-btn web2-btn">
 
-            🌐 WEB2
+            🔷 WEB2 (EDGE)
 
         </button>
 
@@ -621,38 +595,21 @@
             id="web3-btn"
             class="browser-btn web3-btn">
 
-            🌐 WEB3
+            🦁 WEB3 (BRAVE)
 
         </button>
 
-        <button
-            id="app-btn"
-            class="browser-btn app-btn">
+       
+<button
+    id="web4-btn"
+    class="browser-btn web4-btn">
 
-            📱 APP
+    🔴 Chromium (WEB4 BETA)
 
-        </button>
+</button>
 
-    </div>
-
-
-    <!-- =========================================
-         BETA
-    ========================================== -->
-
-    <div class="beta-row">
-
-        <input
-            id="beta"
-            type="checkbox"
-            checked>
-
-        <span class="beta-label">
-            BETA
-        </span>
 
     </div>
-
 
     <!-- =========================================
          RESULT / CLOCK
@@ -955,6 +912,94 @@ if (remainingMs <= 0) {
         }
     );
 }
+
+// =========================================
+// WL CONFIRMATION POPUP LISTENER
+// =========================================
+
+let activeWLWindowId = null;
+
+if (
+    window.electronAPI &&
+    typeof window.electronAPI.onWLDecisionRequest === 'function'
+) {
+    window.electronAPI.onWLDecisionRequest((data) => {
+
+        const card = document.getElementById('wl-confirm-card');
+        const number = document.getElementById('wl-confirm-number');
+
+        if (!card || !number || !data || !data.windowId) {
+            console.error('[WL] Popup elements/data missing.');
+            return;
+        }
+
+        activeWLWindowId = String(data.windowId);
+
+        number.textContent = data.wlNumber || 'WL';
+
+        card.style.display = 'block';
+
+        console.log('[WL] Confirmation popup shown:', data);
+    });
+}
+
+async function sendWLUserDecision(decision) {
+
+    const card = document.getElementById('wl-confirm-card');
+
+    if (!activeWLWindowId) {
+        console.error('[WL] No active request.');
+        return;
+    }
+
+    const windowId = activeWLWindowId;
+
+    document.getElementById('wl-proceed-btn').disabled = true;
+    document.getElementById('wl-cancel-btn').disabled = true;
+
+    try {
+
+        const result = await window.electronAPI.sendWLDecision(
+            windowId,
+            decision
+        );
+
+        if (result && result.success) {
+            card.style.display = 'none';
+            activeWLWindowId = null;
+        } else {
+            console.error('[WL] Decision response failed:', result);
+
+            document.getElementById('wl-proceed-btn').disabled = false;
+            document.getElementById('wl-cancel-btn').disabled = false;
+        }
+
+    } catch (error) {
+
+        console.error('[WL] Decision send error:', error);
+
+        document.getElementById('wl-proceed-btn').disabled = false;
+        document.getElementById('wl-cancel-btn').disabled = false;
+    }
+}
+
+// =========================================
+// WL BUTTON CLICK LISTENER
+// =========================================
+
+document.addEventListener('click', (event) => {
+
+    if (event.target.closest('#wl-proceed-btn')) {
+        sendWLUserDecision('proceed');
+        return;
+    }
+
+    if (event.target.closest('#wl-cancel-btn')) {
+        sendWLUserDecision('cancel');
+        return;
+    }
+
+});
 
 // =========================================
 // QR PAYMENT POPUP LISTENER
@@ -1771,17 +1816,33 @@ finalBookingDisplayed = true;
     );
   }
 
+} else if (response && response.cancelled) {
+
+    setText(
+        "status",
+        "CANCELLED"
+    );
+
+    setText(
+        "result",
+        response.error || "WL booking cancelled by user."
+    );
+
+    console.log(
+        "[MINI WINDOW] WL booking cancelled by user."
+    );
+
 } else {
 
-  setText(
-    "status",
-    "FAILED"
-  );
+    setText(
+        "status",
+        "FAILED"
+    );
 
-  setText(
-    "result",
-    response?.error || "ERROR"
-  );
+    setText(
+        "result",
+        response?.error || "ERROR"
+    );
 }
 
 
@@ -1897,21 +1958,16 @@ document
     );
 
 
-        // =========================================
-        // APP
-        // NO ACTION
-        // =========================================
+ // =========================================
+ // WEB4 - CHROMIUM BOOKING AUTOMATION
+ // =========================================
 
-        document
-            .getElementById("app-btn")
-            .addEventListener(
-                "click",
-                () => {
-
-                    // No action
-
-                }
-            );
+document
+    .getElementById("web4-btn")
+    .addEventListener("click", () => {
+        console.log("[MINI WINDOW] WEB4 booking button clicked");
+        runAutomation("WEB4");
+    });
 
 
                 // =========================================
@@ -2043,6 +2099,66 @@ document
 
     </div>
 
+</div>
+
+<!-- =========================================
+     WL CONFIRMATION CARD - NO BACKDROP
+========================================= -->
+<div id="wl-confirm-card" style="
+    display:none;
+    position:fixed;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    width:290px;
+    padding:15px;
+    background:#10243a;
+    color:#ffffff;
+    border:2px solid #f97316;
+    border-radius:10px;
+    box-shadow:0 5px 20px rgba(0,0,0,0.6);
+    z-index:2147483647;
+    text-align:center;
+    font-family:Segoe UI,sans-serif;
+    -webkit-app-region:no-drag;
+">
+    <div style="
+        font-size:15px;
+        font-weight:bold;
+        color:#f97316;
+        margin-bottom:10px;
+    ">WAITING LIST CONFIRMATION</div>
+
+    <div id="wl-confirm-number" style="
+        font-size:23px;
+        font-weight:bold;
+        margin-bottom:12px;
+        color:#ffffff;
+    ">WL</div>
+
+    <div style="font-size:11px;margin-bottom:14px;">
+        Ticket is on Waiting List. Do you want to proceed?
+    </div>
+
+    <div style="display:flex;gap:10px;">
+        <button id="wl-proceed-btn" style="
+            flex:1;
+            padding:9px;
+            background:#16a34a;
+            color:white;
+            border-radius:5px;
+            font-weight:bold;
+        ">PROCEED</button>
+
+        <button id="wl-cancel-btn" style="
+            flex:1;
+            padding:9px;
+            background:#dc2626;
+            color:white;
+            border-radius:5px;
+            font-weight:bold;
+        ">CANCEL</button>
+    </div>
 </div>
 
 </body>

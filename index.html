@@ -655,6 +655,35 @@ body {
     box-sizing: border-box;
 }
 
+.station-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 180px;
+    overflow-y: auto;
+    background: #0b192b;
+    border: 1px solid #38bdf8;
+    border-radius: 5px;
+    z-index: 99999;
+    display: none;
+}
+
+.station-suggestions div {
+    padding: 8px;
+    cursor: pointer;
+    color: #e8f3ff;
+    font-size: 11px;
+}
+
+.station-suggestions div:hover {
+    background: #1478bb;
+}
+
+.station-field {
+    position: relative;
+}
+
 </style>
 
 <script id="BOSS_NON_BLOCKING_ALERT_FIX">
@@ -688,47 +717,6 @@ body {
 </head>
 
 <body>
-
-<!-- ==========================================
-     APP UPDATE POPUP
-========================================== -->
-
-<div id="appUpdatePopup"
-     style="display:none; pointer-events:none;"
-     class="fixed inset-0 z-[99999] hidden items-center justify-center bg-black/40">
-
-    <div class="bg-white rounded-xl shadow-2xl border border-slate-200 w-[360px] p-5">
-
-        <div class="text-lg font-bold text-slate-800">
-            New Update Available
-        </div>
-
-        <div class="text-sm text-slate-500 mt-2">
-            Boss Software ka naya version available hai.
-        </div>
-
-        <div id="appUpdateVersion"
-             class="text-sm font-semibold text-blue-600 mt-2">
-        </div>
-
-        <div class="flex justify-end gap-2 mt-5">
-
-            <button
-                id="appUpdateLater"
-                class="px-4 py-2 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-sm">
-                Later
-            </button>
-
-            <button
-                id="appUpdateNow"
-                class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm">
-                Update Now
-            </button>
-
-        </div>
-
-    </div>
-</div>
 
 <div id="floating-windows-layer"></div>
 
@@ -927,31 +915,35 @@ body {
        class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
                             </div>
 
-                            <div>
-                                <label class="text-slate-600 block mb-1">
-                                    From Station
-                                </label>
+<div class="station-field">
+    <label class="text-slate-600 block mb-1">
+        From Station
+    </label>
 
-<input type="text"
-       id="inp-from"
-       value=""
-       placeholder="From Station"
-       oninput="this.value = this.value.toUpperCase()"
-       class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
-                                </div>
+    <input type="text"
+           id="inp-from"
+           value=""
+           placeholder="From Station"
+           oninput="this.value = this.value.toUpperCase()"
+           class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
 
-                            <div>
-                                <label class="text-slate-600 block mb-1">
-                                    To Station
-                                </label>
+    <div class="station-suggestions"></div>
+</div>
 
-<input type="text"
-       id="inp-to"
-       value=""
-       placeholder="To Station"
-       oninput="this.value = this.value.toUpperCase()"
-       class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
-                             </div>
+<div class="station-field">
+    <label class="text-slate-600 block mb-1">
+        To Station
+    </label>
+
+    <input type="text"
+           id="inp-to"
+           value=""
+           placeholder="To Station"
+           oninput="this.value = this.value.toUpperCase()"
+           class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+
+    <div class="station-suggestions"></div>
+</div>
 
                         </div>
 
@@ -3910,6 +3902,105 @@ closeLicenseBtn.addEventListener(
     }
 );
 
+</script>
+
+<script>
+(async function () {
+    const fromInput = document.getElementById('inp-from');
+    const toInput = document.getElementById('inp-to');
+
+    let stations = [];
+
+    try {
+        const response = await fetch('./stations.json');
+        if (!response.ok) throw new Error('Station list load nahi hui');
+        const data = await response.json();
+
+        stations = Array.isArray(data) ? data :
+            (data.stations || data.data || []);
+    } catch (error) {
+        console.error('Station list error:', error);
+        return;
+    }
+
+    function getCode(s) {
+        return String(s.code || s.station_code || s.stationCode || '').toUpperCase();
+    }
+
+    function getName(s) {
+        return String(s.name || s.station_name || s.stationName || '').toUpperCase();
+    }
+
+    function setup(input) {
+        const box = input.parentElement.querySelector('.station-suggestions');
+
+        input.setAttribute('autocomplete', 'off');
+
+        input.addEventListener('input', () => {
+            const query = input.value.trim().toUpperCase();
+            box.innerHTML = '';
+
+            if (!query) {
+                box.style.display = 'none';
+                return;
+            }
+
+            const matches = stations
+    .filter(s => {
+        const code = getCode(s);
+        const name = getName(s);
+
+        return code.includes(query) || name.includes(query);
+    })
+    .sort((a, b) => {
+        const codeA = getCode(a);
+        const codeB = getCode(b);
+        const nameA = getName(a);
+        const nameB = getName(b);
+
+        // Exact station code sabse pehle
+        if (codeA === query) return -1;
+        if (codeB === query) return 1;
+
+        // Code se shuru hone wale matches uske baad
+        if (codeA.startsWith(query)) return -1;
+        if (codeB.startsWith(query)) return 1;
+
+        // Phir station name ke matches
+        return nameA.localeCompare(nameB);
+    })
+    .slice(0, 10);
+
+            matches.forEach(s => {
+                const code = getCode(s);
+                const name = getName(s);
+                if (!code || !name) return;
+
+                const option = document.createElement('div');
+                option.textContent = `${name} (${code})`;
+
+                option.addEventListener('mousedown', event => {
+                    event.preventDefault();
+                    input.value = code;
+                    box.style.display = 'none';
+                });
+
+                box.appendChild(option);
+            });
+
+            box.style.display = box.children.length ? 'block' : 'none';
+        });
+
+        input.addEventListener('blur', () => {
+            setTimeout(() => {
+                box.style.display = 'none';
+            }, 150);
+        });
+    }
+
+    setup(fromInput);
+    setup(toInput);
+})();
 </script>
 
 </body>

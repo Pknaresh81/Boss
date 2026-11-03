@@ -50,6 +50,27 @@ prepareBrowsers: () =>
 
     ),
 
+
+    // ==========================================
+// WL CONFIRMATION BRIDGE
+// ==========================================
+
+onWLDecisionRequest: (callback) => {
+    ipcRenderer.on('wl-decision-request', (_event, data) => {
+        callback(data);
+    });
+},
+
+sendWLDecision: (windowId, decision) => {
+    return ipcRenderer.invoke(
+        'wl-decision-response',
+        {
+            windowId,
+            decision
+        }
+    );
+},
+
         // ==========================================
         // TATKAL BOOKING
         // ==========================================
