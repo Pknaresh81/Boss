@@ -903,17 +903,20 @@ body {
 
                         <div class="grid grid-cols-3 gap-3">
 
-                            <div>
-                                <label class="text-slate-600 block mb-1">
-                                    Train Number
-                                </label>
+<div class="station-field">
+    <label class="text-slate-600 block mb-1">
+        Train Number
+    </label>
 
-<input type="text"
-       id="inp-train"
-       value=""
-       placeholder="Train No. or Name"
-       class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
-                            </div>
+    <input type="text"
+           id="inp-train"
+           value=""
+           autocomplete="off"
+           placeholder="Train No. or Name"
+           class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+
+    <div class="station-suggestions train-suggestions"></div>
+</div>
 
 <div class="station-field">
     <label class="text-slate-600 block mb-1">
@@ -3902,6 +3905,89 @@ closeLicenseBtn.addEventListener(
     }
 );
 
+</script>
+
+<script>
+(async function () {
+
+    const trainInput = document.getElementById('inp-train');
+
+    if (!trainInput) return;
+
+    const box = trainInput.parentElement.querySelector('.train-suggestions');
+
+    let trains = [];
+
+    try {
+        const response = await fetch('./train-list.json');
+
+        if (!response.ok) {
+            throw new Error('train-list.json load nahi hui');
+        }
+
+        trains = await response.json();
+
+        console.log('[TRAIN] Loaded:', trains.length);
+
+    } catch (error) {
+        console.error('[TRAIN] Loading error:', error);
+        return;
+    }
+
+    trainInput.addEventListener('input', function () {
+
+        const query = trainInput.value.trim().toUpperCase();
+
+        box.innerHTML = '';
+
+        if (!query) {
+            box.style.display = 'none';
+            return;
+        }
+
+        const matches = trains.filter(train => {
+
+            const number = String(train.trainNumber || '').toUpperCase();
+            const name = String(train.trainName || '').toUpperCase();
+
+            return number.includes(query) || name.includes(query);
+
+        }).slice(0, 10);
+
+        matches.forEach(train => {
+
+            const option = document.createElement('div');
+
+            option.textContent =
+                `${train.trainNumber} - ${train.trainName}`;
+
+            option.addEventListener('mousedown', function (event) {
+
+                event.preventDefault();
+
+                trainInput.value = train.trainNumber;
+
+                box.style.display = 'none';
+
+            });
+
+            box.appendChild(option);
+
+        });
+
+        box.style.display = box.children.length ? 'block' : 'none';
+
+    });
+
+    trainInput.addEventListener('blur', function () {
+
+        setTimeout(() => {
+            box.style.display = 'none';
+        }, 150);
+
+    });
+
+})();
 </script>
 
 <script>
