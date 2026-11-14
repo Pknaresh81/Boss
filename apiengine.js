@@ -473,7 +473,7 @@ async typeHumanLike(selector, text, minDelay = 20, maxDelay = 60) {
 // ==========================================
 async autoLogin(username, password) {
 
-    const isChromiumWEB4 =
+    const isFirefoxWEB4 =
         String(this.browserType).toUpperCase() === 'WEB4';
 
     if (!this.page || this.page.isClosed()) {
@@ -486,7 +486,6 @@ async autoLogin(username, password) {
         `[AUTO LOGIN ${this.browserType}] Opening IRCTC page...`
     );
 
-
 const currentUrl = this.page.url();
 
 const targetLoginUrl =
@@ -497,7 +496,7 @@ const targetLoginUrl =
 if (!currentUrl.includes(new URL(targetLoginUrl).pathname)) {
     await this.page.goto(targetLoginUrl, {
         waitUntil: 'domcontentloaded',
-        timeout: 30000
+        timeout: 120000
     });
 } else {
     console.log(
@@ -510,128 +509,235 @@ if (!currentUrl.includes(new URL(targetLoginUrl).pathname)) {
         `[AUTO LOGIN ${this.browserType}] IRCTC page loaded.`
     );
 
-  
-   // ==========================================
-// WEB4 ONLY - CLOSE VIGILANCE AWARENESS BANNER
+
 // ==========================================
-if (isChromiumWEB4) {
-    console.log(
-        '[AUTO LOGIN WEB4] Vigilance banner close kar rahe hain...'
-    );
+// BOSS - PERMANENT POPUP MONITOR
+// WEB / WEB2 / WEB3 = ENGLISH POPUP
+// WEB4 = VIGILANCE POPUP
+// MAIN FRAME + ALL IFRAMES
+// ==========================================
+
+// Previous monitor cleanup (if autoLogin runs again)
+if (this.__bossPopupMonitorCleanup) {
+    this.__bossPopupMonitorCleanup();
+}
+
+const monitorPage = this.page;
+const monitorIsWEB4 = isFirefoxWEB4;
+
+// Install popup detector inside any frame
+const installPopupWatcherInFrame = async (frame) => {
 
     try {
-        const closeButton = await this.page.waitForSelector(
-            'button.vigilance-banner-close[aria-label="Dismiss vigilance awareness banner"]',
-            {
-                visible: true,
-                timeout: 5000
-            }
-        );
 
-        if (closeButton) {
-            await closeButton.click();
+        await frame.evaluate((isWEB4) => {
+
+            if (window.__bossUnifiedPopupWatcherInstalled) {
+                return;
+            }
+
+            window.__bossUnifiedPopupWatcherInstalled = true;
+
+            const isVisible = (el) => {
+                if (!el || !el.isConnected || el.disabled) return false;
+
+                const style = window.getComputedStyle(el);
+
+                return (
+                    style.display !== 'none' &&
+                    style.visibility !== 'hidden' &&
+                    el.getClientRects().length > 0
+                );
+            };
+
+            const detectAndClosePopups = () => {
+
+                try {
+
+                    // WEB / WEB2 / WEB3 - ENGLISH POPUP
+                    if (!isWEB4) {
+
+                        const buttons = Array.from(
+                            document.querySelectorAll('button')
+                        );
+
+                        const englishButton = buttons.find(button => {
+
+                            return (
+                                button.textContent
+                                    .replace(/\s+/g, ' ')
+                                    .trim()
+                                    .toLowerCase() === 'english' &&
+                                isVisible(button) &&
+                                button.dataset.bossEnglishClicked !== '1'
+                            );
+                        });
+
+                        if (englishButton) {
+
+                            englishButton.dataset.bossEnglishClicked = '1';
+
+                            console.log(
+                                '[BOSS] English popup detected. Clicking English.'
+                            );
+
+                            englishButton.click();
+                        }
+                    }
+
+                    // WEB4 - VIGILANCE / AWARENESS POPUP
+                    if (isWEB4) {
+
+                        const selectors = [
+                            'button.vigilance-banner-close',
+                            'button[aria-label*="dismiss" i]',
+                            'button[aria-label*="close" i]',
+                            'button[title*="close" i]',
+                            'button[title*="dismiss" i]',
+                            'button[class*="close" i]',
+                            '[data-testid*="close" i]'
+                        ];
+
+                        const elements = new Set();
+
+                        selectors.forEach(selector => {
+                            document.querySelectorAll(selector).forEach(el => {
+                                elements.add(el);
+                            });
+                        });
+
+                        elements.forEach(el => {
+
+                            if (!isVisible(el)) return;
+
+                            const label = [
+                                el.innerText,
+                                el.getAttribute('aria-label'),
+                                el.getAttribute('title'),
+                                el.className
+                            ].join(' ').toLowerCase();
+
+                            let parent = el;
+                            let context = '';
+
+                            for (let i = 0; i < 6 && parent; i++) {
+                                context += ' ' + (parent.innerText || '');
+                                parent = parent.parentElement;
+                            }
+
+                            context = context.toLowerCase();
+
+                            const knownButton =
+                                el.matches('button.vigilance-banner-close');
+
+                            const vigilanceButton =
+                                /close|dismiss|×/.test(label) &&
+                                /vigilance|awareness/.test(context);
+
+                            if (
+                                (knownButton || vigilanceButton) &&
+                                el.dataset.bossVigilanceClicked !== '1'
+                            ) {
+
+                                el.dataset.bossVigilanceClicked = '1';
+
+                                console.log(
+                                    '[BOSS] Vigilance popup detected. Closing.'
+                                );
+
+                                el.click();
+                            }
+                        });
+                    }
+
+                } catch (error) {
+
+                    console.warn(
+                        '[BOSS] Popup detection error:',
+                        error.message
+                    );
+                }
+            };
+
+            // Immediate check
+            detectAndClosePopups();
+
+            // Detect dynamically added popup elements
+            const observer = new MutationObserver(() => {
+                detectAndClosePopups();
+            });
+
+            observer.observe(document.documentElement, {
+                childList: true,
+                subtree: true,
+                attributes: true
+            });
+
+            // Continuous backup check
+            setInterval(detectAndClosePopups, 500);
 
             console.log(
-                '[AUTO LOGIN WEB4] Vigilance banner close button click kiya.'
+                '[BOSS] Popup watcher installed in frame:',
+                location.href
             );
 
-            await new Promise(resolve => setTimeout(resolve, 500));
-        }
-    } catch (popupError) {
-        console.log(
-            '[AUTO LOGIN WEB4] Vigilance banner nahi mila ya pehle se band hai:',
-            popupError.message
-        );
+        }, monitorIsWEB4);
+
+    } catch (error) {
+
+        // Frame may be navigating or detached; next scan will retry
     }
-}
+};
 
-if (!isChromiumWEB4) {
+// Install in all currently existing frames
+const scanAllFrames = async () => {
 
-    // ==========================================
-// CLOSE IRCTC WELCOME / LANGUAGE POPUP
-// SELECT ENGLISH ONLY
-// ==========================================
+    if (monitorPage.isClosed()) return;
+
+    const frames = monitorPage.frames();
+
+    for (const frame of frames) {
+        await installPopupWatcherInFrame(frame);
+    }
+};
+
+// Install when a new frame appears or navigates
+const handleFrameChange = (frame) => {
+    installPopupWatcherInFrame(frame);
+};
+
+monitorPage.on('frameattached', handleFrameChange);
+monitorPage.on('framenavigated', handleFrameChange);
+
+// Initial installation
+await scanAllFrames();
+
+// Backup: continuously scan all frames
+const popupMonitorTimer = setInterval(() => {
+    scanAllFrames();
+}, 1000);
+
+// Cleanup if autoLogin is started again
+this.__bossPopupMonitorCleanup = () => {
+
+    clearInterval(popupMonitorTimer);
+
+    monitorPage.off('frameattached', handleFrameChange);
+    monitorPage.off('framenavigated', handleFrameChange);
+};
+
 console.log(
-    `[AUTO LOGIN ${this.browserType}] Checking IRCTC welcome popup...`
+    `[BOSS ${this.browserType}] Permanent all-frame popup monitor active.`
 );
 
-try {
 
-    const englishButton = await this.page.waitForFunction(
-        () => {
-
-            const buttons =
-                Array.from(
-                    document.querySelectorAll(
-                        'button[type="submit"].btn.btn-primary'
-                    )
-                );
-
-            return buttons.find(button =>
-                button.textContent.trim() === 'English'
-            ) || false;
-
-        },
-        {
-            timeout: 2500
-        }
-    );
-
-    if (englishButton) {
-
-        console.log(
-            `[AUTO LOGIN ${this.browserType}] English button found.`
-        );
-
-        await this.page.evaluate(() => {
-
-            const button =
-                Array.from(
-                    document.querySelectorAll(
-                        'button[type="submit"].btn.btn-primary'
-                    )
-                ).find(button =>
-                    button.textContent.trim() === 'English'
-                );
-
-            if (!button) {
-                throw new Error(
-                    'English button not found.'
-                );
-            }
-
-            button.click();
-        });
-
-        console.log(
-            `[AUTO LOGIN ${this.browserType}] English selected.`
-        );
-
-        await new Promise(resolve =>
-            setTimeout(resolve, 300)
-        );
-
-    } else {
-
-        console.log(
-            `[AUTO LOGIN ${this.browserType}] English welcome button not present.`
-        );
-    }
-
-} catch (popupError) {
-
-    console.log(
-        `[AUTO LOGIN ${this.browserType}] Welcome popup not detected or already closed.`
-    );
-}
-}
-
-    // ------------------------------------------
-    // WAIT FOR PAGE TO SETTLE
-    // ------------------------------------------
+   // WEB4: Skip unnecessary fixed page wait
+// Other browsers remain unchanged
+if (!isFirefoxWEB4) {
     await new Promise(resolve =>
         setTimeout(resolve, 500)
     );
+}
 
 
         // ==========================================
@@ -651,9 +757,9 @@ try {
             );
 
             // ======================================
-            // WEB4 Chromium - IRCTC BETA LOGIN
+            // WEB4 Firefox - IRCTC BETA LOGIN
             // ======================================
-            if (isChromiumWEB4) {
+            if (isFirefoxWEB4) {
 
                 console.log(
                     '[AUTO LOGIN WEB4] IRCTC BETA LOGIN button dhoondh rahe hain...'
@@ -1002,7 +1108,7 @@ console.log(
  // CLICK SIGN IN
  // ==========================================
 
-const signInSelector = isChromiumWEB4
+const signInSelector = isFirefoxWEB4
     ? 'button.button-primary.active[type="submit"]'
     : 'button.search_btn.train_Search.train_Search_custom_hover';
 
@@ -1050,38 +1156,62 @@ try {
         `[AUTO LOGIN ${this.browserType}] SIGN IN click sent.`
     );
 
-    // ==========================================
+// ==========================================
     // WAIT FOR IRCTC LOGIN TO COMPLETE
     // ==========================================
 
+    console.log(
+        `[AUTO LOGIN ${this.browserType}] Waiting for CAPTCHA/Login completion...`
+    );
+
     try {
         await this.page.waitForFunction(
-            () => {
+            (isWeb4) => {
                 const loginInput = document.querySelector(
                     'input[formcontrolname="userid"]'
                 );
 
-                return !loginInput;
+                // Agar login form abhi khula hai toh wait karein
+                if (loginInput) return false;
+
+                // WEB4 (IRCTC Beta) ke liye: Login button gayab hona hi login success hai
+                if (isWeb4) {
+                    const betaLoginBtn = document.querySelector('button.btn-login');
+                    return !betaLoginBtn;
+                }
+
+                // WEB / WEB2 / WEB3 ke liye: Logout ya Welcome text check karein
+                const bodyText = (document.body.innerText || '').toUpperCase();
+                const isLoggedInUI =
+                    bodyText.includes('LOGOUT') ||
+                    bodyText.includes('WELCOME') ||
+                    !!document.querySelector('a[href*="logout" i], button[class*="logout" i]');
+
+                return isLoggedInUI;
             },
             {
-                timeout: 30000
-            }
+                timeout: 120000,
+                polling: 400
+            },
+            isFirefoxWEB4
         );
+
+        // Session settle hone ke liye 1 second dein
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         console.log(
-            `[AUTO LOGIN ${this.browserType}] IRCTC login completed.`
+            `[AUTO LOGIN ${this.browserType}] IRCTC login completed successfully.`
         );
 
-        this.sendBookingStatus(
+       this.sendBookingStatus(
             'IRCTC login successful.',
             'LOGIN SUCCESS',
             15
         );
 
     } catch (loginWaitError) {
-        console.warn(
-            `[AUTO LOGIN ${this.browserType}] Login completion wait timeout:`,
-            loginWaitError.message
+        throw new Error(
+            `[${this.browserType}] Login complete nahi hua (CAPTCHA timeout): ${loginWaitError.message}`
         );
     }
 
@@ -1092,13 +1222,13 @@ try {
     );
 
     throw new Error(
-        `[${this.browserType}] SIGN IN button click nahi ho saka.`
+        `[${this.browserType}] ${signInError.message}`
     );
 }
 
 }
 
-    // ==========================================
+// ==========================================
     // LOAD SESSION
     // ==========================================
     loadSession() {
@@ -1318,42 +1448,53 @@ try {
         return data.captchaUrl || data.captchaImage || data.captcha || null;
     }
 
+// ==========================================
+    // HELPER: EXTRACT CLEAN JWT TOKEN
+    // ==========================================
+    async getBrowserJwtToken() {
+        // Pehle network se capture hua asli token check karein
+        if (this.irctcAccessToken && String(this.irctcAccessToken).trim()) {
+            return String(this.irctcAccessToken)
+                .replace(/^Bearer\s+/i, '')
+                .replace(/["\\\r\n]/g, '')
+                .trim();
+        }
+
+        if (!this.page || this.page.isClosed()) return '';
+        try {
+            const rawToken = await this.page.evaluate(() => {
+                const directKeys = ['jwt', 'jwtToken', 'token', 'access_token'];
+                for (const k of directKeys) {
+                    const v = localStorage.getItem(k) || sessionStorage.getItem(k);
+                    if (v && v.includes('eyJ')) return v;
+                }
+                for (let i = 0; i < localStorage.length; i++) {
+                    const val = localStorage.getItem(localStorage.key(i));
+                    if (!val) continue;
+                    if (val.startsWith('{') && val.includes('eyJ')) {
+                        try {
+                            const parsed = JSON.parse(val);
+                            return parsed.jwt || parsed.token || parsed.access_token || '';
+                        } catch (e) {}
+                    }
+                    if (val.includes('eyJ') && val.split('.').length === 3) return val;
+                }
+                return '';
+            });
+            return rawToken ? String(rawToken).replace(/^Bearer\s+/i, '').replace(/["\\\r\n]/g, '').trim() : '';
+        } catch (e) {
+            return '';
+        }
+    }
+
     // ==========================================
     // COMMON HEADERS
     // ==========================================
     async getHeaders(cookies, referer) {
 
-    let jwtToken = '';
-
-    // Actual Chrome / Edge / Brave page ka token
-    if (this.page && !this.page.isClosed()) {
-
-        try {
-
-            jwtToken = await this.page.evaluate(() => {
-
-                return (
-                    localStorage.getItem('jwtToken') ||
-                    localStorage.getItem('token') ||
-                    localStorage.getItem('user') ||
-                    ''
-                );
-
-            });
-
-        } catch (e) {
-
-            console.warn(
-                `[JWT ${this.browserType}] localStorage read failed:`,
-                e.message
-            );
-        }
-    }
+    const jwtToken = await this.getBrowserJwtToken();
 
     const headers = {
-
-        'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
 
         'Accept':
             'application/json, text/plain, */*',
@@ -1394,8 +1535,8 @@ try {
     };
 
     if (jwtToken) {
-        headers.Authorization =
-            `Bearer ${jwtToken}`;
+        headers['Authorization'] = `Bearer ${jwtToken}`;
+        headers['jwttoken'] = jwtToken;
     }
 
     return headers;
@@ -1493,12 +1634,18 @@ this.sendBookingStatus(
 );
         
         const url = 'https://www.irctc.co.in/eticketing/protected/rcs/trainlitchk';
-   const isChromiumWEB4 =
+   const isFirefoxWEB4 =
     String(this.browserType).toUpperCase() === 'WEB4';
+
+    // Sabhi browsers ke liye slow IRCTC navigation timeout
+if (typeof this.page.setDefaultNavigationTimeout === 'function') {
+    this.page.setDefaultNavigationTimeout(120000);
+    console.log(`[AUTO LOGIN ${this.browserType}] Navigation timeout set to 120 seconds.`);
+}
 
 const headers = await this.getHeaders(
     cookies,
-    isChromiumWEB4
+    isFirefoxWEB4
         ? 'https://www.irctc.co.in/eticket/train-search'
         : 'https://www.irctc.co.in/nget/booking/train-list'
 );
@@ -1520,7 +1667,7 @@ for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             method: 'POST',
             headers,
             body: JSON.stringify(enquiryData),
-            timeout: 30000
+            timeout: 120000
         });
 
         // Successful HTTP response
@@ -1612,145 +1759,185 @@ if (responseData === null) {
 return responseData;
     }
 
+   
     // ==========================================
     // 1. CHECK AVAILABILITY AND FARE (BROWSER CONTEXT)
     // ==========================================
     async checkAvailabilityAndFare(bookingData) {
-       
-        await this.delay(2000);
-
-        const jDate = bookingData.journeyDate || bookingData.date;
-        const fromStn = bookingData.fromStation;
-        const toStn = bookingData.toStation;
-        const classTp = bookingData.classType || "SL";
-        const quotaCd = bookingData.quota || "GN";
-        const trainNo = bookingData.trainNo;
+        await this.delay(1500);
 
         if (!this.page || this.page.isClosed()) {
-    throw new Error(`[${this.browserType}] External browser page available nahi hai availability check ke liye.`);
-}
+            throw new Error(`[${this.browserType}] External browser page availability check ke liye available nahi hai.`);
+        }
 
-        console.log('[BROWSER FETCH] Running POST availability check inside Electron window context...');
+        const jDate = String(bookingData.journeyDate || bookingData.date || '').replace(/-/g, '');
+        const fromStn = String(bookingData.fromStation || '').trim().toUpperCase();
+        const toStn = String(bookingData.toStation || '').trim().toUpperCase();
+        const classTp = String(bookingData.classType || 'SL').trim().toUpperCase();
+        const trainNo = String(bookingData.trainNo || '').trim();
+        const quotaRaw = String(bookingData.quota || 'GN').trim().toUpperCase();
+
+        const quotaMap = {
+            GENERAL: 'GN',
+            TATKAL: 'TQ',
+            'PREMIUM TATKAL': 'PT'
+        };
+        const quotaCd = quotaMap[quotaRaw] || quotaRaw;
+
+        if (!/^\d{8}$/.test(jDate) || !fromStn || !toStn || !trainNo) {
+            throw new Error('Availability check ke liye train number, stations ya journey date invalid/missing hai.');
+        }
+
+        // Login ke waqt capture hua actual IRCTC access token
+        const accessToken = String(this.irctcAccessToken || '')
+            .trim()
+            .replace(/^Bearer\s+/i, '');
+
+        if (!accessToken) {
+            throw new Error('IRCTC login token capture nahi hua. Availability request nahi bheji gayi.');
+        }
+
+        const requestData = {
+            trainNo,
+            jDate,
+            fromStn,
+            toStn,
+            classTp,
+            quotaCd,
+            accessToken
+        };
 
         const script = `
             (async () => {
                 try {
-                    // JWT Token fetch karne ka logic
-                    let token = localStorage.getItem("jwt") || localStorage.getItem("token") || sessionStorage.getItem("jwt") || "";
-                    if (!token) {
-                        for (let i = 0; i < localStorage.length; i++) {
-                            let k = localStorage.key(i);
-                            let v = localStorage.getItem(k);
-                            if (v && typeof v === 'string' && v.includes("eyJ")) {
-                                token = v;
-                                break;
-                            }
-                        }
-                    }
-                    token = token ? token.replace(/["\\\\\\r\\n]/g, '').trim() : "";
-                    if (token && !token.startsWith('Bearer')) {
-                        token = 'Bearer ' + token;
-                    }
+                    const d = __REQUEST_DATA_PLACEHOLDER__;
 
-                    const url = "https://www.irctc.co.in/eticketing/protected/mapps1/avlFarenquiry/${trainNo}/${jDate}/${fromStn}/${toStn}/${classTp}/${quotaCd}/N";
+                    const url = 'https://www.irctc.co.in/eticketing/protected/mapps1/avlFarenquiry/' +
+                        encodeURIComponent(d.trainNo) + '/' +
+                        encodeURIComponent(d.jDate) + '/' +
+                        encodeURIComponent(d.fromStn) + '/' +
+                        encodeURIComponent(d.toStn) + '/' +
+                        encodeURIComponent(d.classTp) + '/' +
+                        encodeURIComponent(d.quotaCd) + '/N';
+
                     const payload = {
-                        classCode: "${classTp}",
+                        classCode: d.classTp,
                         concessionBooking: false,
-                        fromStnCode: "${fromStn}",
+                        fromStnCode: d.fromStn,
                         ftBooking: false,
                         isLogedinReq: true,
-                        journeyDate: "${jDate}",
+                        journeyDate: d.jDate,
                         loyaltyRedemptionBooking: false,
                         moreThanOneDay: true,
-                        paymentFlag: "N",
-                        quotaCode: "${quotaCd}",
+                        paymentFlag: 'N',
+                        quotaCode: d.quotaCd,
                         returnJourney: false,
-                        ticketType: "E",
-                        toStnCode: "${toStn}",
-                        trainNumber: "${trainNo}"
+                        ticketType: 'E',
+                        toStnCode: d.toStn,
+                        trainNumber: d.trainNo
                     };
 
-const stealthHeaders = {
-                        "Accept": "application/json, text/plain, */*",
-                        "Accept-Language": "en-US,en;q=0.9",
-                        "Cache-Control": "no-cache",
-                        "Pragma": "no-cache",
-                        "Sec-Ch-Ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
-                        "Sec-Ch-Ua-Mobile": "?0",
-                        "Sec-Ch-Ua-Platform": '"Windows"',
-                        "Sec-Fetch-Site": "same-origin",
-                        "Sec-Fetch-Mode": "cors",
-                        "Sec-Fetch-Dest": "empty",
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-                    };
+                    const jwt = String(d.accessToken || '')
+                        .trim()
+                        .replace(/^Bearer\\s+/i, '');
+
+                    if (!jwt) {
+                        return {
+                            status: 0,
+                            error: 'Captured IRCTC access token is empty.'
+                        };
+                    }
 
                     const response = await fetch(url, {
-                        method: "POST",
+                        method: 'POST',
                         headers: {
-                        ...stealthHeaders,    
-                        "Content-Type": "application/json; charset=UTF-8",
-                            "Accept": "application/json, text/plain, */*",
-                            "Accept-Language": "en-US,en;q=0.9",
-                            "Client-Device-Id": "WEB",
-                            "Greq": String(new Date().getTime()),
-                            "Authorization": token,
-                            "jwttoken": token.replace('Bearer ', '')
+                            'Accept': 'application/json, text/plain, */*',
+                            'Accept-Language': 'en-US,en;q=0.9',
+                            'Content-Type': 'application/json; charset=UTF-8',
+                            'Authorization': 'Bearer ' + jwt,
+                            'jwttoken': jwt,
+                            'Client-Device-Id': 'WEB',
+                            'Greq': String(Date.now()),
+                            'Origin': 'https://www.irctc.co.in',
+                            'Referer': 'https://www.irctc.co.in/nget/booking/availability'
                         },
-                        credentials: "include",
+                        credentials: 'include',
                         body: JSON.stringify(payload)
                     });
-                    
-                    const text = await response.text();
-                    return { status: response.status, body: text };
-                } catch (err) {
-                    return { status: 0, error: err.message };
+
+                    const body = await response.text();
+
+                    return {
+                        status: response.status,
+                        body,
+                        tokenSent: true,
+                        tokenLength: jwt.length
+                    };
+
+                } catch (error) {
+                    return {
+                        status: 0,
+                        error: error?.message || String(error)
+                    };
                 }
             })();
         `;
 
-        let maxRetries = 3;
-        let attempt = 0;
+        const safeScript = script.replace(
+            '__REQUEST_DATA_PLACEHOLDER__',
+            JSON.stringify(requestData)
+        );
 
-        while (attempt < maxRetries) {
-            attempt++;
-            try {
-                console.log(`[DEBUG] Browser-context POST avlFarenquiry attempt ${attempt} of ${maxRetries}...`);
-                // Yeh naya code ensure karega ki request usi External Browser par chale jisme aapne login kiya hai
-let result;
+        let lastResult = null;
 
-if (!this.page || this.page.isClosed()) {
-    throw new Error(`[${this.browserType}] External browser page available nahi hai.`);
-}
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            console.log(`[DEBUG] Browser-context POST avlFarenquiry attempt ${attempt} of 3...`);
 
-result = await this.page.evaluate(script);
+            lastResult = await this.page.evaluate(safeScript);
 
-                if (!result || result.status !== 200 || !result.body) {
+            console.log('[AVAILABILITY AUTH]', {
+                capturedToken: true,
+                tokenLength: accessToken.length,
+                tokenSource: 'login-response /authprovider/webtoken'
+            });
 
-    if (attempt < maxRetries) {
+            console.log(`[AVAILABILITY RAW] HTTP Status: ${lastResult?.status ?? 0}`);
 
-        await this.detectRetryPageStatus();
+            console.log(
+                '[AVAILABILITY RAW BODY]',
+                String(lastResult?.body || lastResult?.error || '').slice(0, 1200)
+            );
 
-        await this.delay(2000);
-        continue;
-    }
-                    throw new Error('avlFarenquiry browser POST response empty ya invalid hai.');
+            if (lastResult && lastResult.status === 200 && lastResult.body) {
+                try {
+                    return JSON.parse(lastResult.body);
+                } catch (parseError) {
+                    throw new Error(
+                        'avlFarenquiry ne HTTP 200 diya, lekin response valid JSON nahi hai: ' +
+                        parseError.message
+                    );
                 }
+            }
 
-                return JSON.parse(result.body);
-            } catch (error) {
+            if (lastResult?.status === 401 || lastResult?.status === 403) {
+                throw new Error(
+                    `avlFarenquiry authentication failed | HTTP ${lastResult.status} | ` +
+                    `${String(lastResult.body || '').slice(0, 700)}`
+                );
+            }
 
-    if (attempt >= maxRetries) {
-        throw error;
-    }
-
-    await this.detectRetryPageStatus();
-
-    await this.delay(2000);
-}
+            if (attempt < 3) {
+                await this.detectRetryPageStatus();
+                await this.delay(1800);
+            }
         }
 
-        throw new Error('avlFarenquiry POST failed after maximum retries.');
+        throw new Error(
+            `avlFarenquiry failed | HTTP: ${lastResult?.status ?? 0} | ` +
+            `Response: ${String(lastResult?.body || lastResult?.error || 'Empty').slice(0, 1000)}`
+        );
     }
+
 
     // ==========================================
     // 2. ALTERNATE AVAILABILITY ENQUIRY
@@ -1987,6 +2174,33 @@ const base64Payload = Buffer.from(rawPayload).toString('base64');
     var payload = JSON.parse(atob(base64Data));
     var diagnosticLogs = [];
 
+    // ==========================================
+// WEB4 BETA: IRCTC TOAST ERROR DETECTOR
+// ==========================================
+function getWEB4ToastError() {
+
+    var toastDetails = Array.from(
+        document.querySelectorAll('.ui-toast-detail')
+    );
+
+    for (var i = 0; i < toastDetails.length; i++) {
+
+        var message = (
+            toastDetails[i].innerText ||
+            toastDetails[i].textContent ||
+            ''
+        ).replace(/\s+/g, ' ').trim();
+
+        if (
+            /high load|unable to process(?: the)? request|please retry/i.test(message)
+        ) {
+            return message;
+        }
+    }
+
+    return '';
+}
+
     // =====================================================
     // LIVE BOOKING STATUS -> NODE -> ELECTRON UI
     // =====================================================
@@ -2063,12 +2277,31 @@ async function liveProgress(step, message, percentage) {
 var currentUrl = window.location.href;
 diagnosticLogs.push("Current Browser URL: " + currentUrl);
 
-// Chromium Beta (WEB4) par eticket page hi rakhein.
+
+// WEB4 SAFETY: Payment provider page par train-search dobara start mat karo.
+if (
+    String(payload.browserType || '').toUpperCase() === 'WEB4' &&
+    window.location.hostname !== 'www.irctc.co.in'
+) {
+    diagnosticLogs.push(
+        '[WEB4 GUARD] External payment page detected. ' +
+        'Train-search redirect skipped: ' + window.location.href
+    );
+
+    return {
+        success: true,
+        paymentPageDetected: true,
+        message: 'WEB4 payment page detected. Continuing QR verification.',
+        logs: diagnosticLogs
+    };
+}
+
+// Firefox Beta (WEB4) par eticket page hi rakhein.
 // Baaki browsers ka existing nget flow nahi badlega.
-var isChromiumWEB4 =
+var isFirefoxWEB4 =
     String(payload.browserType || '').toUpperCase() === 'WEB4';
 
-var trainSearchUrl = isChromiumWEB4
+var trainSearchUrl = isFirefoxWEB4
     ? 'https://www.irctc.co.in/eticket/train-search'
     : 'https://www.irctc.co.in/nget/train-search';
 
@@ -2100,17 +2333,17 @@ await liveProgress(
             // 1. Fill Stations
             diagnosticLogs.push("Filling From/To station details...");
 
-            var isChromiumWEB4Stations =
+            var isFirefoxWEB4Stations =
                 String(payload.browserType || '').toUpperCase() === 'WEB4';
 
-            if (isChromiumWEB4Stations) {
-                async function selectChromiumWEB4Station(label, stationCode) {
+            if (isFirefoxWEB4Stations) {
+                async function selectFirefoxWEB4Station(label, stationCode) {
                     var combo = document.querySelector(
                         'app-jp-input [role="combobox"][aria-label="' + label + '"]'
                     );
 
                     if (!combo) {
-                        throw new Error('Chromium ' + label + ' field nahi mila.');
+                        throw new Error('Firefox  ' + label + ' field nahi mila.');
                     }
 
                     combo.click();
@@ -2123,7 +2356,7 @@ await liveProgress(
                     });
 
                     if (!searchInput) {
-                        throw new Error('Chromium ' + label + ' search input nahi mila.');
+                        throw new Error('Firefox  ' + label + ' search input nahi mila.');
                     }
 
                     searchInput.focus();
@@ -2154,7 +2387,7 @@ await liveProgress(
 
                     if (!match) {
                         diagnosticLogs.push(
-                            'Chromium ' + label + ' options: ' +
+                            'Firefox  ' + label + ' options: ' +
                             options.map(function(el) {
                                 return (el.innerText || el.textContent || '').trim();
                             }).join(' | ')
@@ -2176,23 +2409,23 @@ await liveProgress(
 
                 try {
                     if (payload.fromStation) {
-                        await selectChromiumWEB4Station(
+                        await selectFirefoxWEB4Station(
                             'From station',
                             payload.fromStation
                         );
                     }
 
                     if (payload.toStation) {
-                        await selectChromiumWEB4Station(
+                        await selectFirefoxWEB4Station(
                             'To station',
                             payload.toStation
                         );
                     }
 
-                    diagnosticLogs.push('Chromium From/To stations selected.');
+                    diagnosticLogs.push('Firefox  From/To stations selected.');
                 } catch (e) {
                     diagnosticLogs.push(
-                        'Chromium station selection FAILED: ' + e.message
+                        'Firefox  station selection FAILED: ' + e.message
                     );
 
                     return {
@@ -2332,12 +2565,12 @@ await liveProgress(
                 if (targetYear && !isNaN(targetMonthIndex) && !isNaN(targetDay)) {
                     diagnosticLogs.push("Target: Day " + targetDay + ", Month index " + targetMonthIndex + ", Year " + targetYear);
 
-                    var isChromiumWEB4 =
+                    var isFirefoxWEB4 =
     String(payload.browserType || '').trim().toUpperCase() === 'WEB4';
 
 var calendarTrigger;
 
-if (isChromiumWEB4) {
+if (isFirefoxWEB4) {
     calendarTrigger = Array.from(
         document.querySelectorAll('.field-inner')
     ).find(function(field) {
@@ -2431,16 +2664,16 @@ diagnosticLogs.push("Selecting Quota: " + wanted);
 
 try {
     var quotaDropdown = null;
-    var isChromiumWEB4 = String(payload.browserType || '')
+    var isFirefoxWEB4 = String(payload.browserType || '')
         .toUpperCase() === 'WEB4';
 
-    if (isChromiumWEB4) {
+    if (isFirefoxWEB4) {
         quotaDropdown = document.querySelector(
             'app-jp-input [role="combobox"][aria-label="Quota"]'
         );
 
         if (!quotaDropdown) {
-            throw new Error('Chromium ka Quota field nahi mila.');
+            throw new Error('Firefox  ka Quota field nahi mila.');
         }
 
         quotaDropdown.click();
@@ -2471,7 +2704,7 @@ try {
         ).toUpperCase();
 
         diagnosticLogs.push(
-            'Chromium quota selected value: ' + selected.trim()
+            'Firefox  quota selected value: ' + selected.trim()
         );
 
         if (!selected.includes(wanted)) {
@@ -2637,8 +2870,8 @@ var bookNowClicked = false;
 var targetCard = null;
 var classSelectionCompleted = false;
 
-// WEB4 (Chromium / IRCTC Beta) availability state
-var chromiumAvailabilityOpened = false;
+// WEB4 (Firefox / IRCTC Beta) availability state
+var firefoxAvailabilityOpened = false;
 
 
 attempts = 0;
@@ -2958,85 +3191,341 @@ if (secs !== window.__bossTatkalLastSecond) {
             await new Promise(function(r) { setTimeout(r, 500); });
         }
 
-        // =========================================================
-        // WEB4 IRCTC BETA: CLICK CHECK AVAILABILITY FIRST
-        // =========================================================
+// =========================================================
+// WEB4 ONLY: CHECK AVAILABILITY WITH FRESH DOM RETRIES
+// =========================================================
 
-        var isChromiumWEB4 =
-            String(payload.browserType || '')
-                .trim()
-                .toUpperCase() === 'WEB4';
+var isFirefoxWEB4 =
+    String(payload.browserType || '')
+        .trim()
+        .toUpperCase() === 'WEB4';
 
-        if (isChromiumWEB4) {
-            var availabilityButton = targetCard
-                ? Array.from(
-                    targetCard.querySelectorAll('button')
-                ).find(function(btn) {
-                    var text = (
-                        btn.innerText ||
-                        btn.textContent ||
+if (isFirefoxWEB4) {
+
+    var availabilityRetryLimit = 20;
+    var availabilitySucceeded = false;
+
+
+// WEB4 ONLY: Find exact train card using actual IRCTC DOM
+function findWEB4AvailabilityTrainCard() {
+
+    var cards = Array.from(
+        document.querySelectorAll('div.train-card')
+    );
+
+    for (var i = 0; i < cards.length; i++) {
+
+        var card = cards[i];
+
+        var trainNumberElement = card.querySelector(
+            '.train-header .train-number'
+        );
+
+        if (!trainNumberElement) continue;
+
+        var actualTrainNumber = (
+            trainNumberElement.innerText ||
+            trainNumberElement.textContent ||
+            ''
+        ).trim();
+
+        if (actualTrainNumber === String(payload.targetTrainNo).trim()) {
+            return card;
+        }
+    }
+
+    return null;
+}
+
+
+function waitForWEB4TrainCard(timeoutMs) {
+
+    return new Promise(function(resolve) {
+
+        // Pehle turant check karo
+        var card = findWEB4AvailabilityTrainCard();
+
+        if (card) {
+            resolve(card);
+            return;
+        }
+
+        // Train card DOM mein aate hi detect karo
+        var observer = new MutationObserver(function() {
+
+            var foundCard = findWEB4AvailabilityTrainCard();
+
+            if (foundCard) {
+                observer.disconnect();
+                resolve(foundCard);
+            }
+        });
+
+        observer.observe(document.documentElement, {
+            childList: true,
+            subtree: true
+        });
+
+        // Safety timeout: maximum 10 seconds
+        setTimeout(function() {
+            observer.disconnect();
+            resolve(findWEB4AvailabilityTrainCard());
+        }, timeoutMs || 10000);
+    });
+}
+
+
+    for (
+        var availabilityTry = 1;
+        availabilityTry <= availabilityRetryLimit;
+        availabilityTry++
+    ) {
+
+        diagnosticLogs.push(
+            'WEB4: Availability attempt ' +
+            availabilityTry + '/' +
+            availabilityRetryLimit
+        );
+
+        // Fresh train card search.
+
+targetCard = await waitForWEB4TrainCard(10000);
+
+if (!targetCard || !targetCard.isConnected) {
+
+    diagnosticLogs.push(
+        'WEB4: Target train card 10 seconds mein DOM mein nahi mila.'
+    );
+
+    continue;
+}
+
+
+        // Button ko fresh DOM se search karo.
+        var availabilityButton = Array.from(
+    targetCard.querySelectorAll('button')
+).find(function(btn) {
+
+    var text = (
+        btn.innerText ||
+        btn.textContent ||
+        ''
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+
+    return (
+        text === 'CHECK AVAILABILITY' ||
+        text === 'REFRESH AVAILABILITY'
+    ) && btn.getClientRects().length > 0;
+});
+
+        // Button nahi mila to fail mat karo.
+        // Agle attempt mein fresh DOM search hogi.
+        if (!availabilityButton) {
+
+            diagnosticLogs.push(
+                'WEB4: Check Availability button nahi mila. ' +
+                'Attempt retry hoga.'
+            );
+
+            await new Promise(function(resolve) {
+                setTimeout(resolve, 3000);
+            });
+
+            continue;
+        }
+
+        if (availabilityButton.disabled) {
+
+            diagnosticLogs.push(
+                'WEB4: Availability button disabled hai. Waiting...'
+            );
+
+            await new Promise(function(resolve) {
+                setTimeout(resolve, 3000);
+            });
+
+            continue;
+        }
+
+        var buttonText = (
+            availabilityButton.innerText ||
+            availabilityButton.textContent ||
+            ''
+        )
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toUpperCase();
+
+        diagnosticLogs.push(
+            'WEB4: Clicking ' + buttonText
+        );
+
+        try {
+
+            availabilityButton.scrollIntoView({
+                behavior: 'auto',
+                block: 'center'
+            });
+
+        } catch (e) {}
+
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 300);
+        });
+
+        // Click se pehle button dobara verify karo.
+        if (
+            !availabilityButton.isConnected ||
+            availabilityButton.disabled
+        ) {
+
+            diagnosticLogs.push(
+                'WEB4: Button DOM se change ho gaya. Fresh retry hoga.'
+            );
+
+            continue;
+        }
+
+        availabilityButton.click();
+
+        diagnosticLogs.push(
+            'WEB4: Availability click sent. Result ka wait kar rahe hain...'
+        );
+
+        var retryErrorFound = false;
+        var betaClassesLoaded = false;
+
+        // 80 x 250ms = maximum 20 seconds wait.
+        for (var waitIndex = 0; waitIndex < 80; waitIndex++) {
+
+            await new Promise(function(resolve) {
+                setTimeout(resolve, 250);
+            });
+
+            // Angular re-render ke baad fresh card lo.
+            var refreshedTargetCard =
+                findWEB4AvailabilityTrainCard();
+
+            if (refreshedTargetCard) {
+                targetCard = refreshedTargetCard;
+            }
+
+            var pageText = (
+                document.body
+                    ? (
+                        document.body.innerText ||
+                        document.body.textContent ||
                         ''
-                    ).replace(/\s+/g, ' ').trim().toUpperCase();
+                    )
+                    : ''
+            ).toLowerCase();
 
-                    return text.includes('CHECK AVAILABILITY');
-                })
-                : null;
+            var web4ToastError = '';
 
-            if (availabilityButton) {
-                diagnosticLogs.push(
-                    'WEB4 Beta: Check Availability button found.'
-                );
+            try {
+                web4ToastError =
+                    String(getWEB4ToastError() || '').toLowerCase();
+            } catch (e) {}
 
-                try {
-                    availabilityButton.scrollIntoView({
-                        behavior: 'auto',
-                        block: 'center'
-                    });
-                } catch (e) {}
+            retryErrorFound =
+                web4ToastError.includes('unable to process request') ||
+                web4ToastError.includes('high load') ||
+                pageText.includes('high load') ||
+                pageText.includes('unable to process request') ||
+                pageText.includes('unable to process the request') ||
+                pageText.includes('please retry');
 
-                availabilityButton.click();
+            if (retryErrorFound) {
+                break;
+            }
 
-                diagnosticLogs.push(
-                    'WEB4 Beta: Check Availability click sent.'
-                );
+            // Exact train card ke class cards verify karo.
+            var currentClassCards = targetCard
+                ? targetCard.querySelectorAll('.class-card')
+                : [];
 
-                // Wait for Beta class cards to render
-                var betaClassesLoaded = false;
-
-                for (var waitIndex = 0; waitIndex < 20; waitIndex++) {
-                    await new Promise(function(resolve) {
-                        setTimeout(resolve, 250);
-                    });
-
-                    // Check inside the exact train card first
-                    var currentClassCards = targetCard
-                        ? targetCard.querySelectorAll('.class-card')
-                        : [];
-
-                    if (currentClassCards.length > 0) {
-                        betaClassesLoaded = true;
-                        break;
-                    }
-                }
-
-                diagnosticLogs.push(
-                    'WEB4 Beta: Class cards after availability click = ' +
-                    (targetCard
-                        ? targetCard.querySelectorAll('.class-card').length
-                        : 0)
-                );
-
-                if (!betaClassesLoaded) {
-                    diagnosticLogs.push(
-                        'WEB4 Beta: Classes did not appear after Check Availability.'
-                    );
-                }
-            } else {
-                diagnosticLogs.push(
-                    'WEB4 Beta: Check Availability button not found inside targetCard.'
-                );
+            if (
+                currentClassCards &&
+                currentClassCards.length > 0
+            ) {
+                betaClassesLoaded = true;
+                break;
             }
         }
+
+        // Availability successfully loaded.
+        if (betaClassesLoaded) {
+
+            availabilitySucceeded = true;
+
+            diagnosticLogs.push(
+                'WEB4: Availability successfully loaded. Class cards found: ' +
+                targetCard.querySelectorAll('.class-card').length
+            );
+
+            break;
+        }
+
+        // Explicit IRCTC error.
+        if (retryErrorFound) {
+
+            diagnosticLogs.push(
+                'WEB4: IRCTC High Load / Unable to Process error detected.'
+            );
+
+            var availabilityErrorClose = document.querySelector(
+                'a.ui-toast-close-icon.pi.pi-times'
+            );
+
+            if (availabilityErrorClose) {
+                try {
+                    availabilityErrorClose.click();
+                } catch (e) {}
+            }
+
+        } else {
+
+            diagnosticLogs.push(
+                'WEB4: 20 seconds wait ke baad bhi class cards load nahi hue.'
+            );
+        }
+
+        // Last attempt ke baad stop.
+        if (availabilityTry >= availabilityRetryLimit) {
+
+            diagnosticLogs.push(
+                'WEB4: Maximum 20 Availability attempts completed.'
+            );
+
+            break;
+        }
+
+        diagnosticLogs.push(
+            'WEB4: 2 seconds wait karke Availability dobara check hogi.'
+        );
+
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 3000);
+        });
+    }
+
+    // Safety gate: class selection tabhi chale jab cards load hon.
+    if (!availabilitySucceeded) {
+
+        diagnosticLogs.push(
+            'WEB4: Availability 20 attempts ke baad bhi load nahi hui. Booking safely stopped.'
+        );
+
+        return {
+            success: false,
+            error: 'WEB4: Availability 20 retries ke baad bhi load nahi hui; class selection/BOOK safely stop kar diya.',
+            logs: diagnosticLogs
+        };
+    }
+}
 
 
         var targetClass = String(
@@ -3051,7 +3540,7 @@ if (secs !== window.__bossTatkalLastSecond) {
             };
         }
 
-        var isChromiumWEB4 =
+        var isFirefoxWEB4 =
             String(payload.browserType || '')
                 .trim()
                 .toUpperCase() === 'WEB4';
@@ -3069,7 +3558,7 @@ if (secs !== window.__bossTatkalLastSecond) {
 
         var matchedClassBox = null;
 
-        if (isChromiumWEB4) {
+        if (isFirefoxWEB4) {
 
             // Beta page par har class ek .class-card hai.
             var betaClassCards = Array.from(
@@ -3215,147 +3704,284 @@ diagnosticLogs.push(
             }
 
             
-            // Exact class card ke andar BOOK button click karo.
-            var betaBookButton = matchedClassBox.querySelector(
-                'button.btn-book'
-            );
+// =========================================================
+// WEB4 ONLY: BOOK RETRY - MAX 10 ATTEMPTS
+// =========================================================
 
-            if (!betaBookButton) {
-                diagnosticLogs.push(
-                    'WEB4 Beta: BOOK button not found for ' + targetClass
-                );
+var web4BookSuccess = false;
+var web4BookRetryLimit = 10;
 
-                attempts++;
-                await new Promise(function(resolve) {
-                    setTimeout(resolve, 500);
-                });
-                continue;
-            }
+for (
+    var web4BookTry = 1;
+    web4BookTry <= web4BookRetryLimit;
+    web4BookTry++
+) {
 
-            // Click se pehle exact class aur button verify karo.
-            var finalCodeEl = matchedClassBox.querySelector('.class-code');
-
-            var finalCodeText = (
-                finalCodeEl
-                    ? (finalCodeEl.innerText || finalCodeEl.textContent || '')
-                    : ''
-            ).replace(/\s+/g, ' ').trim().toUpperCase();
-
-            var bookText = (
-                betaBookButton.innerText ||
-                betaBookButton.textContent ||
-                ''
-            ).trim().toUpperCase();
-
-            if (
-                finalCodeText !== wantedClassName + ' (' + targetClass + ')' ||
-                !bookText.includes('BOOK') ||
-                betaBookButton.disabled
-            ) {
-                diagnosticLogs.push(
-                    'WEB4 Beta: BOOK click blocked. Class=' +
-                    finalCodeText + ', Button=' + bookText
-                );
-
-                attempts++;
-                await new Promise(function(resolve) {
-                    setTimeout(resolve, 500);
-                });
-                continue;
-            }
-
-            // Unnecessary scrolling se bacho.
-            try {
-                matchedClassBox.scrollIntoView({
-                    behavior: 'auto',
-                    block: 'nearest'
-                });
-            } catch (e) {}
-
-            await new Promise(function(resolve) {
-                setTimeout(resolve, 200);
-            });
-
-            // DOM re-render hua ho to fresh exact class aur button lo.
-            var freshClassCards = Array.from(
-                targetCard.querySelectorAll('.class-card')
-            );
-
-            var freshMatchedCard = freshClassCards.find(function(card) {
-                var code = card.querySelector('.class-code');
-
-                var text = (
-                    code
-                        ? (code.innerText || code.textContent || '')
-                        : ''
-                ).replace(/\s+/g, ' ').trim().toUpperCase();
-
-                return text === wantedClassName + ' (' + targetClass + ')';
-            });
-
-            var freshBookButton = freshMatchedCard
-                ? freshMatchedCard.querySelector('button.btn-book')
-                : null;
-
-            if (!freshMatchedCard || !freshBookButton || freshBookButton.disabled) {
-                diagnosticLogs.push(
-                    'WEB4 Beta: Fresh class card/BOOK button unavailable.'
-                );
-
-                attempts++;
-                await new Promise(function(resolve) {
-                    setTimeout(resolve, 500);
-                });
-                continue;
-            }
-
-            diagnosticLogs.push(
-                'WEB4 Beta: Clicking BOOK inside exact class ' + targetClass
-            );
-
-            freshBookButton.click();
-
-            await new Promise(function(resolve) {
-                setTimeout(resolve, 700);
-            });
-
-            diagnosticLogs.push(
-                'WEB4 Beta: BOOK click dispatched for ' + targetClass
-            );
-
-            // WEB4: Book click ke baad passenger form ka wait karo.
-var web4PassengerFormReady = false;
-
-for (var web4Wait = 0; web4Wait < 40; web4Wait++) {
-    await new Promise(function(resolve) {
-        setTimeout(resolve, 250);
-    });
-
-    var web4NewPassengerButton = document.querySelector(
-        'button.btn.btn-new-passenger'
-    );
-
-    var web4PassengerName = document.querySelector(
-        'input[formcontrolname="passengerName"], ' +
-        'input[placeholder*="Full Name"], ' +
-        'input[placeholder*="Govt"]'
-    );
-
-    if (web4NewPassengerButton || web4PassengerName) {
-        web4PassengerFormReady = true;
+    // Passenger page already open? Stop immediately.
+    if (
+        window.location.href.toLowerCase().includes('psgninput') ||
+        document.querySelector('button.btn.btn-new-passenger') ||
+        document.querySelector(
+            'input[formcontrolname="passengerName"]'
+        )
+    ) {
+        web4BookSuccess = true;
         break;
     }
+
+    // Exact requested class card dobara find karo.
+    var retryClassCards = Array.from(
+        targetCard.querySelectorAll('.class-card')
+    );
+
+    var retryMatchedCard = retryClassCards.find(function(card) {
+        var code = card.querySelector('.class-code');
+
+        var text = (
+            code
+                ? (code.innerText || code.textContent || '')
+                : ''
+        ).replace(/\s+/g, ' ').trim().toUpperCase();
+
+        return text === wantedClassName + ' (' + targetClass + ')';
+    });
+
+    var retryBookButton = retryMatchedCard
+        ? retryMatchedCard.querySelector('button.btn-book')
+        : null;
+
+    if (!retryMatchedCard || !retryBookButton || retryBookButton.disabled) {
+        diagnosticLogs.push(
+            'WEB4: Requested class/BOOK button unavailable on attempt ' +
+            web4BookTry
+        );
+        break;
+    }
+
+    diagnosticLogs.push(
+        'WEB4: BOOK attempt ' +
+        web4BookTry + '/' + web4BookRetryLimit
+    );
+
+    try {
+        retryMatchedCard.scrollIntoView({
+            behavior: 'auto',
+            block: 'nearest'
+        });
+    } catch (e) {}
+
+    await new Promise(function(resolve) {
+        setTimeout(resolve, 200);
+    });
+
+    // Fresh button check before click.
+    retryBookButton = retryMatchedCard.querySelector('button.btn-book');
+
+    if (!retryBookButton || retryBookButton.disabled) {
+        diagnosticLogs.push(
+            'WEB4: BOOK button disabled before click.'
+        );
+        break;
+    }
+
+    retryBookButton.click();
+
+    diagnosticLogs.push(
+        'WEB4: BOOK click sent for class ' + targetClass
+    );
+
+    // Wait for passenger page or explicit IRCTC error.
+    var web4PassengerFormReady = false;
+    var web4RetryErrorFound = false;
+
+    for (var web4Wait = 0; web4Wait < 40; web4Wait++) {
+
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 250);
+        });
+
+        var currentUrl = window.location.href.toLowerCase();
+
+        var passengerButton = document.querySelector(
+            'button.btn.btn-new-passenger'
+        );
+
+        var passengerName = document.querySelector(
+            'input[formcontrolname="passengerName"], ' +
+            'input[placeholder*="Full Name"], ' +
+            'input[placeholder*="Govt"]'
+        );
+
+        if (
+            currentUrl.includes('psgninput') ||
+            passengerButton ||
+            passengerName
+        ) {
+            web4PassengerFormReady = true;
+            break;
+        }
+
+        var currentPageText = (
+            document.body.innerText ||
+            document.body.textContent ||
+            ''
+        ).toLowerCase();
+
+        var web4BookToastError =
+    getWEB4ToastError().toLowerCase();
+
+web4RetryErrorFound =
+    web4BookToastError.includes('unable to process request') ||
+    currentPageText.includes('high load') ||
+    currentPageText.includes('unable to process request') ||
+    currentPageText.includes('unable to process the request') ||
+    currentPageText.includes('please retry');
+
+        if (web4RetryErrorFound) {
+            break;
+        }
+    }
+
+    // Passenger page success: never click BOOK again.
+    if (web4PassengerFormReady) {
+
+        web4BookSuccess = true;
+        bookNowClicked = true;
+
+        diagnosticLogs.push(
+            'WEB4: Passenger page confirmed. BOOK retry stopped.'
+        );
+
+        break;
+    }
+
+    // Retry ONLY when an explicit IRCTC error is detected.
+    if (!web4RetryErrorFound) {
+
+        diagnosticLogs.push(
+            'WEB4: No confirmed IRCTC error and passenger page not detected. ' +
+            'Stopping to avoid duplicate BOOK click.'
+        );
+
+        break;
+    }
+
+    diagnosticLogs.push(
+        'WEB4: IRCTC BOOK error detected.'
+    );
+
+    if (web4BookTry >= web4BookRetryLimit) {
+        diagnosticLogs.push(
+            'WEB4: Maximum 10 BOOK attempts reached.'
+        );
+        break;
+    }
+
+    // WEB4: BOOK error ke baad retry se pehle 3 seconds wait.
+diagnosticLogs.push(
+    'WEB4: BOOK error detected. 3 seconds wait karke retry start hoga.'
+);
+
+await new Promise(function(resolve) {
+    setTimeout(resolve, 3000);
+});
+
+    // Same train ka Refresh Availability button.
+    var refreshAvailabilityButton = Array.from(
+        targetCard.querySelectorAll('button.btn-availability')
+    ).find(function(btn) {
+        var text = (
+            btn.innerText || btn.textContent || ''
+        ).replace(/\s+/g, ' ').trim().toUpperCase();
+
+        return text.includes('REFRESH AVAILABILITY');
+    });
+
+    if (!refreshAvailabilityButton) {
+        diagnosticLogs.push(
+            'WEB4: Refresh Availability button not found. Retry stopped.'
+        );
+        break;
+    }
+
+    diagnosticLogs.push(
+        'WEB4: Refresh Availability clicked after BOOK error.'
+    );
+
+    refreshAvailabilityButton.click();
+
+    // Wait for refreshed class cards.
+    var refreshedClassesReady = false;
+
+    for (var refreshWait = 0; refreshWait < 40; refreshWait++) {
+
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 250);
+        });
+
+        var refreshedClassCards = targetCard.querySelectorAll('.class-card');
+
+        if (refreshedClassCards.length > 0) {
+            refreshedClassesReady = true;
+            break;
+        }
+    }
+
+    if (!refreshedClassesReady) {
+        diagnosticLogs.push(
+            'WEB4: Classes did not reload after Refresh Availability.'
+        );
+        break;
+    }
+
+    // Next loop requested class ko dobara locate/select karke BOOK karega.
+    var classAfterRefresh = Array.from(
+        targetCard.querySelectorAll('.class-card')
+    ).find(function(card) {
+        var code = card.querySelector('.class-code');
+
+        var text = (
+            code
+                ? (code.innerText || code.textContent || '')
+                : ''
+        ).replace(/\s+/g, ' ').trim().toUpperCase();
+
+        return text === wantedClassName + ' (' + targetClass + ')';
+    });
+
+    if (!classAfterRefresh) {
+        diagnosticLogs.push(
+            'WEB4: Requested class not found after refresh.'
+        );
+        break;
+    }
+
+    classAfterRefresh.click();
+
+    await new Promise(function(resolve) {
+        setTimeout(resolve, 500);
+    });
+
+    diagnosticLogs.push(
+        'WEB4: Requested class ' + targetClass +
+        ' reselected after refresh.'
+    );
 }
 
-if (web4PassengerFormReady) {
+if (web4BookSuccess) {
+
     bookNowClicked = true;
 
     diagnosticLogs.push(
-        'WEB4: Passenger form confirmed after class BOOK click.'
+        'WEB4: BOOK process successful. Passenger page reached.'
     );
+
 } else {
+
+    bookNowClicked = false;
+
     diagnosticLogs.push(
-        'WEB4: Passenger form abhi confirm nahi hua.'
+        'WEB4: BOOK retry process stopped without passenger page confirmation.'
     );
 }
 
@@ -3674,12 +4300,12 @@ try {
 
     // WEB4: Class ke BOOK button par click ho chuka hai.
 // Is page par alag journey-date card search mat karo.
-var isChromiumWEB4DateFlow =
+var isFirefoxWEB4DateFlow =
     String(payload.browserType || '')
         .trim()
         .toUpperCase() === 'WEB4';
 
-if (isChromiumWEB4DateFlow && classSelectionCompleted) {
+if (isFirefoxWEB4DateFlow && classSelectionCompleted) {
     journeyDateSelected = true;
 
     diagnosticLogs.push(
@@ -4092,12 +4718,75 @@ if (
         var bookRetryLimit =
             isTatkal ? 60 : 30;
 
+            // IRCTC explicit BOOK error retry limit
+var bookNowErrorRetryCount = 0;
+var bookNowErrorRetryLimit = 20;
+
+// ================================================
+// PERMANENT PASSENGER PAGE DETECTOR
+// WEB / WEB2 / WEB3
+// ================================================
+
+var passengerPageReached = false;
+var passengerPageObserver = null;
+
+var checkPassengerPage = function() {
+
+    if (passengerPageReached) return true;
+
+    var currentUrl = window.location.href.toLowerCase();
+
+    var passengerInput = document.querySelector(
+        'input[formcontrolname="passengerName"], ' +
+        'input[placeholder*="Full Name"], ' +
+        'input[placeholder*="Govt"]'
+    );
+
+    if (
+        currentUrl.indexOf('psgninput') !== -1 ||
+        passengerInput
+    ) {
+        passengerPageReached = true;
+        bookNowClicked = true;
+
+        diagnosticLogs.push(
+            "PASSENGER PAGE DETECTED! All Book Now retries stopped."
+        );
+
+        if (passengerPageObserver) {
+            passengerPageObserver.disconnect();
+        }
+
+        return true;
+    }
+
+    return false;
+};
+
+passengerPageObserver = new MutationObserver(function() {
+    checkPassengerPage();
+});
+
+passengerPageObserver.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true
+});
+
+window.addEventListener('popstate', checkPassengerPage);
+window.addEventListener('hashchange', checkPassengerPage);
+
+// Immediately check current page
+checkPassengerPage();
 
         for (
-            var bTry = 0;
-            bTry < bookRetryLimit;
-            bTry++
-        ) {
+    var bTry = 0;
+    bTry < bookRetryLimit && !passengerPageReached;
+    bTry++
+) {
+    if (checkPassengerPage()) {
+        break;
+    }
 
             // -------------------------------------------------
         // FRESH TARGET CARD (STRICT & SAFE TRAIN ROW FINDER)
@@ -4271,12 +4960,12 @@ var retryDateEl = Array.from(
 
             var bookBtn = null;
 
-            var isChromiumWEB4 =
+            var isFirefoxWEB4 =
                 String(payload.browserType || '')
                     .trim()
                     .toUpperCase() === 'WEB4';
 
-            if (isChromiumWEB4 && targetCard) {
+            if (isFirefoxWEB4 && targetCard) {
 
                 var betaWantedClass = String(
                     payload.trainClass || ''
@@ -4382,17 +5071,22 @@ var retryDateEl = Array.from(
                 });
 
 
-                diagnosticLogs.push(
-                    "Attempt " +
-                    (bTry + 1) +
-                    ": Clicking Book Now..."
-                );
+                if (checkPassengerPage()) {
+    break;
+}
 
+diagnosticLogs.push(
+    "Attempt " +
+    (bTry + 1) +
+    ": Clicking Book Now..."
+);
 
-                try {
+try {
+    if (checkPassengerPage()) {
+        break;
+    }
 
-
-bookBtn.click();
+    bookBtn.click();
 
 await liveProgress(
     'BOOK NOW',
@@ -4404,18 +5098,19 @@ diagnosticLogs.push(
     "Book Now click sent. Passenger page load hone ka wait..."
 );
 
-var passengerPageReached = false;
+var bookNowErrorFound = false;
 
-// Sirf passenger page detect karo.
-// BOOK NOW ke baad High Load / Unable to Process
-// ko mini window mein bhejne wala extra logic hata diya hai.
-
-for (var waitTry = 0; waitTry < 60; waitTry++) {
+while (!passengerPageReached && !bookNowErrorFound) {
 
     await new Promise(function(r) {
-        setTimeout(r, 100);
+        setTimeout(r, 250);
     });
 
+    if (checkPassengerPage()) {
+    break;
+}
+
+    // Passenger page detection
     var passengerNameInput = document.querySelector(
         'input[formcontrolname="passengerName"], ' +
         'input[placeholder*="Full Name"], ' +
@@ -4423,7 +5118,7 @@ for (var waitTry = 0; waitTry < 60; waitTry++) {
     );
 
     var isPassengerUrl =
-        window.location.href.indexOf('psgninput') !== -1;
+        window.location.href.toLowerCase().indexOf('psgninput') !== -1;
 
     if (isPassengerUrl || passengerNameInput) {
 
@@ -4435,9 +5130,67 @@ for (var waitTry = 0; waitTry < 60; waitTry++) {
 
         break;
     }
+
+    // Explicit IRCTC toast detection
+    var bookToastMessages = Array.from(
+        document.querySelectorAll('.ui-toast-detail')
+    ).map(function(el) {
+        return (
+            el.innerText ||
+            el.textContent ||
+            ''
+        ).replace(/\s+/g, ' ').trim();
+    });
+
+    var bookToastError = bookToastMessages.find(function(message) {
+        return /high load|unable to process(?: the)? request|please retry/i.test(message);
+    }) || '';
+
+    // Page text fallback
+    var currentBookPageText = (
+        document.body.innerText ||
+        document.body.textContent ||
+        ''
+    );
+
+    bookNowErrorFound = !!bookToastError ||
+        /high load|unable to process(?: the)? request|please retry/i.test(
+            currentBookPageText
+        );
+
+    if (bookNowErrorFound) {
+
+        diagnosticLogs.push(
+            "IRCTC BOOK error detected: " +
+            (bookToastError || "High Load / Unable to Process Request")
+        );
+
+        // Close only the matching error toast
+        var errorToast = Array.from(
+            document.querySelectorAll('.ui-toast')
+        ).find(function(toast) {
+            return /high load|unable to process(?: the)? request|please retry/i.test(
+                toast.innerText || toast.textContent || ''
+            );
+        });
+
+        if (errorToast) {
+            var closeButton = errorToast.querySelector(
+                'a.ui-toast-close-icon, button'
+            );
+
+            if (closeButton) {
+                closeButton.click();
+            }
+        }
+
+        break;
+    }
 }
 
+// Passenger page success
 if (passengerPageReached) {
+
     bookNowClicked = true;
 
     await liveProgress(
@@ -4447,27 +5200,232 @@ if (passengerPageReached) {
     );
 
     diagnosticLogs.push(
-        "Passenger page reached after Book Now click."
+        "Passenger page reached. Book Now retry stopped."
     );
 
     break;
 }
 
-else {
+// Retry only on confirmed IRCTC error
+if (bookNowErrorFound) {
+
+    bookNowErrorRetryCount++;
 
     diagnosticLogs.push(
-        "Passenger page not detected yet. Next attempt will reselect Train -> Class -> Date."
+        "BOOK error retry " +
+        bookNowErrorRetryCount +
+        "/" +
+        bookNowErrorRetryLimit
     );
 
-    classSelectionCompleted = false;
-    targetCard = null;
+    if (bookNowErrorRetryCount >= bookNowErrorRetryLimit) {
 
-    await new Promise(function(r) {
-        setTimeout(r, 100);
-    });
+        diagnosticLogs.push(
+            "Maximum confirmed BOOK error retries reached. Stopping safely."
+        );
+
+        break;
+    }
+
+// ================================================
+// RECOVERY SAFETY CHECK 1:
+// INSTANT PASSENGER PAGE DETECTION
+// ================================================
+
+if (checkPassengerPage()) {
+
+    bookNowClicked = true;
+
+    diagnosticLogs.push(
+        "Passenger page detected during recovery. Stopping all Book Now retries."
+    );
+
+    await liveProgress(
+        'PASSENGER PAGE',
+        'FILLING PASSENGER DETAILS...',
+        50
+    );
+
+    break;
+}
+
+// ================================================
+// RECOVERY SAFETY CHECK 2: REFIND EXACT TRAIN CARD
+// ================================================
+
+var recoveryTargetCard = Array.from(
+    document.querySelectorAll(
+        'p-accordionTab, div.train-avl-col, div.form-group'
+    )
+).find(function(card) {
+
+    if (!card || !card.isConnected) {
+        return false;
+    }
+
+    var cardText = (
+        card.innerText ||
+        card.textContent ||
+        ''
+    );
+
+    if (
+        cardText.indexOf(
+            String(payload.targetTrainNo)
+        ) === -1
+    ) {
+        return false;
+    }
+
+    var nestedCards = card.querySelectorAll(
+        'p-accordionTab, div.train-avl-col'
+    );
+
+    return nestedCards.length === 0;
+});
+
+if (!recoveryTargetCard) {
+
+    diagnosticLogs.push(
+        "Recovery: Exact target train card not found. Skipping retry."
+    );
 
     continue;
 }
+
+
+// ================================================
+// RECOVERY SAFETY CHECK 3: REFIND BOOK NOW BUTTON
+// AND VERIFY IT IS NOT DISABLED
+// ================================================
+
+var recoveryBookBtn = null;
+
+if (
+    String(payload.browserType || '')
+        .trim()
+        .toUpperCase() === 'WEB4'
+) {
+
+    var recoveryClass = String(
+        payload.trainClass || ''
+    ).trim().toUpperCase();
+
+    var recoveryClassNames = {
+        'SL': 'SLEEPER',
+        '3E': 'AC 3 ECONOMY',
+        '3A': 'AC 3 TIER',
+        '2A': 'AC 2 TIER',
+        '1A': 'AC FIRST CLASS'
+    };
+
+    var recoveryWantedName =
+        recoveryClassNames[recoveryClass] ||
+        recoveryClass;
+
+    var recoveryClassCard = Array.from(
+        recoveryTargetCard.querySelectorAll('.class-card')
+    ).find(function(card) {
+
+        var code = card.querySelector('.class-code');
+
+        var text = (
+            code
+                ? (code.innerText || code.textContent || '')
+                : ''
+        ).replace(/\s+/g, ' ').trim().toUpperCase();
+
+        return text ===
+            recoveryWantedName + ' (' + recoveryClass + ')';
+    });
+
+    if (recoveryClassCard) {
+        recoveryBookBtn =
+            recoveryClassCard.querySelector('button.btn-book');
+    }
+
+} else {
+
+    recoveryBookBtn = Array.from(
+        recoveryTargetCard.querySelectorAll('button, a')
+    ).find(function(btn) {
+
+        var text = (
+            btn.innerText ||
+            btn.textContent ||
+            ''
+        ).trim().toUpperCase();
+
+        return text.indexOf('BOOK NOW') !== -1;
+    });
+}
+
+
+var recoveryBtnDisabled =
+    recoveryBookBtn &&
+    (
+        recoveryBookBtn.disabled ||
+        recoveryBookBtn.getAttribute('disabled') !== null ||
+        recoveryBookBtn.getAttribute('aria-disabled') === 'true' ||
+        recoveryBookBtn.classList.contains('disabled')
+    );
+
+
+if (!recoveryBookBtn) {
+
+    diagnosticLogs.push(
+        "Recovery: Book Now button not found. Skipping retry."
+    );
+
+    continue;
+}
+
+if (recoveryBtnDisabled) {
+
+    diagnosticLogs.push(
+        "Recovery: Book Now button is disabled. Skipping retry."
+    );
+
+    continue;
+}
+
+
+diagnosticLogs.push(
+    "Recovery safety checks passed: Passenger page, target train and enabled Book Now verified."
+);
+
+
+// ================================================
+// EXISTING NEW RETRY FLOW - KEEP UNCHANGED
+// ================================================
+
+if (checkPassengerPage()) {
+    bookNowClicked = true;
+
+    await liveProgress(
+        'PASSENGER PAGE',
+        'FILLING PASSENGER DETAILS...',
+        50
+    );
+
+    break;
+}
+
+classSelectionCompleted = false;
+targetCard = null;
+
+continue;
+}
+
+// No passenger page and no confirmed error:
+// Do not click BOOK again blindly.
+diagnosticLogs.push(
+    "Passenger page not detected and no confirmed IRCTC error. " +
+    "Stopping retry to avoid duplicate BOOK click."
+);
+
+break;
+
 
                 } catch (clickError) {
 
@@ -4494,11 +5452,11 @@ else {
 
             // -------------------------------------------------
             // IMPORTANT:
-            // 500ms wait between retries
+            // 3000ms wait between retries
             // -------------------------------------------------
 
             await new Promise(function(r) {
-                setTimeout(r, 1000);
+                setTimeout(r, 3000);
             });
         }
 
@@ -4577,13 +5535,13 @@ diagnosticLogs.push(
 );
 
 
-var isChromiumWEB4 =
+var isFirefoxWEB4 =
     String(payload.browserType || '').toUpperCase() === 'WEB4';
 
 var navSuccess = false;
 var nameInputs = [];
 
-if (isChromiumWEB4) {
+if (isFirefoxWEB4) {
     // WEB4: pehle passenger page ka wait karo
     diagnosticLogs.push("WEB4: Waiting for passenger page...");
 
@@ -4645,7 +5603,7 @@ if (isChromiumWEB4) {
 
 } else {
     // WEB / WEB2 / WEB3: existing logic
-    for (var i = 0; i < 60; i++) {
+    while (true) {
         await new Promise(function(resolve) {
             setTimeout(resolve, 500);
         });
@@ -4872,12 +5830,12 @@ try {
 
   var genderSelect = null;
 
-var isChromiumWEB4Gender =
+var isFirefoxWEB4Gender =
     String(payload.browserType || '')
         .trim()
         .toUpperCase() === 'WEB4';
 
-if (isChromiumWEB4Gender) {
+if (isFirefoxWEB4Gender) {
 
     var web4GenderDropdowns = document.querySelectorAll(
         'p-dropdown[formcontrolname="passengerGender"]'
@@ -5675,64 +6633,167 @@ await new Promise(function(r) { setTimeout(r, 2000); });
 // FIRST CONTINUE / WEB4 CALCULATE FARE
 // =================================================
 
-var isChromiumWEB4PaymentCalculateFare =
+var isFirefoxWEB4PaymentCalculateFare =
     String(payload.browserType || '')
         .trim()
         .toUpperCase() === 'WEB4';
 
-if (isChromiumWEB4PaymentCalculateFare) {
 
-    // WEB4 ONLY: Calculate Fare button
-    var calculateFareBtn = Array.from(
-        document.querySelectorAll('button.btn-calc-fare')
-    ).find(function (b) {
-        return (
-            (b.innerText || b.textContent || '')
+if (isFirefoxWEB4PaymentCalculateFare) {
+
+    // WEB4 ONLY: Calculate Fare button wait
+    var calculateFareBtn = null;
+    var web4FareRetrySuccess = false;
+    var fareTry = 0;
+
+    while (!web4FareRetrySuccess) {
+
+        // Button ko maximum 30 seconds search karo
+        calculateFareBtn = null;
+
+        for (var fareButtonWait = 0; fareButtonWait < 60; fareButtonWait++) {
+
+            calculateFareBtn = Array.from(
+                document.querySelectorAll('button.btn-calc-fare')
+            ).find(function(b) {
+
+                var text = (b.innerText || b.textContent || '')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .toLowerCase();
+
+                return text.includes('calculate fare') &&
+                    b.getClientRects().length > 0 &&
+                    !b.disabled;
+            });
+
+            if (calculateFareBtn) break;
+
+            await new Promise(function(resolve) {
+                setTimeout(resolve, 500);
+            });
+        }
+
+        if (!calculateFareBtn) {
+
+            return {
+                success: false,
+                error: 'WEB4: Calculate Fare button nahi mila ya enabled nahi hua.',
+                logs: diagnosticLogs
+            };
+        }
+
+        // Button ko fresh locate karke click karo
+        calculateFareBtn.scrollIntoView({
+            behavior: 'instant',
+            block: 'center'
+        });
+
+        await new Promise(function(resolve) {
+            setTimeout(resolve, 500);
+        });
+
+        // Recheck button
+        calculateFareBtn = Array.from(
+            document.querySelectorAll('button.btn-calc-fare')
+        ).find(function(b) {
+
+            var text = (b.innerText || b.textContent || '')
+                .replace(/\s+/g, ' ')
                 .trim()
-                .toLowerCase() === 'calculate fare' &&
-            b.offsetParent !== null &&
-            !b.disabled
+                .toLowerCase();
+
+            return text.includes('calculate fare') &&
+                b.getClientRects().length > 0 &&
+                !b.disabled;
+        });
+
+        if (!calculateFareBtn) continue;
+
+        fareTry++;
+
+        diagnosticLogs.push(
+            'WEB4: Calculate Fare actual click attempt ' + fareTry
         );
-    });
 
-    if (!calculateFareBtn) {
-        return {
-            success: false,
-            error: 'WEB4: Calculate Fare button nahi mila.',
-            logs: diagnosticLogs
-        };
-    }
+        calculateFareBtn.click();
 
-    await new Promise(function (resolve) {
-        setTimeout(resolve, 500);
-    });
+        // Click ke baad response ka wait
+        var fareResponseDetected = false;
 
-    // Click se pehle button ko dobara check karein
-    calculateFareBtn = Array.from(
-        document.querySelectorAll('button.btn-calc-fare')
-    ).find(function (b) {
-        return (
-            (b.innerText || b.textContent || '')
-                .trim()
-                .toLowerCase() === 'calculate fare' &&
-            b.offsetParent !== null &&
-            !b.disabled
+        for (var fareWait = 0; fareWait < 360; fareWait++) {
+
+            await new Promise(function(resolve) {
+                setTimeout(resolve, 500);
+            });
+
+            // Button dobara visible hai ya nahi
+            var currentFareButton = Array.from(
+                document.querySelectorAll('button.btn-calc-fare')
+            ).find(function(b) {
+                return b.getClientRects().length > 0 &&
+                    !b.disabled;
+            });
+
+            // Review text ke saath button ka disappear hona bhi verify karo
+            var currentFareText = document.body.innerText || '';
+
+            var reviewDetected =
+                /\bbooking\s+review\b/i.test(currentFareText);
+
+            if (reviewDetected && !currentFareButton) {
+
+                web4FareRetrySuccess = true;
+                fareResponseDetected = true;
+
+                diagnosticLogs.push(
+                    'WEB4: Calculate Fare click verified. Review page confirmed.'
+                );
+
+                break;
+            }
+
+            // IRCTC error toast
+            var fareToastError = getWEB4ToastError();
+
+            if (fareToastError) {
+
+                diagnosticLogs.push(
+                    'WEB4 Calculate Fare error: ' + fareToastError
+                );
+
+                var fareErrorClose = document.querySelector(
+                    'a.ui-toast-close-icon.pi.pi-times'
+                );
+
+                if (fareErrorClose) {
+                    fareErrorClose.click();
+                }
+
+                await new Promise(function(resolve) {
+                    setTimeout(resolve, 2000);
+                });
+
+                fareResponseDetected = true;
+                break;
+            }
+        }
+
+        if (web4FareRetrySuccess) break;
+
+        if (!fareResponseDetected) {
+
+            return {
+                success: false,
+                error: 'WEB4: Calculate Fare click ke baad 180 seconds tak page response nahi mila.',
+                logs: diagnosticLogs
+            };
+        }
+
+        diagnosticLogs.push(
+            'WEB4: Calculate Fare dobara attempt kiya jayega.'
         );
-    });
-
-    if (!calculateFareBtn) {
-        return {
-            success: false,
-            error: 'WEB4: Calculate Fare button click se pehle nahi mila.',
-            logs: diagnosticLogs
-        };
     }
-
-    calculateFareBtn.click();
-
-    diagnosticLogs.push(
-        'WEB4: Calculate Fare button clicked.'
-    );
 
 } else {
 
@@ -5837,15 +6898,20 @@ function getIRCTCErrorStatus(text) {
     };
 }
 
+// ==========================================
+// OLD SITE ONLY - FIRST CONTINUE RETRY
+// WEB4 ko is loop se bahar rakho
+// ==========================================
+if (!isFirefoxWEB4PaymentCalculateFare) {
 
 // =================================================
 // FIRST CONTINUE RETRY
 // =================================================
 
 var firstRetry = 0;
-var firstRetryLimit = 10;
+var firstRetryLimit = 20;
 var firstWaitCycles = 0;
-var firstWaitCycleLimit = 240;
+var firstWaitCycleLimit = 360;
 var previousPopup = false;
 
 for (;;) {
@@ -5871,128 +6937,127 @@ for (;;) {
         txt.includes('unable to process') ||
         txt.includes('please retry');
 
-        if (popup) {
+if (popup) {
+
     var isNewPopup = !previousPopup;
     previousPopup = true;
 
-        firstRetry++;
+    // Same popup ko baar-baar count mat karo
+    if (!isNewPopup) {
+        continue;
+    }
 
-        diagnosticLogs.push(
-            "First Continue error popup. Retry " +
-            firstRetry +
-            "/" +
-            firstRetryLimit
-        );
+    firstRetry++;
 
-if (isNewPopup) {
-    
-var detectedError = getIRCTCErrorStatus(
-    document.body.innerText || ''
-);
+    diagnosticLogs.push(
+        "First Continue error popup. Retry " +
+        firstRetry + "/" + firstRetryLimit
+    );
 
-await liveProgress(
-    detectedError.step,
-    detectedError.message,
-    20
-);
+    var detectedError = getIRCTCErrorStatus(
+        document.body.innerText || ''
+    );
 
-}
+    await liveProgress(
+        detectedError.step,
+        detectedError.message,
+        20
+    );
 
-
-        var close =
-    document.querySelector(
+    var close = document.querySelector(
         'a.ui-toast-close-icon.pi.pi-times'
     );
 
-if (close) {
-    try {
-        close.click();
+    if (close) {
+        try {
+            close.click();
 
-        diagnosticLogs.push(
-            "Error toast close button clicked successfully."
-        );
-    } catch (e) {}
+            diagnosticLogs.push(
+                "Error toast close button clicked successfully."
+            );
+        } catch (e) {}
+    }
 
     await new Promise(function(r) {
-        setTimeout(r, 1500);
+        setTimeout(r, 2500);
     });
-}
 
-        if (firstRetry >= firstRetryLimit) {
+    // 20 retries allow karo
+    if (firstRetry > firstRetryLimit) {
+        return {
+            success: false,
+            error: 'First Continue failed after 20 retries.',
+            logs: diagnosticLogs
+        };
+    }
 
-            return {
-                success: false,
-                error:
-                    'First Continue failed after 10 retries.',
-                logs: diagnosticLogs
-            };
+    // Fresh Continue button
+    continueBtn1 = Array.from(
+        document.querySelectorAll('button')
+    ).find(function(b) {
+
+        var t = (b.innerText || '')
+            .trim()
+            .toLowerCase();
+
+        return (
+            t.indexOf('continue') !== -1 &&
+            b.offsetParent !== null &&
+            !b.disabled
+        );
+    });
+
+    if (continueBtn1) {
+
+        await new Promise(function(r) {
+            setTimeout(r, 500);
+        });
+
+        if (
+            continueBtn1.offsetParent !== null &&
+            !continueBtn1.disabled
+        ) {
+            continueBtn1.click();
+
+            diagnosticLogs.push(
+                "First Continue retry clicked."
+            );
         }
-
-        // Fresh Continue button
-        continueBtn1 =
-            Array.from(
-                document.querySelectorAll('button')
-            ).find(function(b) {
-
-                var t =
-                    (b.innerText || '')
-                    .trim()
-                    .toLowerCase();
-
-                return (
-                    t.indexOf('continue') !== -1 &&
-                    b.offsetParent !== null &&
-                    !b.disabled
-                );
-            });
-
-        if (continueBtn1) {
-
-    await new Promise(function(r) {
-        setTimeout(r, 500);
-    });
-
-    if (
-        continueBtn1.offsetParent !== null &&
-        !continueBtn1.disabled
-    ) {
-        continueBtn1.click();
-
-        diagnosticLogs.push(
-            "First Continue retry clicked after 1500ms wait."
-        );
-    } else {
-        diagnosticLogs.push(
-            "First Continue button not ready yet. Waiting for next cycle."
-        );
     }
+
+    continue;
 }
-
-                continue;
-    }
 
     previousPopup = false;
 
-    var wait =
-        txt.includes('please wait') ||
-        txt.includes('processing');
+    var currentPageText =
+        (document.body && document.body.innerText || '')
+            .replace(/\s+/g, ' ')
+            .toLowerCase();
 
-    var passengerPage =
-        document.querySelector(
-            'input[formcontrolname="passengerName"]'
+    // Review Journey page ki exact detection
+    var reviewPage =
+        currentPageText.includes('review journey') ||
+        currentPageText.includes('review your journey');
+
+    // Loader abhi bhi visible hai?
+    var wait =
+        currentPageText.includes('please wait') ||
+        currentPageText.includes('processing') ||
+        currentPageText.includes('loading');
+
+    // Sirf Review Journey aane aur loader hatne par aage badho
+    if (reviewPage && !wait) {
+
+        diagnosticLogs.push(
+            "Review Journey page detected and loader finished. First Continue successful."
         );
 
-    var reviewPage =
-        /review|booking details|passenger details/i.test(txt);
+          break;
+       }
+   }
 
-    if (
-        !wait &&
-        (passengerPage || reviewPage)
-    ) {
-        break;
-    }
 }
-
 
 // =================================================
 // SECOND CONTINUE
@@ -6005,6 +7070,7 @@ diagnosticLogs.push(
 var continueBtn2 = null;
 
 var secondFindRetry = 0;
+var previousSecondFindPopup = false;
 var secondFindLimit = 60;
 var secondFindWaitCycles = 0;
 var secondFindWaitCycleLimit = 300;
@@ -6034,7 +7100,14 @@ for (;;) {
 
     if (popup2) {
 
-        secondFindRetry++;
+        var isNewFindPopup = !previousSecondFindPopup;
+previousSecondFindPopup = true;
+
+if (!isNewFindPopup) {
+    continue;
+}
+
+secondFindRetry++;
 
         diagnosticLogs.push(
             "Second Continue page error. Retry " +
@@ -6079,13 +7152,15 @@ if (close2) {
             return {
                 success: false,
                 error:
-                    'Second Continue button nahi mila after 60 retries.',
+                    'Second Continue button nahi mila after 20 retries.',
                 logs: diagnosticLogs
             };
         }
 
         continue;
     }
+
+        previousSecondFindPopup = false;
 
     continueBtn2 =
         Array.from(
@@ -6117,7 +7192,7 @@ if (close2) {
 var reviewPageText = document.body.innerText || '';
 
 var isReviewPage =
-    /passenger details/i.test(reviewPageText);
+    /passenger\s+(?:details|information)/i.test(reviewPageText);
 
 var wlMatch = isReviewPage
     ? reviewPageText.match(
@@ -6185,10 +7260,15 @@ diagnosticLogs.push(
 // SECOND CONTINUE RETRY - MAXIMUM 10 RETRIES
 // =================================================
 
+var isWEB4SecondContinue =
+    String(payload.browserType || '')
+        .trim()
+        .toUpperCase() === 'WEB4';
+
 var secondRetry = 0;
-var secondRetryLimit = 10;
+var secondRetryLimit = 20;
 var secondWaitCycles = 0;
-var secondWaitCycleLimit = 240;
+var secondWaitCycleLimit = 360;
 var previousSecondPopup = false;
 var secondRetryPending = false;
 
@@ -6211,10 +7291,28 @@ for (;;) {
     var txt3 =
         (document.body.innerText || '').toLowerCase();
 
-    var popup3 =
-        txt3.includes('high load') ||
-        txt3.includes('unable to process') ||
-        txt3.includes('please retry');
+    var web4SecondToastError =
+    isWEB4SecondContinue
+        ? getWEB4ToastError().toLowerCase()
+        : '';
+
+var popup3 =
+    (
+        isWEB4SecondContinue &&
+        (
+            web4SecondToastError.includes('unable to process') ||
+            web4SecondToastError.includes('high load') ||
+            web4SecondToastError.includes('please retry')
+        )
+    ) ||
+    (
+        !isWEB4SecondContinue &&
+        (
+            txt3.includes('high load') ||
+            txt3.includes('unable to process') ||
+            txt3.includes('please retry')
+        )
+    );
 
     // =============================================
     // ERROR POPUP DETECTION
@@ -6248,7 +7346,7 @@ for (;;) {
                 return {
                     success: false,
                     error:
-                        'Second Continue failed after 10 retries.',
+                        'Second Continue failed after 20 retries.',
                     logs: diagnosticLogs
                 };
             }
@@ -6275,10 +7373,9 @@ for (;;) {
                 }
             }
 
-            // Allow page to respond
-            await new Promise(function(r) {
-                setTimeout(r, 1500);
-            });
+await new Promise(function(r) {
+    setTimeout(r, 3000);
+});
 
             // Fresh Continue button
             var retryBtn = Array.from(
@@ -6289,12 +7386,16 @@ for (;;) {
                     .trim()
                     .toLowerCase();
 
-                return (
-                    t.includes('continue') &&
-                    b.offsetParent !== null &&
-                    !b.disabled
-                );
-            });
+return (
+    (
+        isWEB4SecondContinue
+            ? t === 'continue to payment'
+            : t === 'continue'
+    ) &&
+    b.offsetParent !== null &&
+    !b.disabled
+);
+});
 
             if (retryBtn) {
 
@@ -6333,11 +7434,15 @@ for (;;) {
                 .trim()
                 .toLowerCase();
 
-            return (
-                t.includes('continue') &&
-                b.offsetParent !== null &&
-                !b.disabled
-            );
+return (
+    (
+        isWEB4SecondContinue
+            ? t === 'continue to payment'
+            : t === 'continue'
+    ) &&
+    b.offsetParent !== null &&
+    !b.disabled
+);
         });
 
         if (retryBtnAfterPopup) {
@@ -6458,8 +7563,8 @@ if (!paymentIsPaytm && !paymentIsPhonePe && !paymentIsRazorpay ) {
 
 var providerName = paymentIsPaytm ? 'PAYTM' : paymentIsPhonePe ? 'PHONEPE' : 'RAZORPAY';
 
-// WEB4 ONLY: Chromium Beta payment selection
-var isChromiumWEB4Payment =
+// WEB4 ONLY: Firefox Beta payment selection
+var isFirefoxWEB4Payment =
     String(payload.browserType || '')
         .trim()
         .toUpperCase() === 'WEB4';
@@ -6470,7 +7575,7 @@ var web4PaymentAlt = paymentIsPaytm
         ? 'PhonePe'
         : 'Razorpay';
 
-if (isChromiumWEB4Payment) {
+if (isFirefoxWEB4Payment) {
     diagnosticLogs.push(
         'WEB4: Multiple Payment Service already available; skipping its selection.'
     );
@@ -6496,7 +7601,7 @@ diagnosticLogs.push(
     providerName + " QR selected."
 );
 
-if (!isChromiumWEB4Payment) {
+if (!isFirefoxWEB4Payment) {
     diagnosticLogs.push(
         "STEP 1: Pehle Multiple Payment Service select karenge."
     );
@@ -6505,7 +7610,7 @@ if (!isChromiumWEB4Payment) {
 // =================================================
 // FIND MULTIPLE PAYMENT SERVICE
 // =================================================
-if (!isChromiumWEB4Payment) {
+if (!isFirefoxWEB4Payment) {
 
 var multiplePaymentService = null;
 var multiPaymentDeadline = Date.now() + 60000;
@@ -6777,7 +7882,7 @@ if (multipleVerified) {
 // PROVIDER SEARCH
 // =================================================
 
-if (!isChromiumWEB4Payment) {
+if (!isFirefoxWEB4Payment) {
     diagnosticLogs.push(
         "STEP 3: Ab " +
         providerName +
@@ -6820,7 +7925,7 @@ while (Date.now() < providerDeadline) {
         }
 
 
-        if (isChromiumWEB4Payment) {
+        if (isFirefoxWEB4Payment) {
 
             // WEB4 ONLY: payment logo ke alt se option dhoondho
             var web4PaymentLogo = Array.from(
@@ -7064,7 +8169,7 @@ async function reselectRequestedPayment() {
     // =============================================
     // MULTIPLE PAYMENT SERVICE
     // =============================================
-if (!isChromiumWEB4Payment) {
+if (!isFirefoxWEB4Payment) {
 
     var multiOption = null;
     var multiDeadline = Date.now() + 15000;
@@ -7128,7 +8233,7 @@ if (!isChromiumWEB4Payment) {
     while (Date.now() < providerDeadline) {
 
 
-        if (isChromiumWEB4Payment) {
+        if (isFirefoxWEB4Payment) {
 
             // WEB4 ONLY: retry mein bhi same logo select karo
             var retryWeb4Logo = Array.from(
@@ -7708,6 +8813,8 @@ if (!this.page || this.page.isClosed()) {
     // BROWSER PAGE -> NODE -> MINI WINDOW
     // =====================================================
 
+if (this._wlConfirmationBridgePage !== this.page) {
+
     await this.page.exposeFunction(
         '__bossRequestWLDecision',
         async (wlNumber) => {
@@ -7752,9 +8859,18 @@ if (!this.page || this.page.isClosed()) {
         }
     );
 
+    this._wlConfirmationBridgePage = this.page;
+
     console.log(
         `[WL BRIDGE] Confirmation bridge ready for ${this.browserType}.`
     );
+
+} else {
+
+    console.log(
+        `[WL BRIDGE] Already registered for ${this.browserType}. Skipping duplicate registration.`
+    );
+}
 
 // =====================================================
 // LIVE BOOKING PROGRESS BRIDGE
@@ -7838,9 +8954,15 @@ try {
 
 let razorpayShowQrClicked = false;
 
-// Maximum 30 seconds.
-// Pay & Book dobara click nahi hoga.
-for (let i = 0; i < 60; i++) {
+// Maximum 5 minutes.
+ // Pay & Book dobara click nahi hoga.
+const paymentVerificationDeadline = Date.now() + (5 * 60 * 1000);
+
+for (
+    let i = 0;
+    Date.now() < paymentVerificationDeadline;
+    i++
+) {
 
 
     if (!this.page || this.page.isClosed()) {
@@ -8369,7 +9491,7 @@ if (
     if (!paymentPageState) {
         throw new Error(
             'Navigation ke baad selected provider ka actual QR ' +
-            '30 seconds mein verify nahi hua. ' +
+            '5 minutes mein verify nahi hua. ' +
             'Duplicate Pay & Book click nahi kiya.'
         );
     }
@@ -8774,19 +9896,79 @@ console.log(
     );
 }
 
-// ------------------------------------------
-// AUTO LOGIN
-// ------------------------------------------
-await this.autoLogin(
-    username,
-    password
-);
+
+// ==========================================
+// CAPTURE IRCTC ACCESS TOKEN DURING LOGIN
+// ==========================================
+
+this.irctcAccessToken = "";
+
+let resolveTokenCapture;
+
+const tokenCapturePromise = new Promise(resolve => {
+    resolveTokenCapture = resolve;
+});
+
+const tokenResponseHandler = async (response) => {
+    try {
+        const responseUrl = new URL(response.url());
+
+        if (
+            responseUrl.origin !== "https://www.irctc.co.in" ||
+            responseUrl.pathname !== "/authprovider/webtoken" ||
+            response.request().method() !== "POST"
+        ) {
+            return;
+        }
+
+        if (!response.ok()) return;
+
+        const data = await response.json();
+
+        if (
+            typeof data?.access_token === "string" &&
+            data.access_token.trim()
+        ) {
+            this.irctcAccessToken = data.access_token.trim();
+
+            resolveTokenCapture(true);
+
+            console.log("[AUTH] IRCTC access token captured successfully.");
+            console.log(
+                "[AUTH] Token expiry:",
+                data.expires_in || "unknown",
+                "seconds"
+            );
+        }
+    } catch (error) {
+        console.warn("[AUTH] Token capture error:", error.message);
+    }
+};
+
+this.page.on("response", tokenResponseHandler);
 
 try {
+    // AUTO LOGIN
+    await this.autoLogin(username, password);
 
-        console.log(
-            '[API] Starting complete booking sequence flow...'
-        );
+    // Token response ka wait
+    const tokenCaptured = await Promise.race([
+        tokenCapturePromise,
+        this.delay(8000).then(() => false)
+    ]);
+
+    console.log(
+        "[AUTH] Access token captured:",
+        tokenCaptured
+    );
+
+} finally {
+    this.page.off("response", tokenResponseHandler);
+}
+
+try {
+    console.log('[API] Starting complete booking sequence flow...');
+
 
         const dynamicTxnId =
             this.generateTransactionId();
@@ -8794,95 +9976,26 @@ try {
         bookingData.dynamicTxnId =
             dynamicTxnId;
 
-            // STEP 1: Check Availability & Real Fare
-         const quotaUpper = String(bookingData.quota || '').toUpperCase();
+// STEP 1 & 2: Redundant API calls skip ki gayi hain taaki HTTP 401/409 error na aaye
+            console.log('[SAFE MODE] Skipping avlFarenquiry & altAvlEnq APIs to prevent HTTP 409.');
 
-const isTatkalOrPremium =
-    quotaUpper === 'TQ' ||
-    quotaUpper === 'TATKAL' ||
-    quotaUpper === 'PT' ||
-    quotaUpper === 'PREMIUM TATKAL';
-
-
-
-            // STEP 1: CHECK AVAILABILITY & REAL FARE
-
-            if (!isTatkalOrPremium) {
-                const availabilityResponse =
-                    await this.checkAvailabilityAndFare(bookingData);
-
-                if (availabilityResponse) {
-
-                    const extractedAvailability =
-                        availabilityResponse.avlDayList &&
-                        availabilityResponse.avlDayList[0] &&
-                        availabilityResponse.avlDayList[0].availablityStatus
-                            ? String(availabilityResponse.avlDayList[0].availablityStatus)
-                            : '';
-
-                    if (extractedAvailability) {
-                        bookingData.realAvailability = extractedAvailability;
-
-                        console.log(
-                            '[AVAILABILITY] Real availability found:',
-                            bookingData.realAvailability
-                        );
-                    }
-
-                    const extractedRealFare =
-                        availabilityResponse.totalFare ||
-                        (
-                            availabilityResponse.avlFareResponseDTO &&
-                            availabilityResponse.avlFareResponseDTO[0] &&
-                            availabilityResponse.avlFareResponseDTO[0].totalFare
-                        ) ||
-                        (
-                            availabilityResponse.lapFareDetails &&
-                            availabilityResponse.lapFareDetails[0] &&
-                            availabilityResponse.lapFareDetails[0].totalFare
-                        );
-
-                    if (extractedRealFare) {
-                        bookingData.realFare = String(extractedRealFare);
-
-                        console.log(
-                            '[AVAILABILITY] Real fare found:',
-                            bookingData.realFare
-                        );
-                    }
-
-                    this.sendAvailabilityFare(
-                        bookingData.realAvailability || '--',
-                        bookingData.realFare || '--'
-                    );
+            // STEP 3: Master Passengers List (Sirf tab chalega jab form se passenger nahi aaye honge)
+            if (!Array.isArray(bookingData.passengers) || bookingData.passengers.length === 0) {
+                const masterPassengerResponse = await this.getMasterPassengerList();
+                if (masterPassengerResponse && Array.isArray(masterPassengerResponse) && masterPassengerResponse.length > 0) {
+                    bookingData.passengers = masterPassengerResponse.map(function(p) {
+                        return {
+                            name: p.passengerName || p.name,
+                            age: p.passengerAge || p.age,
+                            gender: p.passengerGender || p.gender,
+                            berth: p.passengerBerthChoice || p.berth || 'No Preference',
+                            masterPsgnId: p.masterPsgnId || '',
+                            mobile: bookingData.mobile || ''
+                        };
+                    });
+                } else {
+                    throw new Error('Master list empty hai aur form mein bhi koi passenger nahi mila.');
                 }
-
-                // STEP 2: ALTERNATE AVAILABILITY
-                await this.checkAlternateAvailability(bookingData);
-
-            } else {
-
-                console.log(
-                    '[TATKAL / PREMIUM TATKAL MODE] ' +
-                    'Skipping avlFarenquiry and altAvlEnq API calls.'
-                );
-            }
-
-            // STEP 3: Master Passengers List
-            const masterPassengerResponse = await this.getMasterPassengerList();
-            if (masterPassengerResponse && Array.isArray(masterPassengerResponse) && masterPassengerResponse.length > 0) {
-                bookingData.passengers = masterPassengerResponse.map(function(p) {
-    return {
-        name: p.passengerName || p.name,
-        age: p.passengerAge || p.age,
-        gender: p.passengerGender || p.gender,
-        berth: p.passengerBerthChoice || p.berth || 'No Preference',
-        masterPsgnId: p.masterPsgnId || '',
-        mobile: bookingData.mobile || ''
-    };
-});
-            } else if (!Array.isArray(bookingData.passengers) || bookingData.passengers.length === 0) {
-                throw new Error('Master list empty hai aur form mein bhi koi passenger nahi mila.');
             }
 
             // STEP 4: Full Automated UI Flow
@@ -9541,6 +10654,61 @@ if (timerMatch) {
     );
 }
 
+// ------------------------------------------
+// READ ACTUAL PAYTM PAYMENT AMOUNT
+// ------------------------------------------
+
+let qrAmount = null;
+
+try {
+    const browserPages = await this.page.browser().pages();
+
+    for (const candidatePage of browserPages) {
+
+        if (candidatePage.isClosed()) continue;
+
+        for (const frame of candidatePage.frames()) {
+
+            try {
+                const amountText = await frame.evaluate(() => {
+
+                    const el = document.querySelector('.fr.xs-am');
+
+                    if (!el) return null;
+
+                    return el.innerText || el.textContent || '';
+
+                });
+
+                if (amountText) {
+
+                    qrAmount = amountText
+                        .replace(/Rs\s*/i, '')
+                        .replace(/[^\d,.]/g, '')
+                        .trim();
+
+                    if (qrAmount) break;
+                }
+
+            } catch (_) {
+                // Frame navigation ho to agla frame check karein.
+            }
+        }
+
+        if (qrAmount) break;
+    }
+
+    console.log('[QR] Actual payment amount:', qrAmount || 'Not found');
+
+} catch (amountError) {
+
+    console.warn(
+        '[QR] Payment amount read failed:',
+        amountError.message
+    );
+
+}
+
     // ------------------------------------------
     // SEND QR TO MINI WINDOW - FAST DISPLAY
     // ------------------------------------------
@@ -9555,10 +10723,86 @@ if (timerMatch) {
             this.qrCallbacks &&
             typeof this.qrCallbacks.showQR === 'function'
         ) {
-            const qrPayload = {
+
+// ==========================================
+// READ PHONEPE / RAZORPAY PAYMENT AMOUNT
+// ==========================================
+
+try {
+    const browserPages = await this.page.browser().pages();
+
+    for (const candidatePage of browserPages) {
+        if (candidatePage.isClosed()) continue;
+
+        for (const frame of candidatePage.frames()) {
+            try {
+                const amountText = await frame.evaluate((paymentType) => {
+
+                    // PHONEPE
+                    if (paymentType.startsWith('PHONEPE')) {
+                        const el = document.querySelector('.dark1.mr3');
+
+                        if (el) {
+                            return el.innerText || el.textContent || null;
+                        }
+                    }
+
+                    // RAZORPAY
+if (paymentType.startsWith('RAZORPAY')) {
+    const amountEl = document.querySelector(
+        'h3[data-testid="summary-amount"]'
+    );
+
+    if (amountEl) {
+        const value = amountEl.getAttribute('data-value');
+
+        if (value && /^\d+$/.test(value)) {
+            return (Number(value) / 100).toFixed(2);
+        }
+
+        // Fallback: hidden amount element
+        const fallback = document.querySelector(
+            '[data-testid="summary-amount-fallback"]'
+        );
+
+        if (fallback) {
+            return fallback.innerText || fallback.textContent || null;
+        }
+    }
+}
+
+                    return null;
+
+                }, paymentValue);
+
+                if (amountText) {
+                    qrAmount = amountText
+                        .replace(/₹|Rs\.?/gi, '')
+                        .replace(/[^\d,.]/g, '')
+                        .trim();
+
+                    if (qrAmount) break;
+                }
+
+            } catch (_) {
+                // Frame load hone par next frame check karein.
+            }
+        }
+
+        if (qrAmount) break;
+    }
+
+    console.log('[QR] Payment amount:', qrAmount || 'Not found');
+
+} catch (amountError) {
+    console.warn('[QR] Amount read failed:', amountError.message);
+}
+
+const qrPayload = {
     image: qrImage,
     remainingTime: remainingTime,
-    paymentType: paymentValue
+    paymentType: paymentValue,
+    amount: qrAmount
 };
 
             // Send immediately
@@ -9719,11 +10963,11 @@ if (
         }
     }, 500);
 
-    // Safety cleanup: 3 minutes baad interval band.
+    // Safety cleanup: 5 minutes baad interval band.
     setTimeout(() => {
         razorpayTimerStopped = true;
         clearInterval(razorpayTimerInterval);
-    }, 180000);
+    }, 300000);
 }
 
 // ==========================================
@@ -9747,7 +10991,14 @@ let paymentCompleted = false;
 let paymentFailed = false;
 let confirmedPagePNR = null;
 
-for (let i = 0; i < 120; i++) {
+// Payment confirmation ke liye maximum 5 minutes.
+const paymentConfirmationDeadline = Date.now() + (5 * 60 * 1000);
+
+for (
+    let i = 0;
+    Date.now() < paymentConfirmationDeadline;
+    i++
+) {
 
     let paymentState = {
         success: false,

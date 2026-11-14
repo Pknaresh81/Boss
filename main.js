@@ -26,7 +26,7 @@ const qrPaymentWindows = new Map();
 let miniAutomationWindows = new Map();
 let miniAutomationWindowsByBrowser = new Map();
 const managedBrowserInstances = new Map();
-
+const managedBrowserProcesses = new Map();
 
 let licenseVerified = false;
 
@@ -81,11 +81,11 @@ function createQRPaymentWindow(browserType = 'WEB', targetMiniWin = null) {
 }
 
     const qrWindow =
-        new BrowserWindow({
-            width: 280,
-            height: 300,
-            minWidth: 280,
-            minHeight: 300,         
+    new BrowserWindow({
+        width: 300,
+        height: 360,
+        minWidth: 300,
+        minHeight: 360,         
             movable: true,
             alwaysOnTop: true,
             autoHideMenuBar: true,
@@ -412,11 +412,14 @@ const BROWSER_CONFIG = {
         )
     },
 
-    WEB4: {
+   WEB4: {
     type: 'WEB4',
-    name: 'Chromium',
-    port: 9225,
-    userDataDir: path.join(BOSS_BROWSER_ROOT, 'Chromium')
+    name: 'Firefox',
+    port: null,
+    userDataDir: path.join(
+        BOSS_BROWSER_ROOT,
+        'Firefox'
+    )
 }
 
 };
@@ -672,46 +675,29 @@ function getInstalledBrowserPath(type) {
     }
 
      if (type === 'WEB4') {
+
     return findExistingBrowserPath([
+
         path.join(
             programFiles,
-            'Chromium',
-            'Application',
-            'chrome.exe'
+            'Mozilla Firefox',
+            'firefox.exe'
         ),
 
         path.join(
             programFilesX86,
-            'Chromium',
-            'Application',
-            'chrome.exe'
+            'Mozilla Firefox',
+            'firefox.exe'
         ),
 
         path.join(
             localAppData,
-            'Chromium',
-            'Application',
-            'chrome.exe'
-        ),
-
-        path.join(
-            programFiles,
-            'Chromium',
-            'chrome.exe'
-        ),
-
-        path.join(
-            programFilesX86,
-            'Chromium',
-            'chrome.exe'
-        ),
-
-        path.join(
-            localAppData,
-            'Chromium',
-            'chrome.exe'
+            'Mozilla Firefox',
+            'firefox.exe'
         )
+
     ]);
+
 }
 
     return null;
@@ -751,7 +737,7 @@ function getBrowserConfig(browser) {
     } else if (
         value === 'WEB4' ||
         value === 'WEB 4' ||
-        value === 'CHROMIUM'
+        value === 'FIREFOX'
     ) {
 
         type = 'WEB4';
@@ -782,6 +768,11 @@ async function isBrowserDebugReady(config) {
     if (!config || !config.installed) {
         return false;
     }
+
+    if (config.type === 'WEB4') {
+    const firefox = managedBrowserInstances.get('WEB4');
+    return Boolean(firefox && firefox.connected);
+}
 
     try {
 
@@ -904,13 +895,148 @@ async function launchBrowser(
             `[LAUNCH ${config.type}] PROFILE: ${config.userDataDir}`
         );
 
+        // ==========================================
+// WEB4 - FIREFOX LAUNCH USING PUPPETEER
+// ==========================================
+
+if (config.type === 'WEB4') {
+
+    let firefoxBrowser = null;
+
+    try {
+
+        console.log('[WEB4] Starting Firefox with Puppeteer...');
+
+        const { screen } = require('electron');
+const workArea = screen.getPrimaryDisplay().workAreaSize;
+
+const firefoxX = 1365;
+const firefoxY = Math.min(160, Math.max(0, workArea.height - 600));
+
+        firefoxBrowser = await puppeteer.launch({
+
+            browser: 'firefox',
+
+            executablePath: config.exePath,
+
+            headless: false,
+
+            userDataDir: config.userDataDir,
+
+            defaultViewport: null,
+
+            args: [
+                '--width=450',
+                '--height=600'
+            ]
+
+        });
+
+// WEB4 Firefox window position
+
+const firefoxPid = firefoxBrowser.process()?.pid;
+
+if (firefoxPid) {
+    const psScript = `
+$targetPid = ${firefoxPid}
+
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+public class FirefoxWindowPosition {
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int width, int height, uint flags);
+}
+'@
+
+[FirefoxWindowPosition]::EnumWindows({
+    param($hWnd, $lParam)
+
+    [uint32]$windowPid = 0
+    [void][FirefoxWindowPosition]::GetWindowThreadProcessId($hWnd, [ref]$windowPid)
+
+    if ($windowPid -eq $targetPid -and [FirefoxWindowPosition]::IsWindowVisible($hWnd)) {
+        [void][FirefoxWindowPosition]::SetWindowPos($hWnd, [IntPtr]::Zero, ${firefoxX}, ${firefoxY}, 450, 600, 0x0040)
+        return $false
+    }
+
+    return $true
+}, [IntPtr]::Zero)
+`;
+
+    const encodedScript = Buffer.from(psScript, 'utf16le').toString('base64');
+
+    setTimeout(() => {
+        exec(
+            `powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedScript}`,
+            (error) => {
+                if (error) {
+                    console.error('[WEB4] Window positioning failed:', error.message);
+                } else {
+                    console.log('[WEB4] Firefox position set successfully.');
+                }
+            }
+        );
+    }, 1500);
+}
+
+        // Firefox instance ko memory mein save karo
+        managedBrowserInstances.set('WEB4', firefoxBrowser);
+
+        // Existing tab use karo; nahi ho to naya tab kholo
+        const pages = await firefoxBrowser.pages();
+
+        const page = pages.length
+            ? pages[0]
+            : await firefoxBrowser.newPage();
+
+        await page.goto(targetUrl, {
+            waitUntil: 'domcontentloaded',
+            timeout: 120000
+        });
+
+        console.log('[WEB4] Firefox launched successfully.');
+
+        return {
+            success: true,
+            status: 'READY',
+            alreadyRunning: false,
+            browserType: 'WEB4'
+        };
+
+    } catch (firefoxError) {
+
+        if (firefoxBrowser) {
+            try {
+                await firefoxBrowser.close();
+            } catch (_) {}
+        }
+
+        managedBrowserInstances.delete('WEB4');
+
+        throw firefoxError;
+
+    }
+
+}
+
         const { screen } = require('electron');
 
 const workArea = screen.getPrimaryDisplay().workAreaSize;
 
-const isChromiumWEB4 = config.type === 'WEB4';
-
-const browserWidth = isChromiumWEB4 ? 450 : 450;
+const browserWidth = 450;
 const browserHeight = 600;
 
 const y = Math.min(
@@ -918,16 +1044,22 @@ const y = Math.min(
     Math.max(0, workArea.height - browserHeight)
 );
 
-       const child = spawn(
+const x =
+    config.port === 9222 ? 0 :
+    config.port === 9223 ? 455 :
+    config.port === 9224 ? 910 : 0;
+
+const child = spawn(
     config.exePath,
     [
         `--remote-debugging-port=${config.port}`,
         `--user-data-dir=${config.userDataDir}`,
-        `--window-size=${browserWidth},${browserHeight}`, // <-- Specific width aur height force karein
-        `--window-position=${config.port === 9222 ? 0 : config.port === 9223 ? 455 : config.port === 9224 ? 910 : config.port === 9225 ? 0 : 0},${y}`, // <-- Screen position set karein
+        `--window-size=${browserWidth},${browserHeight}`,
+        `--window-position=${x},${y}`,
         '--no-default-browser-check',
         '--disable-sync',
-        targetUrl
+        '--no-first-run',
+        '--disable-default-apps'
     ],
     {
         detached: true,
@@ -936,8 +1068,16 @@ const y = Math.min(
     }
 );
 
+// Boss-launched browser ka exact process track karo.
+managedBrowserProcesses.set(config.type, child);
 
-        child.unref();
+child.once('exit', () => {
+    if (managedBrowserProcesses.get(config.type) === child) {
+        managedBrowserProcesses.delete(config.type);
+    }
+});
+    
+child.unref();
 
 
         const ready =
@@ -1004,7 +1144,8 @@ ipcMain.handle(
         const browserTypes = [
             'WEB',
             'WEB2',
-            'WEB3'
+            'WEB3',
+            'WEB4'
         ];
 
         const results =
@@ -1399,7 +1540,9 @@ ipcMain.handle(
             WEB2: 'WEB2',
             EDGE: 'WEB2',
             WEB3: 'WEB3',
-            BRAVE: 'WEB3'
+            BRAVE: 'WEB3',
+            WEB4: 'WEB4',
+            FIREFOX: 'WEB4'
         };
 
         const type = allowedTypes[
@@ -1422,70 +1565,147 @@ ipcMain.handle(
             };
         }
 
-        const imageNames = {
-            WEB: 'chrome.exe',
-            WEB2: 'msedge.exe',
-            WEB3: 'brave.exe'
-        };
-
         try {
+
             console.log(
-                `[CLEAR DATA ${type}] Starting full profile reset:`,
+                `[CLEAR DATA ${type}] Starting profile reset:`,
                 config.userDataDir
             );
 
-            // STEP 1: Close browser processes.
-            // NOTE: This closes ALL instances of the selected browser,
-            // including any personal browser windows of the same type.
-            await new Promise((resolve, reject) => {
-                exec(
-                    `taskkill /F /T /IM "${imageNames[type]}"`,
-                    { windowsHide: true },
-                    (error, stdout, stderr) => {
-                        // "Process not found" is okay; verify folder deletion below.
-                        if (error && error.code !== 128) {
-                            console.log(
-                                `[CLEAR DATA ${type}] taskkill:`,
-                                stderr || error.message
-                            );
-                        }
-                        resolve();
-                    }
+            // ==========================================
+            // STEP 1: CLOSE SELECTED BROWSER
+            // ==========================================
+
+            if (type === 'WEB4') {
+
+                // Firefox Puppeteer-managed session
+                const firefoxBrowser =
+                    managedBrowserInstances.get('WEB4');
+
+                if (firefoxBrowser?.connected) {
+    await firefoxBrowser.close();
+}
+
+managedBrowserInstances.delete('WEB4');
+
+                console.log(
+                    '[CLEAR DATA WEB4] Firefox closed.'
                 );
-            });
 
-            // STEP 2: Wait for processes to exit.
-            await new Promise(resolve => setTimeout(resolve, 2000));
+                // Firefox close hone ka wait
+                const deadline = Date.now() + 15000;
 
-            // STEP 3: Delete the entire BOSS-managed profile.
-            await fs.promises.rm(config.userDataDir, {
-                recursive: true,
-                force: true,
-                maxRetries: 10,
-                retryDelay: 1000
-            });
+                while (Date.now() < deadline) {
 
-            // STEP 4: Verify the old folder is gone.
+                    const currentFirefox =
+                        managedBrowserInstances.get('WEB4');
+
+                    if (!currentFirefox ||
+                        !currentFirefox.connected) {
+                        break;
+                    }
+
+                    await new Promise(resolve =>
+                        setTimeout(resolve, 300)
+                    );
+                }
+
+            } else {
+
+                // Chrome / Edge / Brave
+                const running =
+                    await isBrowserDebugReady(config);
+
+                if (running) {
+
+                    const browser =
+                        await puppeteer.connect({
+                            browserURL:
+                                `http://127.0.0.1:${config.port}`,
+                            defaultViewport: null,
+                            protocolTimeout: 120000
+                        });
+
+                    await browser.close();
+
+                    console.log(
+                        `[CLEAR DATA ${type}] Browser close requested.`
+                    );
+
+                    // Browser completely close hone ka wait
+                    const deadline = Date.now() + 15000;
+
+                    let closed = false;
+
+                    while (Date.now() < deadline) {
+
+                        if (!(await isBrowserDebugReady(config))) {
+                            closed = true;
+                            break;
+                        }
+
+                        await new Promise(resolve =>
+                            setTimeout(resolve, 300)
+                        );
+                    }
+
+                    if (!closed) {
+                        throw new Error(
+                            `${config.name} properly close nahi hua. Profile data delete nahi kiya gaya.`
+                        );
+                    }
+                }
+
+                managedBrowserProcesses.delete(type);
+            }
+
+            // ==========================================
+            // STEP 2: DELETE ONLY BOSS PROFILE
+            // ==========================================
+
+            await fs.promises.rm(
+                config.userDataDir,
+                {
+                    recursive: true,
+                    force: true,
+                    maxRetries: 10,
+                    retryDelay: 1000
+                }
+            );
+
+            // ==========================================
+            // STEP 3: VERIFY OLD PROFILE REMOVED
+            // ==========================================
+
             if (fs.existsSync(config.userDataDir)) {
                 throw new Error(
-                    'Profile folder abhi bhi maujood hai; deletion verify nahi hua.'
+                    'Old profile folder delete nahi hua.'
                 );
             }
 
-            // STEP 5: Create an empty profile directory.
-            await fs.promises.mkdir(config.userDataDir, {
-                recursive: true
-            });
+            // ==========================================
+            // STEP 4: CREATE FRESH PROFILE
+            // ==========================================
 
-            // STEP 6: Verify fresh directory exists.
-            const stat = await fs.promises.stat(config.userDataDir);
+            await fs.promises.mkdir(
+                config.userDataDir,
+                {
+                    recursive: true
+                }
+            );
+
+            const stat = await fs.promises.stat(
+                config.userDataDir
+            );
 
             if (!stat.isDirectory()) {
-                throw new Error('Fresh profile directory create nahi hua.');
+                throw new Error(
+                    'Fresh profile folder create nahi hua.'
+                );
             }
 
             console.log(
-                `[CLEAR DATA ${type}] VERIFIED: Fresh profile directory created.`
+                `[CLEAR DATA ${type}] Profile reset VERIFIED.`
             );
 
             return {
@@ -1493,10 +1713,11 @@ ipcMain.handle(
                 browserType: type,
                 browserName: config.name,
                 message:
-                    `${config.name} ka local BOSS profile reset ho gaya.`
+                    `${config.name} ka BOSS browser profile data clear ho gaya.`
             };
 
         } catch (error) {
+
             console.error(
                 `[CLEAR DATA ${type}] RESET FAILED:`,
                 error
@@ -1598,7 +1819,9 @@ ipcMain.handle(
         );
 
 
-        let miniWin = null;
+let miniWin = null;
+let browser = null;
+let browserTypeForCleanup = null;
 
 try {
 
@@ -1608,6 +1831,8 @@ try {
 
             const config =
                 getBrowserConfig(targetBrowser);
+
+            browserTypeForCleanup = config.type;
 
             const port =
                 config.port;
@@ -1626,8 +1851,6 @@ try {
             console.log(
                 `[${config.type}] Port=${port} Profile=${userDataDir}`
             );
-
-            let browser = null;
 
 const launchResult =
     await launchBrowser(
@@ -1648,64 +1871,73 @@ console.log(
     `Already running: ${Boolean(launchResult.alreadyRunning)}`
 );
 
-let retries = 6;
 
-while (retries > 0) {
+if (config.type === 'WEB4') {
 
-                try {
+    // WEB4 - Firefox ka managed Puppeteer session
+    browser = managedBrowserInstances.get('WEB4');
 
-    
-browser = await puppeteer.connect({
-    browserURL: `http://127.0.0.1:${port}`,
-    defaultViewport: null,
-    protocolTimeout: 10 * 60 * 1000
-});
-
-
-                    break;
-
-                } catch (err) {
-
-                    retries--;
-
-                    if (retries === 5) {
-
-    console.log(
-        `[${config.type}] Browser connection failed. Waiting for existing browser...`
-    );
-
-    const ready =
-        await waitForBrowserDebug(
-            config,
-            10000,
-            500
-        );
-
-    if (!ready) {
-
+    if (!browser || !browser.connected) {
         throw new Error(
-            `${config.name} remote debugging port ${port} available nahi hai. ` +
-            `Please ${config.name} ko Open Browser button se start karein.`
+            'Firefox Puppeteer session available nahi hai. Firefox ko Open Browser button se start karein.'
         );
     }
-}
 
-                    if (retries === 0) {
+    console.log('[WEB4] Firefox Puppeteer session connected.');
 
-                        throw new Error(
-                            `Failed to connect to ${config.type} on port ${port}.`
-                        );
-                    }
+} else {
 
-                    await new Promise(
-                        resolve =>
-                            setTimeout(
-                                resolve,
-                                1500
-                            )
+    // WEB / WEB2 / WEB3 - Firefox connection
+    let retries = 6;
+
+    while (retries > 0) {
+
+        try {
+
+            browser = await puppeteer.connect({
+                browserURL: `http://127.0.0.1:${port}`,
+                defaultViewport: null,
+                protocolTimeout: 10 * 60 * 1000
+            });
+
+            break;
+
+        } catch (err) {
+
+            retries--;
+
+            if (retries === 5) {
+
+                console.log(
+                    `[${config.type}] Browser connection failed. Waiting for existing browser...`
+                );
+
+                const ready = await waitForBrowserDebug(
+                    config,
+                    10000,
+                    500
+                );
+
+                if (!ready) {
+                    throw new Error(
+                        `${config.name} remote debugging port ${port} available nahi hai. ` +
+                        `Please ${config.name} ko Open Browser button se start karein.`
                     );
                 }
             }
+
+            if (retries === 0) {
+                throw new Error(
+                    `Failed to connect to ${config.type} on port ${port}.`
+                );
+            }
+
+            await new Promise(resolve =>
+                setTimeout(resolve, 1500)
+            );
+        }
+    }
+}
 
 let page = null;
 
@@ -1715,56 +1947,30 @@ try {
         `[${config.type}] Using existing browser page...`
     );
 
+    const pages = await browser.pages();
 
-
-const pages = await browser.pages();
-
-page =
-    pages.find(p => {
-        const url = p.url() || '';
-        return url.includes('irctc.co.in');
-    }) ||
-    pages[0] ||
-    await browser.newPage();
-
-if (!page) {
-    throw new Error(
-        `${config.name} mein naya browser page nahi ban saka.`
-    );
-}
-
-if (!page.url() || page.url() === 'about:blank') {
-    await page.goto(targetUrl, {
-        waitUntil: 'domcontentloaded',
-        timeout: 60000
-    });
-}
-
-
+    page =
+        pages.find(p =>
+            (p.url() || '').includes('irctc.co.in')
+        ) ||
+        pages[0] ||
+        await browser.newPage();
 
     if (!page) {
-
         throw new Error(
-            `${config.name} mein koi browser page available nahi hai.`
+            `${config.name} mein browser page available nahi hai.`
         );
     }
 
-    if (
-        !page.url() ||
-        page.url() === 'about:blank'
-    ) {
-
-        await page.goto(
-            targetUrl,
-            {
-                waitUntil: 'domcontentloaded',
-                timeout: 30000
-            }
-        );
+    if (!page.url() || page.url() === 'about:blank') {
+        await page.goto(targetUrl, {
+            waitUntil: 'domcontentloaded',
+            timeout: 120000
+        });
     }
 
     console.log(
-        `[${config.type}] Existing browser page selected.`
+        `[${config.type}] Existing browser page selected: ${await page.url()}`
     );
 
 } catch (pageError) {
@@ -1779,6 +1985,7 @@ if (!page.url() || page.url() === 'about:blank') {
         pageError.message
     );
 }
+
 
             console.log(
                 `[${config.type}] Connected to page: ${await page.url()}`
@@ -1798,7 +2005,7 @@ if (
         miniWin
     );
 
-    console.log(
+     console.log(
         `[MINI MAP] ${config.type} mapped to window: ${windowId}`
     );
 }
@@ -2016,6 +2223,33 @@ const result =
             };
 
        } finally {
+
+        // ==========================================
+// CLEANUP PUPPETEER CONNECTION
+// Keep all browser windows OPEN.
+// Never disconnect managed Firefox session.
+// ==========================================
+
+if (
+    browser &&
+    browserTypeForCleanup !== 'WEB4'
+) {
+    try {
+
+        browser.disconnect();
+
+        console.log(
+            `[MAIN] ${browserTypeForCleanup} Puppeteer disconnected. Browser remains open.`
+        );
+
+    } catch (disconnectError) {
+
+        console.warn(
+            '[MAIN] Browser disconnect warning:',
+            disconnectError.message
+        );
+    }
+}
 
     // ==========================================
     // RELEASE BOOKING LOCK
@@ -2944,7 +3178,12 @@ ipcMain.handle(
         payload = {}
     ) => {
 
-        try {
+        let browser = null;
+let browserTypeForCleanup = null;
+let bookingBrowser = null;
+let bookingLockAcquired = false;
+
+try {
 
             console.log(
                 '[BOOKING] start-tatkal-booking received.'
@@ -2962,6 +3201,33 @@ ipcMain.handle(
 
             const config =
                 getBrowserConfig(targetBrowser);
+
+                browserTypeForCleanup = config.type;
+
+            bookingBrowser = config.type;
+
+// ==========================================
+// DUPLICATE TATKAL BOOKING PROTECTION
+// ==========================================
+
+if (activeBookingBrowsers.has(bookingBrowser)) {
+
+    console.warn(
+        `[TATKAL] Booking already running for ${bookingBrowser}. Duplicate request blocked.`
+    );
+
+    return {
+        success: false,
+        error: `Booking already running for ${bookingBrowser}.`
+    };
+}
+
+activeBookingBrowsers.add(bookingBrowser);
+bookingLockAcquired = true;
+
+console.log(
+    `[TATKAL] Booking lock acquired: ${bookingBrowser}`
+);
 
             const port =
                 config.port;
@@ -2983,65 +3249,96 @@ const targetUrl =
                 `[${config.type}] Port=${port} Profile=${userDataDir}`
             );
 
-            let browser = null;
-            let retries = 6;
 
-            while (retries > 0) {
+// ==========================================
+// WEB4 - FIREFOX SESSION
+// ==========================================
 
-                try {
+if (config.type === 'WEB4') {
 
+    browser = managedBrowserInstances.get('WEB4');
 
-browser = await puppeteer.connect({
-    browserURL: `http://127.0.0.1:${port}`,
-    defaultViewport: null,
-    protocolTimeout: 10 * 60 * 1000
-});
+    // Firefox session nahi mila to launch karo
+    if (!browser || !browser.connected) {
 
-
-                    break;
-
-                } catch (err) {
-
-                    retries--;
-
-                    if (retries === 5) {
-
-    console.log(
-        `[${config.type}] Browser connection failed. Waiting for existing browser...`
-    );
-
-    const ready =
-        await waitForBrowserDebug(
+        const launchResult = await launchBrowser(
             config,
-            10000,
-            500
+            targetUrl
         );
 
-    if (!ready) {
+        if (!launchResult.success) {
+            throw new Error(
+                launchResult.error || 'Firefox launch nahi ho saka.'
+            );
+        }
 
+        browser = managedBrowserInstances.get('WEB4');
+    }
+
+    if (!browser || !browser.connected) {
         throw new Error(
-            `${config.name} remote debugging port ${port} available nahi hai. ` +
-            `Please ${config.name} ko Open Browser button se start karein.`
+            'Firefox Puppeteer session available nahi hai.'
         );
     }
+
+    console.log('[WEB4] Firefox session connected for Tatkal.');
+
 }
 
-                    if (retries === 0) {
+// ==========================================
+// WEB / WEB2 / WEB3 - FIREFOX CONNECTION
+// ==========================================
 
-                        throw new Error(
-                            `Failed to connect to ${config.type} on port ${port}.`
-                        );
-                    }
+else {
 
-                    await new Promise(
-                        resolve =>
-                            setTimeout(
-                                resolve,
-                                1500
-                            )
+    let retries = 6;
+
+    while (retries > 0) {
+
+        try {
+
+            browser = await puppeteer.connect({
+                browserURL: `http://127.0.0.1:${port}`,
+                defaultViewport: null,
+                protocolTimeout: 10 * 60 * 1000
+            });
+
+            break;
+
+        } catch (err) {
+
+            retries--;
+
+            if (retries === 5) {
+
+                console.log(
+                    `[${config.type}] Browser connection failed. Waiting for existing browser...`
+                );
+
+                const ready = await waitForBrowserDebug(
+                    config,
+                    10000,
+                    500
+                );
+
+                if (!ready) {
+                    throw new Error(
+                        `${config.name} remote debugging port ${port} available nahi hai.`
                     );
                 }
             }
+
+            if (retries === 0) {
+                throw new Error(
+                    `Failed to connect to ${config.type} on port ${port}.`
+                );
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+    }
+
+}
 
 let page = null;
 
@@ -3076,7 +3373,7 @@ if (!page) {
             targetUrl,
             {
                 waitUntil: 'domcontentloaded',
-                timeout: 30000
+                timeout: 120000
             }
         );
     }
@@ -3289,6 +3586,7 @@ console.log(
                 data: response
             };
 
+       
         } catch (error) {
 
             console.error(
@@ -3302,9 +3600,49 @@ console.log(
                     error?.message ||
                     'Booking failed.'
             };
+
+        } finally {
+
+            // Firefox managed session ko disconnect nahi karna.
+
+            if (
+                browser &&
+                browserTypeForCleanup &&
+                browserTypeForCleanup !== 'WEB4'
+            ) {
+                try {
+
+                    browser.disconnect();
+
+                    console.log(
+                        `[TATKAL] ${browserTypeForCleanup} Puppeteer disconnected. Browser remains open.`
+                    );
+
+                } catch (disconnectError) {
+
+                    console.warn(
+                        '[TATKAL] Browser disconnect warning:',
+                        disconnectError.message
+                    );
+                }
+            }
+
+            // ==========================================
+// RELEASE TATKAL BOOKING LOCK
+// ==========================================
+
+if (bookingLockAcquired && bookingBrowser) {
+
+    activeBookingBrowsers.delete(bookingBrowser);
+
+    console.log(
+        `[TATKAL] Booking lock released: ${bookingBrowser}`
+    );
+}
         }
     }
 );
+
 
 // ==========================================
 // OPEN SPECIFIC BROWSER IPC HANDLER (UPDATED WITH DEBUG PORTS)

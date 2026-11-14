@@ -1182,6 +1182,14 @@ body {
             class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded">
             Clear Brave
         </button>
+
+        <button
+    type="button"
+    onclick="clearBrowserData('WEB4')"
+    class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded">
+    Clear Firefox
+</button>
+
     </div>
 </div>
 
@@ -1240,43 +1248,71 @@ body {
             </section>
 
 
-            <!-- PROFILE -->
-            <section id="tab-profile" class="tab-content">
+<!-- PROFILE -->
+<section id="tab-profile" class="tab-content">
 
-                <h2 class="text-sm font-bold text-indigo-600 mb-3">
-                    MANAGE MULTIPLE IRCTC ACCOUNTS
-                </h2>
+    <h2 class="text-sm font-bold text-indigo-600 mb-3">
+        MANAGE MULTIPLE IRCTC ACCOUNTS
+    </h2>
 
-                <div class="bg-white p-4 rounded-xl border border-slate-200 text-xs space-y-3 shadow-sm">
+    <div class="bg-white p-4 rounded-xl border border-slate-200 text-xs shadow-sm">
 
-                    <div class="grid grid-cols-3 gap-3">
+        <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:6px; align-items:center; width:100%;">
 
-                        <input type="text"
-                               id="profile-user"
-                               placeholder="IRCTC Username"
-                               class="bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+            <input type="text"
+                   id="profile-user"
+                   placeholder="IRCTC Username"
+                   style="width:100%; min-width:0; box-sizing:border-box;"
+                   class="bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
 
-                        <input type="password"
-                               id="profile-pass"
-                               placeholder="Password"
-                               class="bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+            <div style="position:relative; width:100%; min-width:0;">
 
-                        <button onclick="addIrctcAccount()"
-                                class="bg-indigo-600 text-white rounded font-bold">
+                <input type="password"
+                       id="profile-pass"
+                       placeholder="Password"
+                       style="width:100%; min-width:0; box-sizing:border-box; padding:8px 38px 8px 8px;"
+                       class="bg-slate-50 border border-slate-300 rounded text-slate-800">
 
-                            + Add IRCTC Account
+                <button type="button"
+        id="profile-pass-eye"
+        onclick="togglePasswordVisibility()"
+        style="display:flex !important;
+               position:absolute !important;
+               right:8px !important;
+               top:50% !important;
+               transform:translateY(-50%) !important;
+               z-index:99999 !important;
+               visibility:visible !important;
+               opacity:1 !important;
+               align-items:center;
+               justify-content:center;
+               width:28px;
+               height:28px;
+               border:0;
+               background:transparent;
+               color:#ffffff;
+               cursor:pointer;
+               font-size:18px;">
+    👁
+</button>
 
-                        </button>
+            </div>
 
-                    </div>
+            <button type="button"
+                    onclick="addIrctcAccount()"
+                    class="bg-indigo-600 text-white rounded font-bold p-2">
+                + Add IRCTC Account
+            </button>
 
-                    <div id="profiles-list"
-                         class="mt-4 space-y-2">
-                    </div>
+        </div>
 
-                </div>
+        <div id="profiles-list"
+             style="display:flex; flex-direction:column; gap:7px; width:100%; margin-top:14px;">
+        </div>
 
-            </section>
+    </div>
+
+</section>
 
 
             <!-- PAYMENT -->
@@ -1347,10 +1383,11 @@ const passengerFillTimers = new Map();
 
 async function clearBrowserData(browserType) {
     const names = {
-        WEB: 'Chrome',
-        WEB2: 'Edge',
-        WEB3: 'Brave'
-    };
+    WEB: 'Chrome',
+    WEB2: 'Edge',
+    WEB3: 'Brave',
+    WEB4: 'Firefox'
+};
 
     const browserName = names[browserType];
 
@@ -2853,6 +2890,22 @@ function setAutomationError(
     }
 }
 
+function togglePasswordVisibility() {
+    const input = document.getElementById("profile-pass");
+    const button = document.getElementById("profile-pass-eye");
+
+    if (!input || !button) return;
+
+    if (input.type === "password") {
+        input.type = "text";
+        button.textContent = "🙈";
+        button.title = "Hide Password";
+    } else {
+        input.type = "password";
+        button.textContent = "👁";
+        button.title = "Show Password";
+    }
+}
 
 /* =========================================================
    IRCTC ACCOUNTS

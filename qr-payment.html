@@ -10,101 +10,115 @@
     <style>
 
         * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+
+            background: transparent;
+
+            overflow: hidden;
+
+            font-family:
+                Arial,
+                Helvetica,
+                sans-serif;
+        }
+
+        body {
+            display: flex;
+
+            align-items: center;
+            justify-content: center;
+        }
+
+        .qr-window {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    width: 284px;
+    min-height: 340px;
+    padding: 10px 12px;
+
+    background: #ffffff;
     box-sizing: border-box;
 }
 
-html,
-body {
-    margin: 0;
-    padding: 0;
+        /* =========================================
+           QR BOX
+        ========================================== */
 
-    background: transparent;
+        #qr-image-box {
+            width: 260px;
+            height: 260px;
 
-    overflow: hidden;
+            background: #ffffff;
 
-    font-family:
-        Arial,
-        Helvetica,
-        sans-serif;
-}
+            border-radius: 0;
 
-body {
-    display: flex;
+            display: flex;
 
-    align-items: center;
-    justify-content: center;
-}
+            align-items: center;
+            justify-content: center;
 
-.qr-window {
-    position: relative;
+            overflow: hidden;
+        }
 
-    display: flex;
-    flex-direction: column;
+        #qr-payment-image {
+            width: 100%;
+            height: 100%;
 
-    align-items: center;
-    justify-content: center;
+            object-fit: contain;
 
-    padding: 0;
+            display: block;
+        }
 
-    background: transparent;
-}
+        /* Razorpay QR: sharper nearest-neighbour scaling */
+        #qr-payment-image.razorpay-qr {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
 
-/* =========================================
-   QR BOX
-========================================= */
+        /* =========================================
+           PAYMENT AMOUNT
+        ========================================== */
 
-#qr-image-box {
-    width: 260px;
-    height: 260px;
+        #qr-payment-amount {
+            color: #16a34a;
+            font-size: 20px;
+            font-weight: 800;
+            line-height: 26px;
+            margin-top: 5px;
+            text-align: center;
+        }
 
-    background: #ffffff;
+        /* =========================================
+           TIMER
+        ========================================== */
 
-    border-radius: 0;
+        #qr-payment-timer {
+            margin-top: 0;
 
-    display: flex;
+            color: #000000;
 
-    align-items: center;
-    justify-content: center;
+            font-family: monospace;
 
-    overflow: hidden;
-}
+            font-size: 12px;
 
-#qr-payment-image {
-    width: 100%;
-    height: 100%;
+            font-weight: 700;
 
-    object-fit: contain;
-
-    display: block;
-}
-
-/* Razorpay QR: sharper nearest-neighbour scaling */
-#qr-payment-image.razorpay-qr {
-    image-rendering: pixelated;
-    image-rendering: crisp-edges;
-}
-
-/* =========================================
-   TIMER
-========================================= */
-
-#qr-payment-timer {
-    margin-top: 0;
-
-    color: #000000;
-
-    font-family: monospace;
-
-    font-size: 12px;
-
-    font-weight: 700;
-
-    line-height: 14px;
-}
+            line-height: 14px;
+        }
 
         /* =========================================
            STATUS
-        ========================================= */
+        ========================================== */
 
         #qr-payment-status {
 
@@ -125,7 +139,6 @@ body {
 
     <div class="qr-window">
 
-
         <!-- QR -->
 
         <div id="qr-image-box">
@@ -136,6 +149,12 @@ body {
                 alt="Payment QR"
             >
 
+        </div>
+
+        <!-- PAYMENT AMOUNT -->
+
+        <div id="qr-payment-amount">
+            Amount: ₹--
         </div>
 
         <!-- TIMER -->
@@ -149,7 +168,6 @@ body {
 
     <script>
 
-        
         // =========================================
         // QR SHOW - IMAGE LOAD VALIDATION
         // =========================================
@@ -160,11 +178,15 @@ body {
         ) {
             window.electronAPI.onPaymentQR(
                 function(qrData) {
+
                     const image =
                         document.getElementById('qr-payment-image');
 
                     const timer =
                         document.getElementById('qr-payment-timer');
+
+                    const amount =
+                        document.getElementById('qr-payment-amount');
 
                     if (!qrData || !qrData.image) {
                         console.error(
@@ -209,14 +231,27 @@ body {
                     };
 
                     image.classList.toggle(
-    'razorpay-qr',
-    String(qrData.paymentType || '')
-        .trim()
-        .toUpperCase()
-        .startsWith('RAZORPAY')
-);
+                        'razorpay-qr',
+                        String(qrData.paymentType || '')
+                            .trim()
+                            .toUpperCase()
+                            .startsWith('RAZORPAY')
+                    );
 
                     image.src = qrData.image;
+
+                    // PAYMENT AMOUNT UPDATE
+                    if (amount) {
+
+                        const value = String(qrData.amount || '')
+                            .replace(/[^\d,.]/g, '')
+                            .trim();
+
+                        amount.textContent = value
+                            ? 'Amount: ₹' + value
+                            : 'Amount: --';
+
+                    }
 
                     if (timer) {
                         timer.textContent =
