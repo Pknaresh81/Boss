@@ -398,9 +398,9 @@
 
 .mini-clock {
     font-family: monospace;
-    color: #38bdf8;
-    font-weight: bold;
-    font-size: 10px;
+    color: #ffd700 !important;
+    font-weight: 700 !important;
+    font-size: 11px !important;
 }
     </style>
 </head>
@@ -1951,11 +1951,17 @@ document
     });
 
 
-                // =========================================
-        // EXACT CURRENT TIME
+// =========================================
+        // EXACT CURRENT TIME (Pauses when final PNR arrives)
         // =========================================
 
+        let miniClockInterval = null;
+
         function updateMiniClock() {
+            // Agar final booking display ho chuki hai (PNR aa gaya), to clock ko update mat karo (pause rakho)
+            if (finalBookingDisplayed) {
+                return;
+            }
 
             const now = new Date();
 
@@ -1979,7 +1985,7 @@ document
 
         updateMiniClock();
 
-        setInterval(
+        miniClockInterval = setInterval(
             updateMiniClock,
             1000
         );

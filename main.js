@@ -28,6 +28,46 @@ let miniAutomationWindowsByBrowser = new Map();
 const managedBrowserInstances = new Map();
 const managedBrowserProcesses = new Map();
 
+const profileResetInProgress = new Set();
+
+async function cleanupBossProfileAfterClose(config) {
+
+    if (
+        !config?.userDataDir ||
+        profileResetInProgress.has(config.type)
+    ) {
+        return;
+    }
+
+    profileResetInProgress.add(config.type);
+
+    try {
+
+        await fs.promises.rm(config.userDataDir, {
+            recursive: true,
+            force: true,
+            maxRetries: 10,
+            retryDelay: 1000
+        });
+
+        console.log(
+            `[PROFILE CLEANUP ${config.type}] Closed browser profile removed: ${config.userDataDir}`
+        );
+
+    } catch (error) {
+
+        console.error(
+            `[PROFILE CLEANUP ${config.type}] Could not remove profile:`,
+            error.message
+        );
+
+    } finally {
+
+        profileResetInProgress.delete(config.type);
+
+    }
+}
+
 let licenseVerified = false;
 
 function createQRPaymentWindow(browserType = 'WEB', targetMiniWin = null) {
@@ -995,6 +1035,25 @@ public class FirefoxWindowPosition {
         // Firefox instance ko memory mein save karo
         managedBrowserInstances.set('WEB4', firefoxBrowser);
 
+// WEB4 Firefox manually close hone par profile reset
+const firefoxProcess = firefoxBrowser.process?.();
+
+if (firefoxProcess) {
+
+    firefoxProcess.once('close', () => {
+
+        if (
+            managedBrowserInstances.get('WEB4') === firefoxBrowser
+        ) {
+            managedBrowserInstances.delete('WEB4');
+        }
+
+        void cleanupBossProfileAfterClose(config);
+
+    });
+
+}
+
         // Existing tab use karo; nahi ho to naya tab kholo
         const pages = await firefoxBrowser.pages();
 
@@ -1002,10 +1061,14 @@ public class FirefoxWindowPosition {
             ? pages[0]
             : await firefoxBrowser.newPage();
 
-        await page.goto(targetUrl, {
-            waitUntil: 'domcontentloaded',
-            timeout: 120000
-        });
+        if (targetUrl !== 'about:home') {
+    await page.goto(targetUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: 120000
+    });
+} else {
+    console.log('[WEB4] Firefox default home page navigation skipped.');
+}
 
         console.log('[WEB4] Firefox launched successfully.');
 
@@ -1068,17 +1131,81 @@ const child = spawn(
     }
 );
 
+
 // Boss-launched browser ka exact process track karo.
 managedBrowserProcesses.set(config.type, child);
 
-child.once('exit', () => {
+// Browser process completely close hone ke baad Boss profile reset
+child.once('close', async () => {
+
+    console.log(
+        `[PROFILE RESET ${config.type}] Browser process closed.`
+    );
+
     if (managedBrowserProcesses.get(config.type) === child) {
         managedBrowserProcesses.delete(config.type);
     }
-});
-    
-child.unref();
 
+    try {
+
+        // Browser ka debugging port completely band hone ka wait
+        const deadline = Date.now() + 20000;
+        let browserClosed = false;
+
+        while (Date.now() < deadline) {
+
+            const stillRunning = await isBrowserDebugReady(config);
+
+            if (!stillRunning) {
+                browserClosed = true;
+                break;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
+
+        if (!browserClosed) {
+            console.warn(
+                `[PROFILE RESET ${config.type}] Browser still running. Profile NOT deleted.`
+            );
+            return;
+        }
+
+        // Booking chal rahi ho to profile delete mat karo
+        if (activeBookingBrowsers.has(config.type)) {
+            console.warn(
+                `[PROFILE RESET ${config.type}] Booking active. Profile NOT deleted.`
+            );
+            return;
+        }
+
+        // Sirf Boss ka dedicated browser profile delete hoga
+        await fs.promises.rm(
+            config.userDataDir,
+            {
+                recursive: true,
+                force: true,
+                maxRetries: 10,
+                retryDelay: 1000
+            }
+        );
+
+        console.log(
+            `[PROFILE RESET ${config.type}] Boss browser profile deleted successfully.`
+        );
+
+    } catch (error) {
+
+        console.error(
+            `[PROFILE RESET ${config.type}] Profile reset failed:`,
+            error.message
+        );
+
+    }
+
+});
+
+child.unref();
 
         const ready =
             await waitForBrowserDebug(
@@ -1463,8 +1590,7 @@ ipcMain.handle(
             const config =
                 getBrowserConfig(browserName);
 
-            const targetUrl =
-                'https://www.irctc.co.in';
+            const targetUrl = 'about:home';
 
 
             console.log(
@@ -1556,9 +1682,34 @@ ipcMain.handle(
             };
         }
 
-        const config = getBrowserConfig(type);
+        
+const config = getBrowserConfig(type);
 
-        if (activeBookingBrowsers.has(type)) {
+// ==========================================
+// CHECK BROWSER INSTALLATION BEFORE CLEARING
+// ==========================================
+
+if (
+    !config ||
+    !config.installed ||
+    !config.exePath ||
+    !fs.existsSync(config.exePath)
+) {
+    console.warn(
+        `[CLEAR DATA ${type}] Browser is not installed.`
+    );
+
+    return {
+        success: false,
+        browserType: type,
+        browserName: config?.name || type,
+        error:
+            `${config?.name || type} PC mein installed nahi hai. Data clear nahi kiya gaya.`
+    };
+}
+
+if (activeBookingBrowsers.has(type)) {
+
             return {
                 success: false,
                 error: `${config.name} mein booking chal rahi hai.`
@@ -2313,14 +2464,14 @@ function createLicenseWindow() {
 
     licenseWindow = new BrowserWindow({
 
-        width: 320,
-        height: 180,
+        width: 350,
+        height: 290,
 
-        minWidth: 320,
-        minHeight: 180,
+        minWidth: 350,
+        minHeight: 290,
 
-        maxWidth: 320,
-        maxHeight: 180,
+        maxWidth: 350,
+        maxHeight: 290,
 
         frame: false,
         transparent: true,
@@ -2510,7 +2661,7 @@ function createWindow() {
     show: false,
 
     alwaysOnTop: false,
-    hasShadow: true,
+    hasShadow: false,
 
     backgroundColor: '#00000000',
 

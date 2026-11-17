@@ -549,11 +549,11 @@ body {
 
 /* CLOCK */
 #live-clock {
-    color: #72c7f7 !important;
+    color: #ffd700 !important;
 
-    font-size: 9px !important;
+    font-size: 11px !important;
 
-    font-weight: 600;
+    font-weight: 700;
 }
 
 /* BROWSER BUTTONS */
@@ -863,6 +863,28 @@ body {
             id="browser-status-WEB3"
             class="text-[9px] font-semibold text-emerald-600">
             Ready
+        </span>
+
+    </button>
+
+
+    <!-- FIREFOX / WEB4 -->
+    <button
+        id="browser-btn-WEB4"
+        type="button"
+        onclick="connectBrowser('WEB4')"
+        class="flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 transition cursor-pointer">
+
+        <img
+            src="assets/browser-icons/firefox.svg"
+            alt="Firefox"
+            class="w-5 h-5 object-contain"
+        >
+
+        <span
+            id="browser-status-WEB4"
+            class="text-[9px] font-semibold text-emerald-600">
+            Checking...
         </span>
 
     </button>
@@ -1381,54 +1403,48 @@ let ipcRenderer = null;
 const passengerFillTimers = new Map();
 
 
+
 async function clearBrowserData(browserType) {
     const names = {
-    WEB: 'Chrome',
-    WEB2: 'Edge',
-    WEB3: 'Brave',
-    WEB4: 'Firefox'
-};
+        WEB: 'Chrome',
+        WEB2: 'Edge',
+        WEB3: 'Brave',
+        WEB4: 'Firefox'
+    };
 
     const browserName = names[browserType];
 
     if (!browserName || !window.electronAPI?.clearBrowserData) {
-        alert('Browser data clear feature available nahi hai.');
+        await showBossNotice('Browser data clear feature available nahi hai.');
         return;
     }
 
-    const confirmed = confirm(
+    const confirmed = await showBossConfirm(
         `${browserName} ka poora Boss-managed browser profile reset hoga.\n\n` +
         'IRCTC se logout ho sakta hai aur is profile ka doosra saved data bhi delete hoga.\n\n' +
         'Kya aap continue karna chahte hain?'
     );
 
-    if (!confirmed) {
-        return;
-    }
+    if (!confirmed) return;
 
     try {
-        const result =
-            await window.electronAPI.clearBrowserData(
-                browserType
-            );
+        const result = await window.electronAPI.clearBrowserData(browserType);
 
         if (result?.success) {
-            alert(
-                `${browserName} ka browser data clear ho gaya.`
+            await showBossNotice(
+                `${browserName} ka browser data successfully clear ho gaya.`
             );
         } else {
-            alert(
-                result?.error ||
-                'Browser data clear nahi ho saka.'
+            await showBossNotice(
+                result?.error || 'Browser data clear nahi ho saka.'
             );
         }
     } catch (error) {
-        console.error(
-            '[CLEAR BROWSER DATA] Error:',
-            error
-        );
+        console.error('[CLEAR BROWSER DATA] Error:', error);
 
-        alert('Browser data clear karte waqt error aaya.');
+        await showBossNotice(
+            'Browser data clear karte waqt error aaya.'
+        );
     }
 }
 
@@ -2253,6 +2269,65 @@ function showBossConfirm(message) {
         );
 
         box.append(text, buttons);
+        document.body.appendChild(box);
+    });
+}
+
+
+function showBossNotice(message) {
+    return new Promise((resolve) => {
+        const oldPopup = document.getElementById('boss-notice-popup');
+        if (oldPopup) oldPopup.remove();
+
+        const box = document.createElement('div');
+        box.id = 'boss-notice-popup';
+
+        Object.assign(box.style, {
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: '2147483647',
+            background: '#10243a',
+            border: '1px solid #38bdf8',
+            borderRadius: '9px',
+            padding: '14px',
+            width: 'min(300px, calc(100vw - 32px))',
+            boxSizing: 'border-box',
+            textAlign: 'center',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.4)'
+        });
+
+        const text = document.createElement('div');
+        text.textContent = message;
+
+        Object.assign(text.style, {
+            color: 'yellow',
+            font: '600 12px/1.5 sans-serif',
+            marginBottom: '12px',
+            overflowWrap: 'anywhere'
+        });
+
+        const button = document.createElement('button');
+        button.textContent = 'OK';
+
+        Object.assign(button.style, {
+            background: '#2563eb',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '5px',
+            padding: '6px 22px',
+            fontSize: '11px',
+            fontWeight: 'bold',
+            cursor: 'pointer'
+        });
+
+        button.onclick = () => {
+            box.remove();
+            resolve();
+        };
+
+        box.append(text, button);
         document.body.appendChild(box);
     });
 }
@@ -3519,6 +3594,59 @@ async function refreshBrowserStatuses() {
 }
 
 
+// ==========================================
+// REFRESH FIREFOX / WEB4 STATUS
+// ==========================================
+
+async function refreshFirefoxStatus() {
+
+    try {
+
+        if (
+            !window.electronAPI ||
+            typeof window.electronAPI.getBrowserStatuses !== 'function'
+        ) {
+            return;
+        }
+
+        const result =
+            await window.electronAPI.getBrowserStatuses();
+
+        if (!result || !result.success) {
+            return;
+        }
+
+        const firefox = (result.statuses || []).find(
+            browser => browser.type === 'WEB4'
+        );
+
+        if (!firefox) {
+            return;
+        }
+
+        updateBrowserStatusUI({
+            ...firefox,
+            status: firefox.installed
+                ? 'READY'
+                : 'NOT_INSTALLED'
+        });
+
+        console.log(
+            '[WEB4] Firefox status updated:',
+            firefox.installed ? 'READY' : 'NOT_INSTALLED'
+        );
+
+    } catch (error) {
+
+        console.error(
+            '[WEB4] Firefox status check failed:',
+            error
+        );
+
+    }
+}
+
+
 async function prepareDashboardBrowsers() {
     const browserTypes = ['WEB', 'WEB2', 'WEB3'];
 
@@ -3680,9 +3808,28 @@ function startBrowserStatusCheck() {
         return;
     }
 
-    prepareDashboardBrowsers();
+    prepareDashboardBrowsers().finally(() => {
+    refreshFirefoxStatus();
+});
 }
 
+// ==========================================
+// AUTO START BROWSER STATUS CHECK
+// ==========================================
+
+if (document.readyState === 'loading') {
+
+    document.addEventListener(
+        'DOMContentLoaded',
+        startBrowserStatusCheck,
+        { once: true }
+    );
+
+} else {
+
+    startBrowserStatusCheck();
+
+}
 
 // =========================================================
 // DASHBOARD TAB + WINDOW SIZE CONTROL

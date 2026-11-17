@@ -9145,7 +9145,7 @@
   },
   {
     "trainNumber": "22718",
-    "trainName": "t Exp"
+    "trainName": "Rajkot Sf Exp"
   },
   {
     "trainNumber": "20585",
@@ -9154,6 +9154,14 @@
   {
     "trainNumber": "18413",
     "trainName": "Puri Exp"
+  },
+  {
+    "trainNumber": "20967",
+    "trainName": "Sc Pbr Exp"
+  },
+  {
+    "trainNumber": "20968",
+    "trainName": "Pbr Sc Exp"
   },
   {
     "trainNumber": "22938",
@@ -9749,15 +9757,7 @@
   },
   {
     "trainNumber": "18635",
-    "trainName": "Sasaram Exp"
-  },
-  {
-    "trainNumber": "20630",
-    "trainName": "Sabari Exp"
-  },
-  {
-    "trainNumber": "20629",
-    "trainName": "Sabari Exp"
+    "trainName": "Rnc Ssm Exp"
   },
   {
     "trainNumber": "19165",
@@ -9785,11 +9785,11 @@
   },
   {
     "trainNumber": "12547",
-    "trainName": "Sabarmati Exp"
+    "trainName": "Agc Sbib Sf Exp"
   },
   {
     "trainNumber": "12548",
-    "trainName": "Sabarmati Exp"
+    "trainName": "Sbib Agc Exp"
   },
   {
     "trainNumber": "19215",
@@ -9825,23 +9825,15 @@
   },
   {
     "trainNumber": "19115",
-    "trainName": "Sayaji Nagari Exp"
+    "trainName": "Ddr Bhuj Exp"
   },
   {
     "trainNumber": "19116",
-    "trainName": "Sayaji Nagari Exp"
-  },
-  {
-    "trainNumber": "13178",
-    "trainName": "Sealdah Memu Exp"
-  },
-  {
-    "trainNumber": "13180",
-    "trainName": "Sealdah Memu Exp"
+    "trainName": "Bhuj Ddr Exp"
   },
   {
     "trainNumber": "12749",
-    "trainName": "Secunderabad Exp."
+    "trainName": "Mtm Bidr Exp."
   },
   {
     "trainNumber": "12792",
@@ -9849,35 +9841,31 @@
   },
   {
     "trainNumber": "17001",
-    "trainName": "Secunderabad Exp."
+    "trainName": "Snsi Sc Exp."
   },
   {
     "trainNumber": "22717",
-    "trainName": "Secunderabad Exp."
+    "trainName": "Rjt Sc Sup Exp."
   },
   {
     "trainNumber": "12745",
-    "trainName": "Secunderabad Exp."
+    "trainName": "Sc Mugr Sf Exp."
   },
   {
     "trainNumber": "12746",
-    "trainName": "Secunderabad Exp."
-  },
-  {
-    "trainNumber": "17040",
-    "trainName": "Secunderabad Exp."
+    "trainName": "Mugr Sc Sf Exp."
   },
   {
     "trainNumber": "17319",
-    "trainName": "Secunderabad Exp."
+    "trainName": "Hyderabad Exp."
   },
   {
     "trainNumber": "17626",
-    "trainName": "Secunderabad Exp."
+    "trainName": "Ral Vkb Exp."
   },
   {
     "trainNumber": "19713",
-    "trainName": "Secunderabad Exp."
+    "trainName": "Jp Krnt Exp."
   },
   {
     "trainNumber": "22849",
