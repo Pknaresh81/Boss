@@ -1,8 +1,10 @@
+const axios = require('axios');
 const {
     app,
     BrowserWindow,
     ipcMain,
     session,
+    safeStorage
 } = require('electron');
 
 const pendingWLDecisions = new Map();
@@ -18,6 +20,7 @@ const { exec, spawn } = require('child_process');
 const puppeteer = require('puppeteer');
 
 const APIEngine = require('./apiengine');
+const apiKeyStore = require('./api-key-store');
 const { startManualLogin } = require('./loginManager');
 
 let win = null;
@@ -69,6 +72,36 @@ async function cleanupBossProfileAfterClose(config) {
 }
 
 let licenseVerified = false;
+
+// ==========================================
+// SECURE API KEY MANAGEMENT
+// ==========================================
+
+function validateApiKeySender(event) {
+    if (
+        !win ||
+        win.isDestroyed() ||
+        event.sender !== win.webContents
+    ) {
+        throw new Error('Unauthorized API key request.');
+    }
+}
+
+ipcMain.handle(
+    'api-keys:get-status',
+    (event) => {
+        validateApiKeySender(event);
+        return apiKeyStore.getApiKeyStatus();
+    }
+);
+
+ipcMain.handle(
+    'api-keys:save',
+    (event, values = {}) => {
+        validateApiKeySender(event);
+        return apiKeyStore.saveApiKeys(values);
+    }
+);
 
 function createQRPaymentWindow(browserType = 'WEB', targetMiniWin = null) {
 
@@ -208,6 +241,187 @@ qrWindow.focus();
 
 return qrWindow;
 }
+
+
+ipcMain.handle('search-route-trains', async (event, data) => {
+    try {
+        const { fromStation, toStation, journeyDate } = data || {};
+
+        const savedKeys = apiKeyStore.getApiKeys();
+const apiKey = savedKeys.directApiSh;
+
+        if (!apiKey) {
+    return {
+        success: false,
+        error: 'API.SH key nahi mili. Tokens tab mein apni API key save karein.'
+    };
+}
+
+        if (!fromStation || !toStation || !journeyDate) {
+            return {
+                success: false,
+                error: 'From, To aur Journey Date zaroori hain.'
+            };
+        }
+
+        // YYYYMMDD ko YYYY-MM-DD mein convert karein
+        const dateText = String(journeyDate).replace(/-/g, '');
+
+        if (!/^\d{8}$/.test(dateText)) {
+            return {
+                success: false,
+                error: 'Journey date format galat hai.'
+            };
+        }
+
+        const date =
+            dateText.substring(0, 4) + '-' +
+            dateText.substring(4, 6) + '-' +
+            dateText.substring(6, 8);
+
+        const response = await axios.get(
+            'https://api.api.sh/indian-rail/v1/trains',
+            {
+                params: {
+                    from: fromStation.trim().toUpperCase(),
+                    to: toStation.trim().toUpperCase(),
+                    date: date
+                },
+                headers: {
+                    'x-api-key': apiKey
+                },
+                timeout: 30000
+            }
+        );
+
+        const raw = response.data;
+        const trainList = Array.isArray(raw.trains)
+            ? raw.trains
+            : [];
+
+        const trains = trainList.map(t => ({
+            trainNumber: t.number || '',
+            trainName: t.name || t.full_name || '',
+            departureTime: t.departure || '--',
+            arrivalTime: t.arrival || '--',
+            duration: t.duration || '--',
+            runningDays: t.run_days || [],
+            avlClasses: t.classes || [],
+            fares: t.fares || {},
+            availability: 'Live seat availability not provided by API.SH'
+        }));
+
+        return {
+            success: true,
+            total: trains.length,
+            trains,
+            creditsUsed: raw.credits_used || 1
+        };
+
+    } catch (error) {
+        console.error('[APISH ERROR]', error.response?.data || error.message);
+
+        return {
+            success: false,
+            error: error.response?.data?.error ||
+                error.message ||
+                'API request failed.'
+        };
+    }
+});
+
+// ==========================================
+// RAILCORE - SEAT AVAILABILITY + FARE
+// ==========================================
+ipcMain.handle('railcore-availability', async (event, data) => {
+    try {
+        const {
+            trainNumber,
+            fromStation,
+            toStation,
+            journeyDate,
+            travelClass,
+            quota
+        } = data || {};
+
+        const savedKeys = apiKeyStore.getApiKeys();
+const apiKey = savedKeys.railCore;
+
+        if (!apiKey) {
+            return {
+                success: false,
+                error: 'RAILCORE_API_KEY nahi mili.'
+            };
+        }
+
+        if (
+            !trainNumber ||
+            !fromStation ||
+            !toStation ||
+            !journeyDate ||
+            !travelClass ||
+            !quota
+        ) {
+            return {
+                success: false,
+                error: 'Train, From, To, Date, Class aur Quota zaroori hain.'
+            };
+        }
+
+        const dateText = String(journeyDate).replace(/-/g, '');
+
+        if (!/^\d{8}$/.test(dateText)) {
+            return {
+                success: false,
+                error: 'Journey date format galat hai.'
+            };
+        }
+
+        const date =
+            dateText.substring(0, 4) + '-' +
+            dateText.substring(4, 6) + '-' +
+            dateText.substring(6, 8);
+
+        const response = await axios.get(
+            'https://ir.railcore.tech/v1/availability/seats',
+            {
+                params: {
+                    train_number: String(trainNumber).trim(),
+                    from: String(fromStation).trim().toUpperCase(),
+                    to: String(toStation).trim().toUpperCase(),
+                    date,
+                    class: String(travelClass).trim().toUpperCase(),
+                    quota: String(quota).trim().toUpperCase()
+                },
+                headers: {
+                    'X-RailCore-Key': apiKey
+                },
+                timeout: 30000
+            }
+        );
+
+        return {
+            success: true,
+            data: response.data.data,
+            meta: response.data.meta
+        };
+
+    } catch (error) {
+        console.error(
+            '[RAILCORE ERROR]',
+            error.response?.data || error.message
+        );
+
+        return {
+            success: false,
+            error:
+                error.response?.data?.error?.message ||
+                error.response?.data?.message ||
+                error.message ||
+                'RailCore API request failed.'
+        };
+    }
+});
 
 
 ipcMain.handle(

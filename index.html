@@ -1039,10 +1039,16 @@ body {
                                 <input type="date"
                                        id="bookingDate"
                                        class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
-                            </div>
+                           
+                                       <button type="button"
+                              onclick="openRouteTrainsPopup()"
+                              class="bg-cyan-600 hover:bg-cyan-700 text-white px-2 py-1.5 rounded text-sm font-bold block w-fit ml-auto mt-2">
+                              🔍 Search Train
+                              </button>
+                           
+                          </div>
 
                         </div>
-
 
                         <!-- PASSENGERS -->
                         <div class="border-t border-slate-200 pt-3">
@@ -1152,36 +1158,74 @@ body {
             <!-- TOKENS -->
             <section id="tab-tokens" class="tab-content">
 
-                <h2 class="text-sm font-bold text-indigo-600 mb-3">
-                    TOKENS MANAGEMENT PANEL
-                </h2>
+<div class="mt-0 pt-0 space-y-2">
 
-                <div class="bg-white p-4 rounded-xl border border-slate-200 text-xs space-y-3 shadow-sm">
+    <h3 class="text-sm font-bold text-indigo-600">
+        EXTERNAL API KEYS
+    </h3>
 
-                    <div class="flex gap-3">
+    <div class="space-y-1">
 
-                        <input type="text"
-                               id="token-input"
-                               placeholder="Enter API Token / Session Key"
-                               class="flex-1 bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+        <label class="font-semibold text-slate-700">
+            Direct API.SH Key
+        </label>
 
-                        <button onclick="addToken()"
-                                class="bg-indigo-600 text-white px-4 py-2 rounded font-bold">
-                            Save Token
-                        </button>
+        <input
+            type="password"
+            id="direct-api-sh-key"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Enter your Direct API.SH key"
+            class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800"
+        />
 
-                    </div>
+    </div>
 
-                    <div id="tokens-list"
-                         class="space-y-2 mt-3 text-slate-700">
-                    </div>
+    <div class="space-y-1">
 
+        <label class="font-semibold text-slate-700">
+            RailCore API Key
+        </label>
 
-<div class="mt-5 border-t pt-4">
-    
-<h3 class="text-sm font-bold text-indigo-600 mb-3">
-    Clear Browser Data
-</h3>
+        <input
+            type="password"
+            id="railcore-api-key"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Enter your RailCore API key"
+            class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800"
+        />
+
+    </div>
+
+    <button
+        id="save-api-keys-btn"
+        onclick="saveApiKeys()"
+        class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded font-bold"
+    >
+        Save API Keys
+    </button>
+
+    <div
+        id="api-key-status"
+        class="text-xs text-slate-600"
+        aria-live="polite"
+    >
+        Checking saved API keys...
+    </div>
+
+</div>
+
+ </section>
+
+<!-- SETTINGS -->
+<section id="tab-settings" class="tab-content">
+
+<div class="mt-0 px-4 pb-4 pt-0 rounded-xl">
+
+  <h3 class="text-sm font-bold text-sky-400 mb-3 border-b border-slate-200 pb-3">
+        Clear Browser Data
+    </h3>
 
   <div class="flex flex-wrap gap-2">
         <button
@@ -1215,60 +1259,7 @@ body {
     </div>
 </div>
 
-
-                </div>
-
-            </section>
-
-
-            <!-- SETTINGS -->
-            <section id="tab-settings" class="tab-content">
-
-                <h2 class="text-sm font-bold text-indigo-600 mb-3">
-                    SOFTWARE CONFIGURATION SETTINGS
-                </h2>
-
-                <div class="bg-white p-4 rounded-xl border border-slate-200 text-xs space-y-4 shadow-sm">
-
-                    <label class="flex items-center space-x-3 text-slate-700">
-
-                        <input type="checkbox"
-                               id="set-sound"
-                               checked
-                               class="rounded bg-slate-50 border-slate-300 w-4 h-4">
-
-                        <span>
-                            Enable Audio Alerts on Availability Found
-                        </span>
-
-                    </label>
-
-
-                    <label class="flex items-center space-x-3 text-slate-700">
-
-                        <input type="checkbox"
-                               id="set-fast"
-                               checked
-                               class="rounded bg-slate-50 border-slate-300 w-4 h-4">
-
-                        <span>
-                            High-Speed Multi-Threaded Request Mode
-                        </span>
-
-                    </label>
-
-
-                    <button onclick="alert('Settings saved successfully!')"
-                            class="bg-indigo-600 text-white px-4 py-2 rounded font-bold">
-
-                        Save Settings
-
-                    </button>
-
-                </div>
-
-            </section>
-
+</section>
 
 <!-- PROFILE -->
 <section id="tab-profile" class="tab-content">
@@ -1788,18 +1779,9 @@ let paymentMethods =
         []
     );
 
-
-let tokensList =
-    loadStorage(
-        "Boss_tokens",
-        ["Boss_TOKEN_SECURE_9982"]
-    );
-
-
 let latestSavedTicket = null;
 
 let editingTicketIndex = -1;
-
 
 /* =========================================================
    PASSENGER INPUTS - COMPACT DARK UI
@@ -3255,79 +3237,92 @@ function renderPayments() {
     }
 }
 
+async function loadApiKeyStatus() {
+    const statusEl =
+        document.getElementById('api-key-status');
 
-/* =========================================================
-   TOKENS
-========================================================= */
+    try {
+        const result =
+            await window.electronAPI.getApiKeyStatus();
 
-function addToken() {
+        if (!result.success) {
+            throw new Error('API key status load nahi hua.');
+        }
 
-    const tokenInput =
-        document.getElementById(
-            "token-input"
-        );
+        statusEl.textContent =
+            'Direct API.SH: ' +
+            (result.directApiShConfigured ? 'Saved' : 'Not saved') +
+            ' | RailCore: ' +
+            (result.railCoreConfigured ? 'Saved' : 'Not saved');
 
+        document.getElementById('direct-api-sh-key').placeholder =
+            result.directApiShConfigured
+                ? 'Saved key - enter new key to replace'
+                : 'Enter your Direct API.SH key';
 
-    const token =
-        tokenInput.value.trim();
+        document.getElementById('railcore-api-key').placeholder =
+            result.railCoreConfigured
+                ? 'Saved key - enter new key to replace'
+                : 'Enter your RailCore API key';
 
+    } catch (error) {
+        statusEl.textContent = error.message;
+    }
+}
 
-    if (!token) {
+async function saveApiKeys() {
+    const directInput =
+        document.getElementById('direct-api-sh-key');
 
-        alert(
-            "Enter Token"
-        );
+    const railInput =
+        document.getElementById('railcore-api-key');
 
+    const statusEl =
+        document.getElementById('api-key-status');
+
+    const saveBtn =
+        document.getElementById('save-api-keys-btn');
+
+    const directApiSh = directInput.value.trim();
+    const railCore = railInput.value.trim();
+
+    if (!directApiSh && !railCore) {
+        statusEl.textContent =
+            'Kam se kam ek API key enter karein.';
         return;
     }
 
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
 
-    tokensList.push(token);
+    try {
+        const result =
+            await window.electronAPI.saveApiKeys({
+                directApiSh,
+                railCore
+            });
 
+        if (!result.success) {
+            throw new Error(
+                result.message || 'API keys save nahi hui.'
+            );
+        }
 
-    saveStorage(
-        "Boss_tokens",
-        tokensList
-    );
+        directInput.value = '';
+        railInput.value = '';
 
+        statusEl.textContent =
+            'API keys securely saved on this PC.';
 
-    tokenInput.value = "";
+        await loadApiKeyStatus();
 
-
-    renderTokens();
-
-
-    alert(
-        "Token Saved!"
-    );
+    } catch (error) {
+        statusEl.textContent = error.message;
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save API Keys';
+    }
 }
-
-
-function renderTokens() {
-
-    const listEl =
-        document.getElementById(
-            "tokens-list"
-        );
-
-
-    if (!listEl) return;
-
-
-    listEl.innerHTML =
-        tokensList.map(
-            t => `
-
-            <div class="bg-slate-50 p-2 rounded border border-slate-200 font-mono text-xs text-slate-white">
-
-                🔑 ${escapeHtml(t)}
-
-            </div>
-
-        `
-        ).join("");
-}
-
 
 /* =========================================================
    SECURITY / HTML ESCAPE
@@ -3747,7 +3742,6 @@ renderPassengerInputs();
 renderTickets();
 renderProfiles();
 renderPayments();
-renderTokens();
 
 const mainWindow = document.getElementById('mainWindow');
 
@@ -4288,6 +4282,238 @@ closeLicenseBtn.addEventListener(
     setup(toInput);
 })();
 </script>
+<!-- ROUTE TRAINS & AVAILABILITY POPUP MODAL -->
+<div id="route-trains-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; align-items: center; justify-content: center;">
+    <div style="background: #0d1b2f; border: 1px solid #38bdf8; border-radius: 10px; padding: 15px; width: 700px; max-width: 95%; color: #e8f3ff; font-family: sans-serif;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="font-size: 13px; font-weight: bold; color: #38bdf8;">Route Trains & 7-Day Availability</h3>
+            <button onclick="document.getElementById('route-trains-modal').style.display='none'" style="background: none; border: none; color: #fff; font-size: 16px; cursor: pointer;">✕</button>
+        </div>
+        <div id="route-trains-results-container" style="max-height: 400px; overflow-y: auto; font-size: 11px;">
+            <p style="text-align: center; color: #8fa8c2;">From aur To station daal kar search karein...</p>
+        </div>
+    </div>
+</div>
 
+<script>
+
+// ==========================================
+// ROUTE TRAINS + RAILCORE AVAILABILITY
+// ==========================================
+async function openRouteTrainsPopup() {
+    const modal = document.getElementById('route-trains-modal');
+    const container = document.getElementById('route-trains-results-container');
+
+    const fromStation = document.getElementById('inp-from').value.trim();
+    const toStation = document.getElementById('inp-to').value.trim();
+    const journeyDate = document.getElementById('bookingDate').value.replace(/-/g, '');
+
+    if (!fromStation || !toStation || !journeyDate) {
+        alert('Pehle From, To aur Journey Date bharein!');
+        return;
+    }
+
+    let selectedQuota = 'GN';
+    let trains = [];
+
+    modal.style.display = 'flex';
+
+    container.innerHTML = `
+        <div style="padding:12px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:15px;">
+                <b style="color:#38bdf8;">SELECT QUOTA</b>
+                <div id="railcore-quota-buttons" style="display:flex;gap:8px;">
+                    ${['GN','TQ','PT'].map(q => `
+                        <button type="button" data-quota="${q}"
+                            style="border:2px solid ${q === 'GN' ? '#22c55e' : '#64748b'};
+                            background:${q === 'GN' ? '#14532d' : 'transparent'};
+                            color:white;border-radius:30px;padding:8px 17px;
+                            font-weight:bold;cursor:pointer;">
+                            ${q}
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+
+            <div id="railcore-train-list" style="color:#38bdf8;text-align:center;">
+                Route ki trains search ho rahi hain...
+            </div>
+        </div>
+    `;
+
+    const trainList = document.getElementById('railcore-train-list');
+    const quotaButtons = document.getElementById('railcore-quota-buttons');
+
+    try {
+        const response = await window.electronAPI.searchRouteTrains({
+            fromStation,
+            toStation,
+            journeyDate
+        });
+
+        if (!response || !response.success) {
+            trainList.innerHTML = `<p style="color:#ef4444;">${response?.error || 'Train search failed'}</p>`;
+            return;
+        }
+
+        trains = response.trains || [];
+
+        if (!trains.length) {
+            trainList.innerHTML = '<p>Koi train nahi mili.</p>';
+            return;
+        }
+
+        function renderTrains() {
+            trainList.innerHTML = `
+                <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;text-align:left;min-width:650px;">
+                        <thead>
+                            <tr style="color:#38bdf8;border-bottom:1px solid #38bdf8;">
+                                <th style="padding:9px;">TRAIN</th>
+                                <th style="padding:9px;">DEPARTURE</th>
+                                <th style="padding:9px;">ARRIVAL</th>
+                                <th style="padding:9px;">CLASSES / AVAILABILITY</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${trains.map((t, i) => `
+                                <tr style="border-bottom:1px solid rgba(255,255,255,.15);">
+                                    <td style="padding:10px;min-width:140px;">
+                                        <b>${t.trainNumber}</b><br>
+                                        ${t.trainName}
+                                    </td>
+
+                                    <td style="padding:10px;">${t.departureTime || '--'}</td>
+                                    <td style="padding:10px;">${t.arrivalTime || '--'}</td>
+
+                                    <td style="padding:10px;min-width:300px;">
+                                        <div style="display:flex;flex-direction:row;flex-wrap:wrap;gap:6px;">
+                                            ${(t.avlClasses || []).map((cls, j) => `
+                                                <button type="button"
+                                                    class="railcore-class-btn"
+                                                    data-train="${i}"
+                                                    data-class="${j}"
+                                                    style="padding:7px 11px;border:1px solid #0ea5e9;
+                                                    border-radius:7px;background:#0c4a6e;color:white;
+                                                    font-weight:bold;cursor:pointer;">
+                                                    ${cls}
+                                                </button>
+                                            `).join('')}
+                                        </div>
+
+                                        <div id="railcore-result-${i}"
+                                            style="margin-top:9px;font-size:13px;color:#cbd5e1;">
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        renderTrains();
+
+        // QUOTA SELECTION
+        quotaButtons.onclick = (event) => {
+            const button = event.target.closest('[data-quota]');
+            if (!button) return;
+
+            selectedQuota = button.dataset.quota;
+
+            quotaButtons.querySelectorAll('[data-quota]').forEach(btn => {
+                const active = btn.dataset.quota === selectedQuota;
+                btn.style.borderColor = active ? '#22c55e' : '#64748b';
+                btn.style.background = active ? '#14532d' : 'transparent';
+            });
+
+            renderTrains();
+        };
+
+        // CLASS CLICK - RAILCORE API
+        trainList.onclick = async (event) => {
+            const button = event.target.closest('.railcore-class-btn');
+            if (!button) return;
+
+            const trainIndex = Number(button.dataset.train);
+            const classIndex = Number(button.dataset.class);
+
+            const train = trains[trainIndex];
+            const travelClass = train?.avlClasses?.[classIndex];
+
+            if (!train || !travelClass || button.disabled) return;
+
+            const resultBox = document.getElementById(
+                `railcore-result-${trainIndex}`
+            );
+
+            button.disabled = true;
+            button.style.opacity = '0.5';
+
+            resultBox.style.color = '#38bdf8';
+            resultBox.textContent =
+                `${travelClass} ${selectedQuota}: Checking availability...`;
+
+            try {
+                const result = await window.electronAPI.railcoreAvailability({
+                    trainNumber: train.trainNumber,
+                    fromStation,
+                    toStation,
+                    journeyDate,
+                    travelClass,
+                    quota: selectedQuota
+                });
+
+                if (!result || !result.success) {
+                    throw new Error(result?.error || 'Availability check failed');
+                }
+
+                const cls = result.data?.classes?.find(
+                    item => item.class_code === travelClass
+                ) || result.data?.classes?.[0];
+
+                if (!cls) {
+                    throw new Error('Availability data nahi mila.');
+                }
+
+                resultBox.style.color = '#22c55e';
+                resultBox.innerHTML = `
+                    <div style="background:rgba(34,197,94,.10);border:1px solid #16a34a;
+                    border-radius:8px;padding:9px;margin-top:5px;">
+                        <b>${travelClass} | ${selectedQuota}</b><br>
+                        <span style="font-size:14px;">
+                            Status: <b>${cls.availability_text || cls.status || '--'}</b>
+                        </span><br>
+                        Available: ${cls.available_count ?? '--'}
+                        &nbsp; | &nbsp;
+                        RAC: ${cls.rac_count ?? '--'}
+                        &nbsp; | &nbsp;
+                        WL: ${cls.waitlist_count ?? '--'}
+                        <br>
+                        <b style="font-size:15px;">Fare: ₹${cls.total_fare ?? cls.fare ?? '--'}</b>
+                        <br>
+                        <small>Updated: ${cls.last_updated_at || 'Time unavailable'}</small>
+                    </div>
+                `;
+
+            } catch (error) {
+                resultBox.style.color = '#ef4444';
+                resultBox.textContent = 'Error: ' + error.message;
+            } finally {
+                button.disabled = false;
+                button.style.opacity = '1';
+            }
+        };
+
+    } catch (error) {
+        trainList.innerHTML =
+            `<p style="color:#ef4444;">Error: ${error.message}</p>`;
+    }
+}
+
+loadApiKeyStatus();
+
+</script>
 </body>
 </html>

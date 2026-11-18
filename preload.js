@@ -253,6 +253,48 @@ sendWLDecision: (windowId, decision) => {
                     event,
                     data
                 ) => callback(data)
-            )
+            ),
+            onPaymentQRTimer: (callback) =>
+            ipcRenderer.on(
+                'payment-qr-timer',
+                (
+                    event,
+                    data
+                ) => callback(data)
+            ),
+
+        // ==========================================
+        // SEARCH ROUTE TRAINS (Naya Function)
+        // ==========================================
+        searchRouteTrains: (data) =>
+            ipcRenderer.invoke(
+                'search-route-trains',
+                data
+            ),
+            
+            
+            railcoreAvailability: (data) =>
+                ipcRenderer.invoke(
+                    'railcore-availability',
+                    data
+                ),
+
+            // ==========================================
+            // SECURE API KEY MANAGEMENT
+            // ==========================================
+
+            getApiKeyStatus: () =>
+                ipcRenderer.invoke(
+                    'api-keys:get-status'
+                ),
+
+            saveApiKeys: (values) =>
+                ipcRenderer.invoke(
+                    'api-keys:save',
+                    {
+                        directApiSh: String(values?.directApiSh || ''),
+                        railCore: String(values?.railCore || '')
+                    }
+                )
     }
 );

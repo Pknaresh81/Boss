@@ -292,9 +292,26 @@ async typeHumanLike(selector, text, minDelay = 20, maxDelay = 60) {
                     : JSON.stringify(bodyData)
             )
             : null;
-    const finalHeaders = {
-    ...customHeaders
-};
+    // Browser fetch owns browser-controlled headers and the cookie jar.
+    // Never try to inject Cookie/Connection/Sec-Fetch headers from page JS.
+    const finalHeaders = {};
+    for (const [headerName, headerValue] of Object.entries(customHeaders)) {
+        const normalizedName = String(headerName).toLowerCase();
+        if (
+            normalizedName === 'cookie' ||
+            normalizedName === 'connection' ||
+            normalizedName.startsWith('sec-fetch-') ||
+            normalizedName === 'host' ||
+            normalizedName === 'origin' ||
+            normalizedName === 'referer' ||
+            normalizedName === 'content-length'
+        ) {
+            continue;
+        }
+        if (headerValue !== undefined && headerValue !== null) {
+            finalHeaders[headerName] = String(headerValue);
+        }
+    }
     console.log(
         `[BROWSER ${this.browserType}] SAFE FETCH: ${url}`
     );
@@ -928,17 +945,50 @@ await this.page.evaluate(
     },
     usernameSelector
 );
-// SELECTED USERNAME FILL (Human-like 100ms - 200ms delay)
-await this.page.click(usernameSelector);
-await new Promise(function(r) { setTimeout(r, Math.floor(Math.random() * 100) + 100); });
-var usernameStr = String(username || '');
-for (var uIdx = 0; uIdx < usernameStr.length; uIdx++) {
-    await this.page.type(usernameSelector, usernameStr[uIdx]);
-    await this.delay(Math.floor(Math.random() * 100) + 100);
-}
-console.log(
-    `[AUTO LOGIN ${this.browserType}] Selected username filled.`
+
+
+// USERNAME - Complete value at once
+await this.page.evaluate(
+    (args) => {
+        const input = document.querySelector(args.selector);
+        if (!input) throw new Error('Username field nahi mila.');
+
+        const setter = Object.getOwnPropertyDescriptor(
+            window.HTMLInputElement.prototype,
+            'value'
+        ).set;
+
+        input.click();
+        input.focus();
+
+        setter.call(input, '');
+
+        input.dispatchEvent(
+            new Event('input', { bubbles: true })
+        );
+
+        const usernameText = String(args.value || '').trim();
+
+        setter.call(input, usernameText);
+
+        input.dispatchEvent(
+            new Event('input', { bubbles: true })
+        );
+
+        input.dispatchEvent(
+            new Event('change', { bubbles: true })
+        );
+    },
+    {
+        selector: usernameSelector,
+        value: String(username || '')
+    }
 );
+
+await this.delay(600);
+
+console.log(`[AUTO LOGIN ${this.browserType}] Username filled.`);
+
 // PASSWORD
 await this.page.waitForSelector(
     passwordSelector,
@@ -977,17 +1027,50 @@ await this.page.evaluate(
     },
     passwordSelector
 );
-// SELECTED PASSWORD FILL (Human-like 100ms - 200ms delay)
-await this.page.click(passwordSelector);
-await new Promise(function(r) { setTimeout(r, Math.floor(Math.random() * 100) + 100); });
-var passwordStr = String(password || '');
-for (var pIdx = 0; pIdx < passwordStr.length; pIdx++) {
-    await this.page.type(passwordSelector, passwordStr[pIdx]);
-    await this.delay(Math.floor(Math.random() * 100) + 100);
-}
-console.log(
-    `[AUTO LOGIN ${this.browserType}] Selected password filled.`
+
+
+// PASSWORD - Complete value at once
+await this.page.evaluate(
+    (args) => {
+        const input = document.querySelector(args.selector);
+        if (!input) throw new Error('Password field nahi mila.');
+
+        const setter = Object.getOwnPropertyDescriptor(
+            window.HTMLInputElement.prototype,
+            'value'
+        ).set;
+
+        input.click();
+        input.focus();
+
+        setter.call(input, '');
+
+        input.dispatchEvent(
+            new Event('input', { bubbles: true })
+        );
+
+        const passwordText = String(args.value || '');
+
+        setter.call(input, passwordText);
+
+        input.dispatchEvent(
+            new Event('input', { bubbles: true })
+        );
+
+        input.dispatchEvent(
+            new Event('change', { bubbles: true })
+        );
+    },
+    {
+        selector: passwordSelector,
+        value: String(password || '')
+    }
 );
+
+await this.delay(600);
+
+console.log(`[AUTO LOGIN ${this.browserType}] Password filled.`);
+
     // CAPTCHA / SIGN IN MANUAL
     console.log(
     `[AUTO LOGIN ${this.browserType}] Username/password filled.`
@@ -1209,6 +1292,156 @@ try {
         `[${this.browserType}] Cookies nahi mili. Please IRCTC par login karein.`
     );
 }
+
+
+// SAFE AUTO SESSION RESTORE
+async autoRestoreSession() {
+    if (!this.page || this.page.isClosed()) {
+        console.warn(`[SESSION ${this.browserType}] Browser page unavailable.`);
+        return false;
+    }
+
+    try {
+        // 1. Browser mein current IRCTC cookies check karo
+        const currentCookies = await this.page.cookies(
+            'https://www.irctc.co.in'
+        );
+
+        // Existing browser cookies ko saved cookies se overwrite mat karo
+        if (currentCookies && currentCookies.length > 0) {
+            console.log(
+                `[SESSION ${this.browserType}] Existing browser cookies found. Restore skipped.`
+            );
+            return false;
+        }
+
+        // 2. Browser-specific saved session read karo
+        let savedData;
+
+        try {
+            savedData = this.loadSession();
+        } catch (error) {
+            console.warn(
+                `[SESSION ${this.browserType}] Saved session unavailable:`,
+                error.message
+            );
+            return false;
+        }
+
+        if (
+            !savedData ||
+            typeof savedData.cookies !== 'string' ||
+            !savedData.cookies.trim()
+        ) {
+            console.warn(
+                `[SESSION ${this.browserType}] Saved cookies not found.`
+            );
+            return false;
+        }
+
+        // 3. Cookie name=value pairs safely parse karo.
+        // Cookie value mein "=" ho to bhi value truncate nahi hogi.
+        const cookieObjects = savedData.cookies
+            .split(';')
+            .map(item => item.trim())
+            .filter(Boolean)
+            .map(cookieString => {
+                const separatorIndex = cookieString.indexOf('=');
+
+                if (separatorIndex <= 0) return null;
+
+                const name = cookieString
+                    .slice(0, separatorIndex)
+                    .trim();
+
+                const value = cookieString
+                    .slice(separatorIndex + 1)
+                    .trim();
+
+                if (!name) return null;
+
+                return {
+                    name,
+                    value,
+                    url: 'https://www.irctc.co.in'
+                };
+            })
+            .filter(Boolean);
+
+        if (cookieObjects.length === 0) {
+            console.warn(
+                `[SESSION ${this.browserType}] Saved cookie format is invalid.`
+            );
+            return false;
+        }
+
+        this.sendBookingStatus(
+            'Restoring saved browser cookies...',
+            'SESSION RESTORE',
+            10
+        );
+
+        // 4. Cookies browser mein set karo
+        await this.page.setCookie(...cookieObjects);
+
+        // 5. Cookies install hui hain ya nahi, verify karo
+        const restoredCookies = await this.page.cookies(
+            'https://www.irctc.co.in'
+        );
+
+        if (!restoredCookies || restoredCookies.length === 0) {
+            console.warn(
+                `[SESSION ${this.browserType}] Browser did not accept restored cookies.`
+            );
+            return false;
+        }
+
+        // 6. Agar current page IRCTC ka hai to reload karo.
+        // About:blank ya kisi doosre page ko reload nahi karna.
+        let currentUrl = '';
+
+        try {
+            currentUrl = this.page.url();
+        } catch (e) {}
+
+        if (currentUrl.startsWith('https://www.irctc.co.in/')) {
+            await this.page.reload({
+                waitUntil: 'domcontentloaded',
+                timeout: 30000
+            });
+        }
+
+        console.log(
+            `[SESSION ${this.browserType}] ${restoredCookies.length} cookies restored.`
+        );
+
+        this.sendBookingStatus(
+            'Saved cookies loaded. Checking IRCTC login...',
+            'SESSION RESTORE',
+            15
+        );
+
+        // Sirf cookies restore hui hain.
+        // Actual login validity autoLogin() ke existing flow se check hogi.
+        return true;
+
+    } catch (error) {
+        console.warn(
+            `[SESSION ${this.browserType}] Session restore failed:`,
+            error.message
+        );
+
+        this.sendBookingStatus(
+            'Saved session could not be restored. Continuing to login check...',
+            'SESSION RESTORE',
+            10
+        );
+
+        return false;
+    }
+}
+
+
     // AUTO-UPDATE COOKIES FROM RESPONSE
     updateCookiesFromResponse(response) {
         try {
@@ -1309,10 +1542,21 @@ try {
     async getBrowserJwtToken() {
         // Pehle network se capture hua asli token check karein
         if (this.irctcAccessToken && String(this.irctcAccessToken).trim()) {
-            return String(this.irctcAccessToken)
+            const capturedToken = String(this.irctcAccessToken)
                 .replace(/^Bearer\s+/i, '')
                 .replace(/["\\\r\n]/g, '')
                 .trim();
+            const capturedStatus = this.inspectJwtExpiry(capturedToken);
+            if (capturedStatus.expired === true) {
+                this.sendDiagnostic(
+                    'JWT_EXPIRED',
+                    'Captured IRCTC access token has expired; checking the current browser session token.',
+                    capturedStatus
+                );
+                this.irctcAccessToken = '';
+            } else {
+                return capturedToken;
+            }
         }
         if (!this.page || this.page.isClosed()) return '';
         try {
@@ -1335,7 +1579,20 @@ try {
                 }
                 return '';
             });
-            return rawToken ? String(rawToken).replace(/^Bearer\s+/i, '').replace(/["\\\r\n]/g, '').trim() : '';
+            const cleanToken = rawToken
+                ? String(rawToken).replace(/^Bearer\s+/i, '').replace(/["\\\r\n]/g, '').trim()
+                : '';
+            if (!cleanToken) return '';
+            const tokenStatus = this.inspectJwtExpiry(cleanToken);
+            if (tokenStatus.expired === true) {
+                this.sendDiagnostic(
+                    'JWT_EXPIRED',
+                    'Browser storage contains an expired IRCTC JWT; please log in again.',
+                    tokenStatus
+                );
+                return '';
+            }
+            return cleanToken;
         } catch (e) {
             return '';
         }
@@ -1358,27 +1615,14 @@ try {
             'application/json, text/plain, */*',
         'Accept-Language':
             'en-US,en;q=0.9',
-        'Referer':
-            referer ||
-            'https://www.irctc.co.in/nget/booking/train-list',
-        'Origin':
-            'https://www.irctc.co.in',
         'Content-Type':
             'application/json',
-        'Connection':
-            'keep-alive',
         'Client-Device-Id':
             'WEB',
-        'Sec-Fetch-Dest':
-            'empty',
-        'Sec-Fetch-Mode':
-            'cors',
-        'Sec-Fetch-Site':
-            'same-origin',
         'X-Requested-With':
-            'XMLHttpRequest',
-        'Cookie':
-            cookies || ''
+            'XMLHttpRequest'
+        // Browser fetch supplies Origin/Referer and session cookies from the
+        // current IRCTC page context. Do not forge browser-controlled headers.
     };
     if (jwtToken) {
         headers['Authorization'] = `Bearer ${jwtToken}`;
@@ -1563,10 +1807,10 @@ return responseData;
             throw new Error(`[${this.browserType}] External browser page availability check ke liye available nahi hai.`);
         }
         const jDate = String(bookingData.journeyDate || bookingData.date || '').replace(/-/g, '');
-        const fromStn = String(bookingData.fromStation || '').trim().toUpperCase();
-        const toStn = String(bookingData.toStation || '').trim().toUpperCase();
-        const classTp = String(bookingData.classType || 'SL').trim().toUpperCase();
-        const trainNo = String(bookingData.trainNo || '').trim();
+        const fromStn = String(bookingData.fromStation || bookingData.from || '').trim().toUpperCase();
+        const toStn = String(bookingData.toStation || bookingData.to || '').trim().toUpperCase();
+        const classTp = String(bookingData.classType || bookingData.trainClass || bookingData.class || 'SL').trim().toUpperCase();
+        const trainNo = String(bookingData.trainNo || bookingData.trainNumber || '').trim();
         const quotaRaw = String(bookingData.quota || 'GN').trim().toUpperCase();
         const quotaMap = {
             GENERAL: 'GN',
@@ -1577,13 +1821,20 @@ return responseData;
         if (!/^\d{8}$/.test(jDate) || !fromStn || !toStn || !trainNo) {
             throw new Error('Availability check ke liye train number, stations ya journey date invalid/missing hai.');
         }
-        // Login ke waqt capture hua actual IRCTC access token
-        const accessToken = String(this.irctcAccessToken || '')
+        // Use the latest usable token from the authenticated browser session.
+        // getBrowserJwtToken also rejects a token whose JWT exp has passed.
+        const accessToken = String(await this.getBrowserJwtToken() || '')
             .trim()
             .replace(/^Bearer\s+/i, '');
         if (!accessToken) {
-            throw new Error('IRCTC login token capture nahi hua. Availability request nahi bheji gayi.');
+            this.sendDiagnostic(
+                'AVAILABILITY_AUTH_MISSING',
+                'No usable IRCTC access token is available; availability request was not sent.',
+                { browserType: this.browserType }
+            );
+            throw new Error('IRCTC login token missing/expired hai. Browser mein login/session verify karein.');
         }
+        this.irctcAccessToken = accessToken;
         const requestData = {
             trainNo,
             jDate,
@@ -1699,9 +1950,20 @@ return responseData;
                 await this.delay(1800);
             }
         }
+        const finalStatus = Number(lastResult?.status || 0);
+        const finalStatusInfo = this.classifyHttpStatus(finalStatus);
+        this.sendDiagnostic(
+            finalStatusInfo.category,
+            `Availability/Fare enquiry failed after the existing retry sequence: ${finalStatusInfo.message}`,
+            {
+                endpoint: 'avlFarenquiry',
+                status: finalStatus,
+                responseLength: String(lastResult?.body || lastResult?.error || '').length,
+                containsUnableToProcess: /unable to process request/i.test(String(lastResult?.body || ''))
+            }
+        );
         throw new Error(
-            `avlFarenquiry failed | HTTP: ${lastResult?.status ?? 0} | ` +
-            `Response: ${String(lastResult?.body || lastResult?.error || 'Empty').slice(0, 1000)}`
+            `avlFarenquiry failed | HTTP: ${finalStatus} | ${finalStatusInfo.message}`
         );
     }
     // 2. ALTERNATE AVAILABILITY ENQUIRY
@@ -1712,22 +1974,33 @@ return responseData;
         `[${this.browserType}] External browser page available nahi hai alternate availability check ke liye.`
     );
 }
+        const alternateRequestData = {
+            toStation: String(bookingData.toStation || bookingData.to || '').trim().toUpperCase(),
+            journeyDate: String(bookingData.journeyDate || bookingData.date || '').replace(/-/g, ''),
+            quota: String(bookingData.quota || 'GN').trim().toUpperCase(),
+            fromStation: String(bookingData.fromStation || bookingData.from || '').trim().toUpperCase()
+        };
+        if (!/^\d{8}$/.test(alternateRequestData.journeyDate) ||
+            !alternateRequestData.fromStation || !alternateRequestData.toStation) {
+            throw new Error('Alternate availability payload mein station/date invalid hai.');
+        }
         const script = `
             (async () => {
                 try {
+                    const d = __ALTERNATE_REQUEST_DATA__;
                     const url = "https://www.irctc.co.in/eticketing/protected/mapps1/altAvlEnq/TC";
                     const payload = {
                         concessionBooking: false,
                         currentBooking: "false",
-                        destStn: "${bookingData.toStation}",
+                        destStn: d.toStation,
                         flexiFlag: false,
                         ftBooking: false,
                         handicapFlag: false,
                         jrnyClass: "",
-                        jrnyDate: "${bookingData.journeyDate}",
+                        jrnyDate: d.journeyDate,
                         loyaltyRedemptionBooking: false,
-                        quotaCode: "${bookingData.quota}",
-                        srcStn: "${bookingData.fromStation}",
+                        quotaCode: d.quota,
+                        srcStn: d.fromStation,
                         ticketType: "E"
                     };
                     const response = await fetch(url, {
@@ -1739,6 +2012,7 @@ return responseData;
                             "Client-Device-Id": "WEB",
                             "Greq": String(new Date().getTime())
                         },
+                        credentials: "include",
                         body: JSON.stringify(payload)
                     });
                     const text = await response.text();
@@ -1747,7 +2021,7 @@ return responseData;
                     return { status: 0, error: err.message };
                 }
             })();
-        `;
+        `.replace('__ALTERNATE_REQUEST_DATA__', JSON.stringify(alternateRequestData));
         let maxRetries = 3;
         let attempt = 0;
         while (attempt < maxRetries) {
@@ -2031,26 +2305,25 @@ await liveProgress(
                         throw new Error('Firefox  ' + label + ' search input nahi mila.');
                     }
                     searchInput.focus();
-var stationValueSetter = Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype,
-    'value'
-).set;
+
 var firefoxSetter = Object.getOwnPropertyDescriptor(
     window.HTMLInputElement.prototype,
     "value"
 ).set;
-var firefoxText = String(stationCode);
-var firefoxCurrentValue = "";
-for (var firefoxIndex = 0; firefoxIndex < firefoxText.length; firefoxIndex++) {
-    firefoxCurrentValue += firefoxText[firefoxIndex];
-    firefoxSetter.call(searchInput, firefoxCurrentValue);
-    searchInput.dispatchEvent(
-        new Event('input', { bubbles: true })
-    );
-    await new Promise(function(r) {
-        setTimeout(r, 40);
-    });
-}
+
+var firefoxText = String(stationCode).trim();
+
+// Pura station code ek saath fill karein
+firefoxSetter.call(searchInput, firefoxText);
+
+searchInput.dispatchEvent(
+    new Event('input', { bubbles: true })
+);
+
+searchInput.dispatchEvent(
+    new Event('change', { bubbles: true })
+);
+
                     await new Promise(function(r) { setTimeout(r, 500); });
                     var options = Array.from(
                         document.querySelectorAll('[role="option"]')
@@ -2145,29 +2418,19 @@ async function setStationValue(input, value) {
     // Pehle field clear karein
     setter.call(input, '');
     input.dispatchEvent(new Event('input', { bubbles: true }));
-    var text = String(value || '').trim();
-    var currentText = '';
-    // Letter by letter fill karein
-    for (var i = 0; i < text.length; i++) {
-        currentText += text.charAt(i);
-        setter.call(input, currentText);
-        input.dispatchEvent(
-            new Event('input', { bubbles: true })
-        );
-        input.dispatchEvent(
-            new KeyboardEvent('keyup', {
-                key: text.charAt(i),
-                bubbles: true
-            })
-        );
-        // Har letter ke beech chhota delay taaki autocomplete list load ho sake
-        await new Promise(function(resolve) {
-            setTimeout(resolve, 100);
-        });
-    }
-    input.dispatchEvent(
-        new Event('change', { bubbles: true })
-    );
+    
+var text = String(value || '').trim();
+
+// Pura station name ek saath fill karein
+setter.call(input, text);
+
+input.dispatchEvent(
+    new Event('input', { bubbles: true })
+);
+
+input.dispatchEvent(
+    new Event('change', { bubbles: true })
+);
 }
 async function selectFirstStationSuggestion() {
     await new Promise(function(resolve) {
@@ -4697,54 +4960,60 @@ if (i > 0) {
          document.querySelectorAll('select[formcontrolname="passengerGender"]')
      ).filter(function(el) { return el.offsetParent !== null; });
 
-     // 2. Passenger Name (Human-like Typing Simulation)
-     var nameInput = nameInputs[
+    
+// NAME + AGE: Fill complete values together
+var passengerIndex =
     String(payload.browserType || '').trim().toUpperCase() === 'WEB4'
         ? 0
-        : i
-];
-     if (nameInput) {
-         nameInput.focus();
-         var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-         var nameToType = String(p.name || p.passengerName || "Test Passenger");
-         // Character by character simulation
-         // Character by character simulation (Human-like 100ms - 200ms delay)
-         var currentVal = "";
-         for (var charIndex = 0; charIndex < nameToType.length; charIndex++) {
-             currentVal += nameToType[charIndex];
-             nativeInputValueSetter.call(nameInput, currentVal);
-             nameInput.dispatchEvent(new Event('input', { bubbles: true }));
-             // Random keypress delay (100ms to 200ms per letter)
-             var randomDelay = Math.floor(Math.random() * 100) + 100;
-             await new Promise(function(r) { setTimeout(r, randomDelay); });
-         }
-         nameInput.dispatchEvent(new Event('change', { bubbles: true }));
-         nameInput.dispatchEvent(new Event('blur', { bubbles: true }));
-         diagnosticLogs.push("Filled name for passenger " + (i + 1) + ": " + nameToType);
-         // Dynamic random delay before next step (150ms to 350ms)
-         await new Promise(function(r) { setTimeout(r, Math.floor(Math.random() * 120) + 120); });
-     }
-     // 3. Passenger Age (Human-like delay & typing)
-     var ageInput = ageInputs[
-    String(payload.browserType || '').trim().toUpperCase() === 'WEB4'
-        ? 0
-        : i
-];
-     if (ageInput) {
-         ageInput.focus();
-         await new Promise(function(r) { setTimeout(r, Math.floor(Math.random() * 100) + 100); }); // 100ms to 200ms pause before age
-         var nativeAgeValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-         var ageStr = String(p.age || p.passengerAge || 30);
-         for (var aIdx = 0; aIdx < ageStr.length; aIdx++) {
-             nativeAgeValueSetter.call(ageInput, ageStr.substring(0, aIdx + 1));
-             ageInput.dispatchEvent(new Event('input', { bubbles: true }));
-             await new Promise(function(r) { setTimeout(r, Math.floor(Math.random() * 100) + 100); });
-         }
-         ageInput.dispatchEvent(new Event('change', { bubbles: true }));
-         ageInput.dispatchEvent(new Event('blur', { bubbles: true }));
-         diagnosticLogs.push("Filled age for passenger " + (i + 1));
-         await new Promise(function(r) { setTimeout(r, Math.floor(Math.random() * 100) + 100); });
-     }
+        : i;
+
+var nameInput = nameInputs[passengerIndex];
+var ageInput = ageInputs[passengerIndex];
+
+var nameToFill = String(
+    p.name || p.passengerName || 'Test Passenger'
+);
+
+var ageToFill = String(
+    p.age || p.passengerAge || 30
+);
+
+if (nameInput && ageInput) {
+    var inputSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+    ).set;
+
+    nameInput.focus();
+    inputSetter.call(nameInput, nameToFill);
+    nameInput.dispatchEvent(
+        new Event('input', { bubbles: true })
+    );
+    nameInput.dispatchEvent(
+        new Event('change', { bubbles: true })
+    );
+    nameInput.blur();
+
+    ageInput.focus();
+    inputSetter.call(ageInput, ageToFill);
+    ageInput.dispatchEvent(
+        new Event('input', { bubbles: true })
+    );
+    ageInput.dispatchEvent(
+        new Event('change', { bubbles: true })
+    );
+    ageInput.blur();
+
+    diagnosticLogs.push(
+        'Passenger ' + (i + 1) +
+        ' Name and Age filled together.'
+    );
+
+    await new Promise(function(resolve) {
+        setTimeout(resolve, 400);
+    });
+}
+
                 // 3. Gender Select - Native HTML SELECT + Angular
 try {
     diagnosticLogs.push(
@@ -5188,31 +5457,39 @@ try {
     mobileInput.dispatchEvent(new Event("input", { bubbles: true }));
     mobileInput.dispatchEvent(new Event("change", { bubbles: true }));
     await new Promise(function(r) { setTimeout(r, 100); });
-    // Ab naya mobile number character-by-character type karo (Human-like 100ms - 200ms delay)
+ 
+    // Mobile Number - Fill complete number at once
     var mobStr = String(mobileVal);
-    var currentMob = "";
-    for (var mIdx = 0; mIdx < mobStr.length; mIdx++) {
-        currentMob += mobStr[mIdx];
-        nativeMobileSetter.call(mobileInput, currentMob);
-        mobileInput.dispatchEvent(new Event("input", { bubbles: true }));
-        // Random typing delay per digit (100ms to 200ms)
-        await new Promise(function(r) { setTimeout(r, Math.floor(Math.random() * 100) + 100); });
+
+    nativeMobileSetter.call(mobileInput, mobStr);
+
+    mobileInput.dispatchEvent(
+        new Event("input", { bubbles: true })
+    );
+
+    mobileInput.dispatchEvent(
+        new Event("change", { bubbles: true })
+    );
+
+    mobileInput.dispatchEvent(
+        new Event("blur", { bubbles: true })
+    );
+
+    if (mobileInput.value === mobStr && mobStr.length > 0) {
+        mobileFilled = true;
+        diagnosticLogs.push("Mobile number filled successfully.");
+    } else {
+        diagnosticLogs.push("Mobile number set nahi hua.");
     }
-    mobileInput.dispatchEvent(new Event("change", { bubbles: true }));
-    mobileInput.dispatchEvent(new Event("blur", { bubbles: true }));
-    await new Promise(function(r) { setTimeout(r, Math.floor(Math.random() * 200) + 150); });
-    if (mobileInput.value.length > 0) {
-    mobileFilled = true;
-    diagnosticLogs.push("Mobile number filled successfully.");
-} else {
-    diagnosticLogs.push("Mobile number set nahi hua.");
-}
+
 } catch (mErr) {
     diagnosticLogs.push("Mobile error: " + mErr.message);
 }
+
 await new Promise(function(r) {
-    setTimeout(r, 100);
+    setTimeout(r, 300);
 });
+
 // BOOK ONLY IF CONFIRMED BERTH - AUTO TICK
 try {
     var confirmCheckbox =
@@ -8121,6 +8398,19 @@ validateBookingFormData(bookingData) {
     }
     if (!/^(\d{8}|\d{4}-\d{2}-\d{2})$/.test(journeyDate)) {
         errors.push('Journey date missing/invalid hai.');
+    } else {
+        const normalizedDate = journeyDate.replace(/-/g, '');
+        const year = Number(normalizedDate.slice(0, 4));
+        const month = Number(normalizedDate.slice(4, 6));
+        const day = Number(normalizedDate.slice(6, 8));
+        const parsedDate = new Date(Date.UTC(year, month - 1, day));
+        if (
+            parsedDate.getUTCFullYear() !== year ||
+            parsedDate.getUTCMonth() !== month - 1 ||
+            parsedDate.getUTCDate() !== day
+        ) {
+            errors.push('Journey date calendar ke hisaab se valid nahi hai.');
+        }
     }
     if (!trainClass) errors.push('Travel class missing hai.');
     if (!quota) errors.push('Quota missing hai.');
@@ -8169,6 +8459,8 @@ createBookingFingerprint(bookingData) {
         from: String(bookingData.fromStation || bookingData.from || '').trim().toUpperCase(),
         to: String(bookingData.toStation || bookingData.to || '').trim().toUpperCase(),
         date: String(bookingData.journeyDate || bookingData.date || '').replace(/-/g, ''),
+        trainClass: String(bookingData.trainClass || bookingData.classType || bookingData.class || '').trim().toUpperCase(),
+        quota: String(bookingData.quota || '').trim().toUpperCase(),
         passengers
     });
 }
@@ -8298,11 +8590,19 @@ const tokenResponseHandler = async (response) => {
 };
 this.page.on("response", tokenResponseHandler);
 try {
-    // PRE-LOGIN AVAILABILITY & FARE (Login hone se pehle hi mini window mein dikhayega)
-    await this.checkPreLoginAvailabilityFromUI(bookingData);
+   
+    
+// PRE-LOGIN AVAILABILITY & FARE
+// Existing availability check ko unchanged rakha gaya hai.
+await this.checkPreLoginAvailabilityFromUI(bookingData);
 
-    // AUTO LOGIN
-    await this.autoLogin(username, password);
+// RESTORE SAVED SESSION IF NEEDED
+await this.autoRestoreSession();
+
+// EXISTING AUTO LOGIN / SESSION CHECK
+await this.autoLogin(username, password);
+
+
     // Existing session mein naya /webtoken response nahi aayega.
     // Aise case mein current browser storage se JWT reuse karein.
     const tokenCaptured = await Promise.race([
