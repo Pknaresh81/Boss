@@ -1279,8 +1279,10 @@ if (config.type === 'WEB4') {
         const { screen } = require('electron');
 const workArea = screen.getPrimaryDisplay().workAreaSize;
 
-const firefoxX = 1365;
-const firefoxY = Math.min(160, Math.max(0, workArea.height - 600));
+const firefoxWidth = 440;
+const firefoxHeight = 680;
+const firefoxX = Math.max(0, workArea.width - firefoxWidth);
+const firefoxY = Math.min(160, Math.max(0, workArea.height - firefoxHeight));
 
         firefoxBrowser = await puppeteer.launch({
 
@@ -1295,8 +1297,8 @@ const firefoxY = Math.min(160, Math.max(0, workArea.height - 600));
             defaultViewport: null,
 
             args: [
-                '--width=450',
-                '--height=600'
+                `--width=${firefoxWidth}`,
+                `--height=${firefoxHeight}`
             ]
 
         });
@@ -1337,7 +1339,7 @@ public class FirefoxWindowPosition {
     [void][FirefoxWindowPosition]::GetWindowThreadProcessId($hWnd, [ref]$windowPid)
 
     if ($windowPid -eq $targetPid -and [FirefoxWindowPosition]::IsWindowVisible($hWnd)) {
-        [void][FirefoxWindowPosition]::SetWindowPos($hWnd, [IntPtr]::Zero, ${firefoxX}, ${firefoxY}, 450, 600, 0x0040)
+        [void][FirefoxWindowPosition]::SetWindowPos($hWnd, [IntPtr]::Zero, ${firefoxX}, ${firefoxY}, ${firefoxWidth}, ${firefoxHeight}, 0x0040)
         return $false
     }
 
@@ -1399,6 +1401,11 @@ if (firefoxProcess) {
     console.log('[WEB4] Firefox default home page navigation skipped.');
 }
 
+const zoomLevel = 0.75; // 75% zoom
+        await page.evaluate((z) => {
+            document.documentElement.style.zoom = String(z);
+        }, zoomLevel).catch(() => {});
+
         console.log('[WEB4] Firefox launched successfully.');
 
         return {
@@ -1428,26 +1435,34 @@ if (firefoxProcess) {
 
 const workArea = screen.getPrimaryDisplay().workAreaSize;
 
-const browserWidth = 450;
-const browserHeight = 600;
+const browserWidth = 440;
+const browserHeight = 680;
 
-const y = Math.min(
-    160,
-    Math.max(0, workArea.height - browserHeight)
-);
+// 75% scale factor ke saath actual screen height ka hisaab (~0.75x)
+const effectiveHeight = Math.round(browserHeight * 0.75);
+const yOffset = 60; // Aur neeche karne ke liye is number ko badhayein (jaise 80 ya 100)
+const y = Math.max(0, workArea.height - effectiveHeight + yOffset);
 
 const x =
     config.port === 9222 ? 0 :
     config.port === 9223 ? 455 :
     config.port === 9224 ? 910 : 0;
 
+const appUrl =
+    targetUrl && targetUrl !== 'about:home'
+        ? targetUrl
+        : 'https://www.irctc.co.in/nget/train-search';
+
 const child = spawn(
     config.exePath,
     [
         `--remote-debugging-port=${config.port}`,
         `--user-data-dir=${config.userDataDir}`,
+        `--app=${appUrl}`,
         `--window-size=${browserWidth},${browserHeight}`,
         `--window-position=${x},${y}`,
+        '--force-device-scale-factor=0.75',
+        '--high-dpi-support=1',
         '--no-default-browser-check',
         '--disable-sync',
         '--no-first-run',
@@ -1459,7 +1474,6 @@ const child = spawn(
         windowsHide: false
     }
 );
-
 
 // Boss-launched browser ka exact process track karo.
 managedBrowserProcesses.set(config.type, child);
@@ -2452,6 +2466,11 @@ try {
     console.log(
         `[${config.type}] Existing browser page selected: ${await page.url()}`
     );
+
+    const zoomLevel = 0.75; // 75% zoom
+    await page.evaluate((z) => {
+        document.documentElement.style.zoom = String(z);
+    }, zoomLevel).catch(() => {});
 
 } catch (pageError) {
 
@@ -3857,6 +3876,11 @@ if (!page) {
             }
         );
     }
+
+    const zoomLevel = 0.75; // 75% zoom
+    await page.evaluate((z) => {
+        document.documentElement.style.zoom = String(z);
+    }, zoomLevel).catch(() => {});
 
 } catch (pageError) {
 
