@@ -22,7 +22,8 @@ function readRawStore() {
         return {
             version: 1,
             directApiSh: '',
-            railCore: ''
+            railCore: '',
+            irctcDev: ''
         };
     }
 
@@ -34,7 +35,13 @@ function readRawStore() {
         throw new Error('API key storage version invalid hai.');
     }
 
-    return data;
+    // Old saved files remain compatible.
+    return {
+        ...data,
+        directApiSh: data.directApiSh || '',
+        railCore: data.railCore || '',
+        irctcDev: data.irctcDev || ''
+    };
 }
 
 function getApiKeyStatus() {
@@ -43,7 +50,8 @@ function getApiKeyStatus() {
     return {
         success: true,
         directApiShConfigured: Boolean(data.directApiSh),
-        railCoreConfigured: Boolean(data.railCore)
+        railCoreConfigured: Boolean(data.railCore),
+        irctcDevConfigured: Boolean(data.irctcDev)
     };
 }
 
@@ -60,7 +68,11 @@ function saveApiKeys(values = {}) {
         values.railCore || ''
     ).trim();
 
-    if (!directApiSh && !railCore) {
+    const irctcDev = String(
+        values.irctcDev || ''
+    ).trim();
+
+    if (!directApiSh && !railCore && !irctcDev) {
         return {
             success: false,
             message: 'Kam se kam ek API key enter karein.'
@@ -77,6 +89,10 @@ function saveApiKeys(values = {}) {
         railCore: railCore
             ? safeStorage.encryptString(railCore).toString('base64')
             : current.railCore,
+
+        irctcDev: irctcDev
+            ? safeStorage.encryptString(irctcDev).toString('base64')
+            : current.irctcDev,
 
         updatedAt: new Date().toISOString()
     };
@@ -99,24 +115,23 @@ function saveApiKeys(values = {}) {
 }
 
 // Secrets sirf Main Process ke liye.
-// Renderer ko ye function expose nahi karna.
 function getApiKeys() {
     checkEncryption();
 
     const data = readRawStore();
 
-    return {
-        directApiSh: data.directApiSh
+    function decrypt(value) {
+        return value
             ? safeStorage.decryptString(
-                Buffer.from(data.directApiSh, 'base64')
+                Buffer.from(value, 'base64')
             )
-            : '',
+            : '';
+    }
 
-        railCore: data.railCore
-            ? safeStorage.decryptString(
-                Buffer.from(data.railCore, 'base64')
-            )
-            : ''
+    return {
+        directApiSh: decrypt(data.directApiSh),
+        railCore: decrypt(data.railCore),
+        irctcDev: decrypt(data.irctcDev)
     };
 }
 

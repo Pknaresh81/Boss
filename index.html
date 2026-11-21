@@ -1184,17 +1184,17 @@ body {
     <div class="space-y-1">
 
         <label class="font-semibold text-slate-700">
-            RailCore API Key
-        </label>
+    IRCTC.dev API Key
+</label>
 
-        <input
-            type="password"
-            id="railcore-api-key"
-            autocomplete="off"
-            spellcheck="false"
-            placeholder="Enter your RailCore API key"
-            class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800"
-        />
+<input
+    type="password"
+    id="irctc-dev-api-key"
+    autocomplete="off"
+    spellcheck="false"
+    placeholder="Enter your IRCTC.dev API key"
+    class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800"
+/>
 
     </div>
 
@@ -1810,6 +1810,7 @@ function renderPassengerInputs() {
                 id="p-name-${i}"
                 placeholder="Enter full name"
                 autocomplete="off"
+                oninput="this.value = this.value.toUpperCase()"
             >
 
             <input
@@ -3237,6 +3238,7 @@ function renderPayments() {
     }
 }
 
+
 async function loadApiKeyStatus() {
     const statusEl =
         document.getElementById('api-key-status');
@@ -3252,18 +3254,18 @@ async function loadApiKeyStatus() {
         statusEl.textContent =
             'Direct API.SH: ' +
             (result.directApiShConfigured ? 'Saved' : 'Not saved') +
-            ' | RailCore: ' +
-            (result.railCoreConfigured ? 'Saved' : 'Not saved');
+            ' | IRCTC.dev: ' +
+            (result.irctcDevConfigured ? 'Saved' : 'Not saved');
 
         document.getElementById('direct-api-sh-key').placeholder =
             result.directApiShConfigured
                 ? 'Saved key - enter new key to replace'
                 : 'Enter your Direct API.SH key';
 
-        document.getElementById('railcore-api-key').placeholder =
-            result.railCoreConfigured
+        document.getElementById('irctc-dev-api-key').placeholder =
+            result.irctcDevConfigured
                 ? 'Saved key - enter new key to replace'
-                : 'Enter your RailCore API key';
+                : 'Enter your IRCTC.dev API key';
 
     } catch (error) {
         statusEl.textContent = error.message;
@@ -3274,8 +3276,8 @@ async function saveApiKeys() {
     const directInput =
         document.getElementById('direct-api-sh-key');
 
-    const railInput =
-        document.getElementById('railcore-api-key');
+    const irctcInput =
+        document.getElementById('irctc-dev-api-key');
 
     const statusEl =
         document.getElementById('api-key-status');
@@ -3284,9 +3286,9 @@ async function saveApiKeys() {
         document.getElementById('save-api-keys-btn');
 
     const directApiSh = directInput.value.trim();
-    const railCore = railInput.value.trim();
+    const irctcDev = irctcInput.value.trim();
 
-    if (!directApiSh && !railCore) {
+    if (!directApiSh && !irctcDev) {
         statusEl.textContent =
             'Kam se kam ek API key enter karein.';
         return;
@@ -3299,7 +3301,7 @@ async function saveApiKeys() {
         const result =
             await window.electronAPI.saveApiKeys({
                 directApiSh,
-                railCore
+                irctcDev
             });
 
         if (!result.success) {
@@ -3309,7 +3311,7 @@ async function saveApiKeys() {
         }
 
         directInput.value = '';
-        railInput.value = '';
+        irctcInput.value = '';
 
         statusEl.textContent =
             'API keys securely saved on this PC.';
@@ -3323,6 +3325,7 @@ async function saveApiKeys() {
         saveBtn.textContent = 'Save API Keys';
     }
 }
+
 
 /* =========================================================
    SECURITY / HTML ESCAPE
@@ -4431,7 +4434,7 @@ async function openRouteTrainsPopup() {
             renderTrains();
         };
 
-        // CLASS CLICK - RAILCORE API
+        // CLASS CLICK - IRCTC.dev API
         trainList.onclick = async (event) => {
             const button = event.target.closest('.railcore-class-btn');
             if (!button) return;
@@ -4456,7 +4459,7 @@ async function openRouteTrainsPopup() {
                 `${travelClass} ${selectedQuota}: Checking availability...`;
 
             try {
-                const result = await window.electronAPI.railcoreAvailability({
+                const result = await window.electronAPI.irctcDevAvailability({
                     trainNumber: train.trainNumber,
                     fromStation,
                     toStation,

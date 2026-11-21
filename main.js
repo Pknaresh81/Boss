@@ -330,10 +330,13 @@ const apiKey = savedKeys.directApiSh;
     }
 });
 
-// ==========================================
-// RAILCORE - SEAT AVAILABILITY + FARE
-// ==========================================
-ipcMain.handle('railcore-availability', async (event, data) => {
+
+ // ==========================================
+ // IRCTC.DEV - SEAT AVAILABILITY + FARE
+ // Existing IPC channel preserved for compatibility
+ // ==========================================
+
+ipcMain.handle('irctcdev-availability', async (event, data) => {
     try {
         const {
             trainNumber,
@@ -345,12 +348,12 @@ ipcMain.handle('railcore-availability', async (event, data) => {
         } = data || {};
 
         const savedKeys = apiKeyStore.getApiKeys();
-const apiKey = savedKeys.railCore;
+        const apiKey = savedKeys.irctcDev;
 
         if (!apiKey) {
             return {
                 success: false,
-                error: 'RAILCORE_API_KEY nahi mili.'
+                error: 'IRCTC.dev API key nahi mili. Tokens tab mein key save karein.'
             };
         }
 
@@ -377,48 +380,160 @@ const apiKey = savedKeys.railCore;
             };
         }
 
-        const date =
-            dateText.substring(0, 4) + '-' +
+        // IRCTC.dev availability requires DD-MM-YYYY.
+        const apiDate =
+            dateText.substring(6, 8) + '-' +
             dateText.substring(4, 6) + '-' +
-            dateText.substring(6, 8);
+            dateText.substring(0, 4);
 
-        const response = await axios.get(
-            'https://ir.railcore.tech/v1/availability/seats',
+        const train = String(trainNumber).trim();
+        const from = String(fromStation).trim().toUpperCase();
+        const to = String(toStation).trim().toUpperCase();
+        const cls = String(travelClass).trim().toUpperCase();
+        const selectedQuota = String(quota).trim().toUpperCase();
+
+        const headers = {
+            'x-api-key': apiKey,
+            'accept': 'application/json'
+        };
+
+        const availabilityResponse = await axios.get(
+            `https://api.irctc.dev/api/v1/trains/${encodeURIComponent(train)}/availability`,
             {
                 params: {
-                    train_number: String(trainNumber).trim(),
-                    from: String(fromStation).trim().toUpperCase(),
-                    to: String(toStation).trim().toUpperCase(),
-                    date,
-                    class: String(travelClass).trim().toUpperCase(),
-                    quota: String(quota).trim().toUpperCase()
+                    from,
+                    to,
+                    date: apiDate,
+                    class: cls,
+                    quota: selectedQuota
                 },
-                headers: {
-                    'X-RailCore-Key': apiKey
-                },
+                headers,
                 timeout: 30000
             }
         );
 
+        const raw = availabilityResponse.data || {};
+
+        if (raw.success === false) {
+            throw new Error(raw.error || 'IRCTC.dev availability request failed.');
+        }
+
+        const availabilityList = Array.isArray(raw.availability)
+            ? raw.availability
+            : [];
+
+        const requestedDate =
+            `${dateText.substring(0, 4)}-${dateText.substring(4, 6)}-${dateText.substring(6, 8)}`;
+
+        const selectedDay = availabilityList.find(item => {
+            const itemDate = String(item.date || '');
+            return itemDate === requestedDate ||
+                itemDate === apiDate;
+        }) || availabilityList[0];
+
+        if (!selectedDay) {
+            throw new Error('IRCTC.dev se availability data nahi mila.');
+        }
+
+        let totalFare = null;
+        let fareResponseData = null;
+
+        // Fare API documentation lists GN and TQ quotas.
+        // PT availability is still checked independently.
+        if (selectedQuota === 'GN' || selectedQuota === 'TQ') {
+            try {
+                const fareResponse = await axios.get(
+                    `https://api.irctc.dev/api/v1/trains/${encodeURIComponent(train)}/fare`,
+                    {
+                        params: {
+                            from,
+                            to,
+                            class: cls,
+                            quota: selectedQuota
+                        },
+                        headers,
+                        timeout: 30000
+                    }
+                );
+
+                fareResponseData = fareResponse.data || {};
+
+                const fares = Array.isArray(fareResponseData.fares)
+                    ? fareResponseData.fares
+                    : [];
+
+                const selectedFare = fares.find(item =>
+                    String(item.class || '').toUpperCase() === cls
+                );
+
+                totalFare = selectedFare?.totalFare ?? null;
+
+            } catch (fareError) {
+                console.warn(
+                    '[IRCTC.DEV FARE] Fare lookup unavailable:',
+                    fareError.response?.data || fareError.message
+                );
+            }
+        }
+
+        const statusText = String(
+            selectedDay.status || selectedDay.type || '--'
+        );
+
+        const availableMatch =
+            statusText.match(/AVAILABLE[- ]?(\d+)/i);
+
+        const waitlistMatch =
+            statusText.match(/WL(\d+)/i);
+
+        const racMatch =
+            statusText.match(/RAC[- /]?(\d+)/i);
+
+        const resultClass = {
+            class_code: cls,
+            availability_text: statusText,
+            available_count: availableMatch
+                ? Number(availableMatch[1])
+                : null,
+            rac_count: racMatch
+                ? Number(racMatch[1])
+                : null,
+            waitlist_count: waitlistMatch
+                ? Number(waitlistMatch[1])
+                : null,
+            total_fare: totalFare,
+            last_updated_at: raw._time
+                ? `${raw._time}s API response`
+                : (raw._cached ? 'Cached response' : '--')
+        };
+
         return {
             success: true,
-            data: response.data.data,
-            meta: response.data.meta
+            data: {
+                classes: [resultClass],
+                availability: availabilityList
+            },
+            meta: {
+                source: raw.source || 'irctc.dev',
+                cached: Boolean(raw._cached),
+                responseTime: raw._time ?? null,
+                fareAvailable: totalFare !== null
+            }
         };
 
     } catch (error) {
         console.error(
-            '[RAILCORE ERROR]',
+            '[IRCTC.DEV AVAILABILITY ERROR]',
             error.response?.data || error.message
         );
 
         return {
             success: false,
             error:
-                error.response?.data?.error?.message ||
+                error.response?.data?.error ||
                 error.response?.data?.message ||
                 error.message ||
-                'RailCore API request failed.'
+                'IRCTC.dev API request failed.'
         };
     }
 });

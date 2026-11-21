@@ -273,11 +273,11 @@ sendWLDecision: (windowId, decision) => {
             ),
             
             
-            railcoreAvailability: (data) =>
-                ipcRenderer.invoke(
-                    'railcore-availability',
-                    data
-                ),
+            irctcDevAvailability: (data) =>
+    ipcRenderer.invoke(
+        'irctcdev-availability',
+        data
+    ),
 
             // ==========================================
             // SECURE API KEY MANAGEMENT
@@ -289,12 +289,13 @@ sendWLDecision: (windowId, decision) => {
                 ),
 
             saveApiKeys: (values) =>
-                ipcRenderer.invoke(
-                    'api-keys:save',
-                    {
-                        directApiSh: String(values?.directApiSh || ''),
-                        railCore: String(values?.railCore || '')
-                    }
-                )
+    ipcRenderer.invoke(
+        'api-keys:save',
+        {
+            directApiSh: String(values?.directApiSh || ''),
+            railCore: String(values?.railCore || ''),
+            irctcDev: String(values?.irctcDev || '')
+        }
+    )
     }
 );
