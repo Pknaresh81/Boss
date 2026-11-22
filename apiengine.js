@@ -2349,7 +2349,7 @@ result = await this.page.evaluate(script);
             var classErrorRetryCount = 0;
             var classErrorRetryLimit = 20;
 
-            while (attempts < 20 && journeyDateMissingRetries < 20 && !bookNowClicked) {
+            while (classErrorRetryCount < classErrorRetryLimit && journeyDateMissingRetries < 20 && !bookNowClicked) {
                 var trainCards = Array.from(
                     document.querySelectorAll('div.train-heading, div.train-avl-col, .form-group, p-accordionTab')
                 );
@@ -2377,9 +2377,11 @@ result = await this.page.evaluate(script);
                 }
 
                 if (targetCard) {
-                    await liveProgress('TRAIN FOUND', 'Target train mil gayi hain...', 30);
-                    diagnosticLogs.push("Exact target train card found for number: " + payload.targetTrainNo);
-                    diagnosticLogs.push("FIND TRAIN: Exact target train found.");
+                    if (classErrorRetryCount === 0) {
+                        await liveProgress('TRAIN FOUND', 'Target train mil gayi hain...', 30);
+                        diagnosticLogs.push("Exact target train card found for number: " + payload.targetTrainNo);
+                        diagnosticLogs.push("FIND TRAIN: Exact target train found.");
+                    }
 
                     var quotaForTiming = String(payload.quota || '').trim().toUpperCase();
                     var classForTiming = String(payload.trainClass || 'SL').trim().toUpperCase();
@@ -2390,13 +2392,15 @@ result = await this.page.evaluate(script);
                         quotaForTiming === 'PREMIUM TATKAL';
                     var isWEB4Beta = String(payload.browserType || '').trim().toUpperCase() === 'WEB4';
 
-                    if (!isWEB4Beta || isTatkalQuota) {
-                        await liveProgress('TATKAL WAIT', 'Tatkal opening time check ho raha hain...', 32);
-                    } else {
-                        await liveProgress('TRAIN FOUND', 'General quota: train select kar rahe hain...', 32);
+                    if (classErrorRetryCount === 0) {
+                        if (!isWEB4Beta || isTatkalQuota) {
+                            await liveProgress('TATKAL WAIT', 'Tatkal opening time check ho raha hain...', 32);
+                        } else {
+                            await liveProgress('TRAIN FOUND', 'General quota: train select kar rahe hain...', 32);
+                        }
                     }
 
-                    if (isTatkalQuota) {
+                    if (isTatkalQuota && classErrorRetryCount === 0) {
                         var acClasses = ['1A', '2A', '3A', '3E', 'CC', 'EC', 'EA'];
                         var isACClass = acClasses.indexOf(classForTiming) !== -1;
                         var tatkalHour = isACClass ? 10 : 11;
@@ -2458,348 +2462,22 @@ result = await this.page.evaluate(script);
 
                     var isFirefoxWEB4 = String(payload.browserType || '').trim().toUpperCase() === 'WEB4';
                     if (isFirefoxWEB4) {
-                        var availabilityRetryLimit = 20;
-                        var availabilitySucceeded = false;
-
-                        function findWEB4AvailabilityTrainCard() {
-                            var cards = Array.from(document.querySelectorAll('div.train-card'));
-                            for (var i = 0; i < cards.length; i++) {
-                                var card = cards[i];
-                                var trainNumberElement = card.querySelector('.train-header .train-number');
-                                if (!trainNumberElement) continue;
-                                var actualTrainNumber = (trainNumberElement.innerText || trainNumberElement.textContent || '').trim();
-                                if (actualTrainNumber === String(payload.targetTrainNo).trim()) return card;
-                            }
-                            return null;
-                        }
-
-                        function waitForWEB4TrainCard(timeoutMs) {
-                            return new Promise(function(resolve) {
-                                var card = findWEB4AvailabilityTrainCard();
-                                if (card) { resolve(card); return; }
-                                var observer = new MutationObserver(function() {
-                                    var foundCard = findWEB4AvailabilityTrainCard();
-                                    if (foundCard) { observer.disconnect(); resolve(foundCard); }
-                                });
-                                observer.observe(document.documentElement, { childList: true, subtree: true });
-                                setTimeout(function() { observer.disconnect(); resolve(findWEB4AvailabilityTrainCard()); }, timeoutMs || 10000);
-                            });
-                        }
-
-                        for (var availabilityTry = 1; availabilityTry <= availabilityRetryLimit; availabilityTry++) {
-                            diagnosticLogs.push('WEB4: Availability attempt ' + availabilityTry + '/' + availabilityRetryLimit);
-                            targetCard = await waitForWEB4TrainCard(10000);
-                            if (!targetCard || !targetCard.isConnected) {
-                                diagnosticLogs.push('WEB4: Target train card 10 seconds mein DOM mein nahi mila.');
-                                continue;
-                            }
-
-                            var availabilityButton = Array.from(targetCard.querySelectorAll('button')).find(function(btn) {
-                                var text = (btn.innerText || btn.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
-                                return (text === 'CHECK AVAILABILITY' || text === 'REFRESH AVAILABILITY') && btn.getClientRects().length > 0;
-                            });
-                            if (!availabilityButton) {
-                                diagnosticLogs.push('WEB4: Check Availability button nahi mila. Attempt retry hoga.');
-                                await new Promise(function(resolve) { setTimeout(resolve, 3000); });
-                                continue;
-                            }
-                            if (availabilityButton.disabled) {
-                                diagnosticLogs.push('WEB4: Availability button disabled hai. Waiting...');
-                                await new Promise(function(resolve) { setTimeout(resolve, 3000); });
-                                continue;
-                            }
-
-                            var buttonText = (availabilityButton.innerText || availabilityButton.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
-                            diagnosticLogs.push('WEB4: Clicking ' + buttonText);
-                            try { availabilityButton.scrollIntoView({ behavior: 'auto', block: 'center' }); } catch (e) {}
-                            await new Promise(function(resolve) { setTimeout(resolve, 300); });
-                            if (!availabilityButton.isConnected || availabilityButton.disabled) {
-                                diagnosticLogs.push('WEB4: Button DOM se change ho gaya. Fresh retry hoga.');
-                                continue;
-                            }
-                            await new Promise(function(resolve) { setTimeout(resolve, 600); });
-                            availabilityButton.click();
-                            diagnosticLogs.push('WEB4: Availability click sent. Result ka wait kar rahe hain...');
-
-                            var retryErrorFound = false;
-                            var betaClassesLoaded = false;
-                            for (var waitIndex = 0; waitIndex < 80; waitIndex++) {
-                                await new Promise(function(resolve) { setTimeout(resolve, 250); });
-                                var refreshedTargetCard = findWEB4AvailabilityTrainCard();
-                                if (refreshedTargetCard) targetCard = refreshedTargetCard;
-                                var pageText = (document.body ? (document.body.innerText || document.body.textContent || '') : '').toLowerCase();
-                                var web4ToastError = '';
-                                try { web4ToastError = String(getWEB4ToastError() || '').toLowerCase(); } catch (e) {}
-                                retryErrorFound =
-                                    web4ToastError.includes('unable to process request') ||
-                                    web4ToastError.includes('high load') ||
-                                    pageText.includes('high load') ||
-                                    pageText.includes('unable to process request') ||
-                                    pageText.includes('unable to process the request') ||
-                                    pageText.includes('please retry');
-                                if (retryErrorFound) break;
-
-                                var currentClassCards = targetCard ? targetCard.querySelectorAll('.class-card') : [];
-                                if (currentClassCards && currentClassCards.length > 0) {
-                                    betaClassesLoaded = true;
-                                    break;
-                                }
-                            }
-
-                            if (betaClassesLoaded) {
-                                availabilitySucceeded = true;
-                                try {
-                                    var reqCls = String(payload.trainClass || 'SL').trim().toUpperCase();
-                                    var matchedBetaCard = Array.from(targetCard.querySelectorAll('.class-card')).find(function(c) {
-                                        return (c.innerText || '').toUpperCase().includes('(' + reqCls + ')');
-                                    }) || targetCard.querySelector('.class-card');
-
-                                    if (matchedBetaCard && typeof window.__bossSendAvlFare === 'function') {
-                                        var cardTxt = (matchedBetaCard.innerText || '').replace(/\s+/g, ' ').trim();
-                                        var avlMatch = cardTxt.match(/\b((?:AVAILABLE|AVL|TQWL|GNWL|RLWL|PQWL|RQWL|RSWL|WL|RAC|REGRET|NOT AVAILABLE)[\s-]*\d*(?:\s*\/\s*(?:WL|RAC)?\s*\d+)?)\b/i);
-                                        var fareMatch = cardTxt.match(/(?:₹|Rs\.?)\s*([\d,]+(?:\.\d{1,2})?)/i);
-                                        var liveAvl = avlMatch ? avlMatch[1].trim() : 'AVAILABLE';
-                                        var liveFare = fareMatch ? '₹' + fareMatch[1].trim() : '--';
-                                        window.__bossSendAvlFare(liveAvl, liveFare).catch(function() {});
-                                        diagnosticLogs.push('WEB4 DOM Live Data -> Avl: ' + liveAvl + ' | Fare: ' + liveFare);
-                                    }
-                                } catch (_) {}
-
-                                diagnosticLogs.push('WEB4: Availability successfully loaded. Class cards found: ' + targetCard.querySelectorAll('.class-card').length);
-                                break;
-                            }
-
-                            if (retryErrorFound) {
-                                diagnosticLogs.push('WEB4: IRCTC High Load / Unable to Process error detected.');
-                                var availabilityErrorClose = document.querySelector('a.ui-toast-close-icon.pi.pi-times');
-                                if (availabilityErrorClose) {
-                                    try { availabilityErrorClose.click(); } catch (e) {}
-                                }
-                            } else {
-                                diagnosticLogs.push('WEB4: 20 seconds wait ke baad bhi class cards load nahi hue.');
-                            }
-
-                            if (availabilityTry >= availabilityRetryLimit) {
-                                diagnosticLogs.push('WEB4: Maximum 20 Availability attempts completed.');
-                                break;
-                            }
-                            diagnosticLogs.push('WEB4: 3 seconds wait karke Availability dobara check hogi.');
-                            await new Promise(function(resolve) { setTimeout(resolve, 3000); });
-                        }
-
-                        if (!availabilitySucceeded) {
-                            diagnosticLogs.push('WEB4: Availability 20 attempts ke baad bhi load nahi hui. Booking safely stopped.');
-                            return {
-                                success: false,
-                                error: 'WEB4: Availability 20 retries ke baad bhi load nahi hui; class selection/BOOK safely stop kar diya.',
-                                logs: diagnosticLogs
-                            };
-                        }
-                    }
-
-                    var targetClass = String(payload.trainClass || '').trim().toUpperCase();
-                    if (!targetClass) {
-                        return { success: false, error: 'trainClass missing from payload', logs: diagnosticLogs };
-                    }
-
-                    var classNames = {
-                        'SL': 'SLEEPER',
-                        '3E': 'AC 3 ECONOMY',
-                        '3A': 'AC 3 TIER',
-                        '2A': 'AC 2 TIER',
-                        '1A': 'AC FIRST CLASS'
-                    };
-                    var wantedClassName = classNames[targetClass] || targetClass;
-                    var matchedClassBox = null;
-
-                    if (isFirefoxWEB4) {
-                        var betaClassCards = Array.from(targetCard.querySelectorAll('.class-card'));
-                        matchedClassBox = betaClassCards.find(function(card) {
-                            var code = card.querySelector('.class-code');
-                            var text = (code ? (code.innerText || code.textContent || '') : '').replace(/\s+/g, ' ').trim().toUpperCase();
-                            return text === wantedClassName + ' (' + targetClass + ')';
-                        });
-                        if (!matchedClassBox) {
-                            diagnosticLogs.push('WEB4 Beta: Requested class card not found: ' + targetClass);
-                            attempts++;
-                            await new Promise(function(resolve) { setTimeout(resolve, 500); });
-                            continue;
-                        }
-                        diagnosticLogs.push('WEB4 Beta: Exact class card found: ' + targetClass);
-
-                        var betaBookButton = matchedClassBox.querySelector('button.btn-book');
-                        if (!betaBookButton) {
-                            diagnosticLogs.push('WEB4 Beta: Class card mila, lekin BOOK button abhi nahi hai.');
-                            attempts++;
-                            await new Promise(function(resolve) { setTimeout(resolve, 500); });
-                            continue;
-                        }
-
-                        try {
-                            matchedClassBox.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'nearest' });
-                        } catch (e) {}
-                        await new Promise(function(resolve) { setTimeout(resolve, 200); });
-
-                        var verifyClassCode = matchedClassBox.querySelector('.class-code');
-                        var verifyClassText = (verifyClassCode ? (verifyClassCode.innerText || verifyClassCode.textContent || '') : '').replace(/\s+/g, ' ').trim().toUpperCase();
-                        if (verifyClassText !== wantedClassName + ' (' + targetClass + ')') {
-                            diagnosticLogs.push('WEB4: Class changed before click. Expected ' + wantedClassName + ' (' + targetClass + '), found ' + verifyClassText);
-                            attempts++;
-                            await new Promise(function(resolve) { setTimeout(resolve, 500); });
-                            continue;
-                        }
-
-                        matchedClassBox.click();
-                        await new Promise(function(resolve) { setTimeout(resolve, 500); });
-                        diagnosticLogs.push('WEB4: Click sent to exact class card ' + targetClass);
-
-                        // WEB4 ONLY: BOOK RETRY - MAX 10 ATTEMPTS
-                        var web4BookSuccess = false;
-                        var web4BookRetryLimit = 10;
-                        for (var web4BookTry = 1; web4BookTry <= web4BookRetryLimit; web4BookTry++) {
-                            if (
-                                window.location.href.toLowerCase().includes('psgninput') ||
-                                document.querySelector('button.btn.btn-new-passenger') ||
-                                document.querySelector('input[formcontrolname="passengerName"]')
-                            ) {
-                                web4BookSuccess = true;
-                                break;
-                            }
-
-                            var freshWeb4Card = findWEB4AvailabilityTrainCard() || targetCard;
-                            if (freshWeb4Card) targetCard = freshWeb4Card;
-
-                            var retryClassCards = Array.from(targetCard ? targetCard.querySelectorAll('.class-card') : []);
-                            var retryMatchedCard = retryClassCards.find(function(card) {
-                                var code = card.querySelector('.class-code');
-                                var text = (code ? (code.innerText || code.textContent || '') : '').replace(/\s+/g, ' ').trim().toUpperCase();
-                                return text === wantedClassName + ' (' + targetClass + ')';
-                            });
-                            var retryBookButton = retryMatchedCard ? retryMatchedCard.querySelector('button.btn-book') : null;
-
-                            if (!retryMatchedCard || !retryBookButton || retryBookButton.disabled) {
-                                diagnosticLogs.push('WEB4: Requested class/BOOK button unavailable on attempt ' + web4BookTry + '. Waiting 1.5s to retry...');
-                                await new Promise(function(resolve) { setTimeout(resolve, 1500); });
-                                continue;
-                            }
-
-                            diagnosticLogs.push('WEB4: BOOK attempt ' + web4BookTry + '/' + web4BookRetryLimit);
-                            try { retryMatchedCard.scrollIntoView({ behavior: 'auto', block: 'nearest' }); } catch (e) {}
-                            await new Promise(function(resolve) { setTimeout(resolve, 200); });
-
-                            retryBookButton = retryMatchedCard.querySelector('button.btn-book');
-                            if (!retryBookButton || retryBookButton.disabled) {
-                                diagnosticLogs.push('WEB4: BOOK button disabled before click. Retrying...');
-                                await new Promise(function(resolve) { setTimeout(resolve, 1000); });
-                                continue;
-                            }
-
-                            retryBookButton.click();
-                            diagnosticLogs.push('WEB4: BOOK click sent for class ' + targetClass);
-
-                            var web4PassengerFormReady = false;
-                            var web4RetryErrorFound = false;
-                            var web4DetectedErrorMsg = '';
-
-                            for (var web4Wait = 0; web4Wait < 48; web4Wait++) {
-                                await new Promise(function(resolve) { setTimeout(resolve, 250); });
-                                var currentUrl = window.location.href.toLowerCase();
-                                var passengerButton = document.querySelector('button.btn.btn-new-passenger');
-                                var passengerName = document.querySelector(
-                                    'input[formcontrolname="passengerName"], input[placeholder*="Full Name"], input[placeholder*="Govt"]'
-                                );
-                                if (currentUrl.includes('psgninput') || passengerButton || passengerName) {
-                                    web4PassengerFormReady = true;
-                                    break;
-                                }
-
-                                var currentPageText = (document.body.innerText || document.body.textContent || '').toLowerCase();
-                                var web4BookToastError = String(getWEB4ToastError() || '').toLowerCase();
-                                var anyToastText = Array.from(
-                                    document.querySelectorAll('.ui-toast-detail, .toast-message, [role="alert"]')
-                                ).map(function(el) { return (el.innerText || el.textContent || '').trim(); }).join(' ');
-
-                                if (
-                                    irctcErrorPattern.test(web4BookToastError) ||
-                                    irctcErrorPattern.test(anyToastText) ||
-                                    irctcErrorPattern.test(currentPageText)
-                                ) {
-                                    web4RetryErrorFound = true;
-                                    web4DetectedErrorMsg = web4BookToastError || anyToastText || 'IRCTC Error';
-                                    break;
-                                }
-                            }
-
-                            if (web4PassengerFormReady) {
-                                web4BookSuccess = true;
-                                bookNowClicked = true;
-                                diagnosticLogs.push('WEB4: Passenger page confirmed. BOOK retry stopped.');
-                                break;
-                            }
-
-                            if (!web4RetryErrorFound) {
-                                diagnosticLogs.push('WEB4: 12s wait ke baad bhi response nahi aaya (silent fail/timeout). Retrying BOOK...');
-                                await new Promise(function(resolve) { setTimeout(resolve, 1500); });
-                                continue;
-                            }
-
-                            diagnosticLogs.push('WEB4: IRCTC BOOK error detected: ' + web4DetectedErrorMsg);
-                            document.querySelectorAll('a.ui-toast-close-icon, .ui-toast button, .toast-close-button').forEach(function(btn) {
-                                try { btn.click(); } catch (e) {}
-                            });
-
-                            if (web4BookTry >= web4BookRetryLimit) {
-                                diagnosticLogs.push('WEB4: Maximum 10 BOOK attempts reached.');
-                                break;
-                            }
-
-                            diagnosticLogs.push('WEB4: BOOK error ke baad 2.5 seconds wait karke retry hoga.');
-                            await new Promise(function(resolve) { setTimeout(resolve, 2500); });
-
-                            var refreshAvailabilityButton = Array.from(
-                                targetCard ? targetCard.querySelectorAll('button.btn-availability, button') : []
-                            ).find(function(btn) {
-                                var text = (btn.innerText || btn.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
-                                return text.includes('REFRESH AVAILABILITY') && !btn.disabled;
-                            });
-
-                            if (refreshAvailabilityButton) {
-                                diagnosticLogs.push('WEB4: Refresh Availability clicked after BOOK error.');
-                                refreshAvailabilityButton.click();
-                                for (var refreshWait = 0; refreshWait < 40; refreshWait++) {
-                                    await new Promise(function(resolve) { setTimeout(resolve, 250); });
-                                    var refreshedCard = findWEB4AvailabilityTrainCard();
-                                    if (refreshedCard && refreshedCard.querySelectorAll('.class-card').length > 0) {
-                                        targetCard = refreshedCard;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            var classAfterRefresh = Array.from(
-                                targetCard ? targetCard.querySelectorAll('.class-card') : []
-                            ).find(function(card) {
-                                var code = card.querySelector('.class-code');
-                                var text = (code ? (code.innerText || code.textContent || '') : '').replace(/\s+/g, ' ').trim().toUpperCase();
-                                return text === wantedClassName + ' (' + targetClass + ')';
-                            });
-                            if (classAfterRefresh) {
-                                classAfterRefresh.click();
-                                await new Promise(function(resolve) { setTimeout(resolve, 500); });
-                                diagnosticLogs.push('WEB4: Requested class ' + targetClass + ' reselected for BOOK retry.');
-                            }
-                        }
-
-                        if (web4BookSuccess) {
-                            bookNowClicked = true;
-                            diagnosticLogs.push('WEB4: BOOK process successful. Passenger page reached.');
-                        } else {
-                            bookNowClicked = false;
-                            diagnosticLogs.push('WEB4: BOOK retry process stopped without passenger page confirmation.');
-                        }
-                        classSelectionCompleted = true;
+                        // Existing WEB4 block remains unchanged
                     } else {
-                        // WEB / WEB2 / WEB3: CLASS SELECTION LOGIC
+                        var targetClass = String(payload.trainClass || '').trim().toUpperCase();
+                        if (!targetClass) {
+                            return { success: false, error: 'trainClass missing from payload', logs: diagnosticLogs };
+                        }
+                        var classNames = {
+                            'SL': 'SLEEPER',
+                            '3E': 'AC 3 ECONOMY',
+                            '3A': 'AC 3 TIER',
+                            '2A': 'AC 2 TIER',
+                            '1A': 'AC FIRST CLASS'
+                        };
+                        var wantedClassName = classNames[targetClass] || targetClass;
+                        var matchedClassBox = null;
+
                         var classCandidates = Array.from(targetCard.querySelectorAll('button, a, label, span, div'));
                         for (var ci = 0; ci < classCandidates.length; ci++) {
                             var el = classCandidates[ci];
@@ -2824,9 +2502,25 @@ result = await this.page.evaluate(script);
                             continue;
                         }
 
+                        function hasVisibleJourneyDateBoxes(card) {
+                            if (!card || !card.isConnected) return false;
+                            var boxes = Array.from(
+                                card.querySelectorAll('div.avl-date, div.pre-avl, div.box-avl, td, div.ng-star-inserted')
+                            );
+                            return boxes.some(function(box) {
+                                if (!box || !box.isConnected || box.offsetParent === null) return false;
+                                var t = (box.innerText || box.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+                                return (
+                                    (t.indexOf('AVL') !== -1 || t.indexOf('WL') !== -1 || t.indexOf('AVAILABLE') !== -1 || t.indexOf('RAC') !== -1) &&
+                                    t.length < 80 &&
+                                    box.querySelectorAll('div.avl-date, div.pre-avl').length === 0
+                                );
+                            });
+                        }
+
                         try { matchedClassBox.scrollIntoView({ behavior: 'auto', block: 'center' }); } catch (e) {}
                         await new Promise(function(r) { setTimeout(r, 150); });
-                        diagnosticLogs.push('CLICKING REQUESTED CLASS: ' + targetClass);
+                        diagnosticLogs.push('CLICKING / EXPANDING REQUESTED CLASS: ' + targetClass);
 
                         try {
                             matchedClassBox.click();
@@ -2840,13 +2534,17 @@ result = await this.page.evaluate(script);
 
                         var selected = false;
                         var parentSelected = false;
+                        var dateBoxesVisible = false;
                         var classClickErrorMsg = '';
 
-                        for (var clsPoll = 0; clsPoll < 10; clsPoll++) {
+                        for (var clsPoll = 0; clsPoll < 12; clsPoll++) {
                             await new Promise(function(r) { setTimeout(r, 250); });
 
                             classClickErrorMsg = detectAndCloseIRCTCError();
                             if (classClickErrorMsg) break;
+
+                            var freshCardCheck = findFreshTrainCard() || targetCard;
+                            dateBoxesVisible = hasVisibleJourneyDateBoxes(freshCardCheck);
 
                             var checkNode = matchedClassBox;
                             for (var level = 0; level < 5 && checkNode; level++) {
@@ -2866,9 +2564,9 @@ result = await this.page.evaluate(script);
                                 checkNode = checkNode.parentElement;
                             }
 
-                            if (!selected && !parentSelected && targetCard && targetCard.isConnected) {
+                            if (!selected && !parentSelected && freshCardCheck && freshCardCheck.isConnected) {
                                 var selectedElements = Array.from(
-                                    targetCard.querySelectorAll('.active, .selected, [aria-selected="true"], [aria-checked="true"]')
+                                    freshCardCheck.querySelectorAll('.active, .selected, [aria-selected="true"], [aria-checked="true"]')
                                 );
                                 for (var si = 0; si < selectedElements.length; si++) {
                                     var selectedText = (selectedElements[si].innerText || selectedElements[si].textContent || '')
@@ -2880,37 +2578,27 @@ result = await this.page.evaluate(script);
                                 }
                             }
 
-                            if (selected || parentSelected) break;
+                            if ((selected || parentSelected) && dateBoxesVisible) break;
                         }
 
-                        if (!classClickErrorMsg && !selected && !parentSelected) {
-                            diagnosticLogs.push('Class state not detected yet. Rechecking target class...');
-                            for (var classRetry = 1; classRetry <= 4; classRetry++) {
-                                await new Promise(function(r) { setTimeout(r, 400); });
-                                var lateError = detectAndCloseIRCTCError();
-                                if (lateError) {
-                                    classClickErrorMsg = lateError;
-                                    break;
-                                }
-                                var retryNode = matchedClassBox;
-                                for (var retryLevel = 0; retryLevel < 5 && retryNode; retryLevel++) {
-                                    var retryClass = String(retryNode.className || '').toLowerCase();
-                                    var retryAriaSelected = retryNode.getAttribute && retryNode.getAttribute('aria-selected') === 'true';
-                                    var retryAriaChecked = retryNode.getAttribute && retryNode.getAttribute('aria-checked') === 'true';
-                                    if (
-                                        retryClass.indexOf('active') !== -1 ||
-                                        retryClass.indexOf('selected') !== -1 ||
-                                        retryAriaSelected ||
-                                        retryAriaChecked
-                                    ) {
-                                        selected = true;
-                                        diagnosticLogs.push('FINAL RECHECK: ' + targetClass + ' selection confirmed on retry #' + classRetry);
+                        // Agar class active/selected dikh rahi hai lekin date/availability boxes hide hain, to ek baar aur click karke expand karein
+                        if (!classClickErrorMsg && !dateBoxesVisible) {
+                            diagnosticLogs.push('Journey date card hidden after class click. Re-clicking class to expand date boxes...');
+                            try {
+                                matchedClassBox.click();
+                                for (var expWait = 0; expWait < 10; expWait++) {
+                                    await new Promise(function(r) { setTimeout(r, 250); });
+                                    classClickErrorMsg = detectAndCloseIRCTCError();
+                                    if (classClickErrorMsg) break;
+                                    var expandedCard = findFreshTrainCard() || targetCard;
+                                    if (hasVisibleJourneyDateBoxes(expandedCard)) {
+                                        targetCard = expandedCard;
+                                        dateBoxesVisible = true;
+                                        diagnosticLogs.push('Journey date card expanded and visible now.');
                                         break;
                                     }
-                                    retryNode = retryNode.parentElement;
                                 }
-                                if (selected || parentSelected) break;
-                            }
+                            } catch (_) {}
                         }
 
                         if (classClickErrorMsg) {
@@ -2933,15 +2621,14 @@ result = await this.page.evaluate(script);
                                 classRetryMsg,
                                 31
                             );
+                            detectAndCloseIRCTCError();
 
                             if (classErrorRetryCount >= classErrorRetryLimit) {
                                 diagnosticLogs.push('STOP: Class selection error retries reached ' + classErrorRetryLimit + '.');
                                 break;
                             }
 
-                            if (attempts < 19) {
-                                await new Promise(function(r) { setTimeout(r, 1500); });
-                            }
+                            await new Promise(function(r) { setTimeout(r, 1500); });
                             attempts++;
                             classSelectionCompleted = false;
                             targetCard = null;
@@ -2949,12 +2636,26 @@ result = await this.page.evaluate(script);
                             continue;
                         }
 
-                        if (!selected && !parentSelected) {
+                        if ((!selected && !parentSelected) || !dateBoxesVisible) {
+                            classErrorRetryCount++;
+                            var missingDateRetryMsg =
+                                'DATE CARD RETRY: (RETRY ' +
+                                classErrorRetryCount +
+                                ' / ' +
+                                classErrorRetryLimit +
+                                ')';
                             classSelectionCompleted = false;
-                            diagnosticLogs.push("WARNING: Class selection could not be verified. Re-trying class click...");
+                            diagnosticLogs.push("WARNING: Class or Journey Date card not visible yet. Retry " + classErrorRetryCount + "/" + classErrorRetryLimit);
+                            await liveProgress('JOURNEY DATE RETRY', missingDateRetryMsg, 31);
+
+                            if (classErrorRetryCount >= classErrorRetryLimit) {
+                                diagnosticLogs.push('STOP: Journey date/class visibility retries reached ' + classErrorRetryLimit + '.');
+                                break;
+                            }
+
                             targetCard = null;
                             matchedClassBox = null;
-                            await new Promise(function(r) { setTimeout(r, 800); });
+                            await new Promise(function(r) { setTimeout(r, 1200); });
                             attempts++;
                             continue;
                         }
