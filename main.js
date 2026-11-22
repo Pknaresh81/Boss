@@ -1150,7 +1150,7 @@ async function isBrowserDebugReady(config) {
         browserURL:
             `http://127.0.0.1:${config.port}`,
         defaultViewport: null,
-        protocolTimeout: 10 * 60 * 1000
+        protocolTimeout: 30 * 60 * 1000
     });
 
         await browser.disconnect();
@@ -1295,6 +1295,8 @@ const firefoxY = Math.min(160, Math.max(0, workArea.height - firefoxHeight));
             userDataDir: config.userDataDir,
 
             defaultViewport: null,
+
+            protocolTimeout: 30 * 60 * 1000,
 
             args: [
                 `--width=${firefoxWidth}`,
@@ -2117,7 +2119,7 @@ managedBrowserInstances.delete('WEB4');
                             browserURL:
                                 `http://127.0.0.1:${config.port}`,
                             defaultViewport: null,
-                            protocolTimeout: 120000
+                            protocolTimeout: 30 * 60 * 1000
                         });
 
                     await browser.close();
@@ -2391,7 +2393,7 @@ if (config.type === 'WEB4') {
             browser = await puppeteer.connect({
                 browserURL: `http://127.0.0.1:${port}`,
                 defaultViewport: null,
-                protocolTimeout: 10 * 60 * 1000
+                protocolTimeout: 30 * 60 * 1000
             });
 
             break;
@@ -3619,7 +3621,7 @@ ipcMain.handle(
                     credentials,
                     {
                         timeout:
-                            10 * 60 * 1000
+                            30 * 60 * 1000
                     }
                 );
 
@@ -3799,7 +3801,7 @@ else {
             browser = await puppeteer.connect({
                 browserURL: `http://127.0.0.1:${port}`,
                 defaultViewport: null,
-                protocolTimeout: 10 * 60 * 1000
+                protocolTimeout: 30 * 60 * 1000
             });
 
             break;

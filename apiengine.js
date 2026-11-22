@@ -4005,6 +4005,10 @@ for (;;) {
         this._avlFareBridgePage = this.page;
     }
 
+    if (typeof this.page.setDefaultTimeout === 'function') {
+        this.page.setDefaultTimeout(0);
+    }
+
     try {
         result = await this.page.evaluate(script);
     } catch (automationEvalError) {
