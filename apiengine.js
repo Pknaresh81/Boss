@@ -39,35 +39,6 @@ this.qrCallbacks =
         `[APIEngine] Browser=${this.browserType} | Session=${this.sessionFilePath}`
     );
 }
-// VPS DETECTION (ONLY USED FOR VPS QR BLANK/WHITE GUARD; NORMAL PC FLOW UNTOUCHED)
-    isVpsEnvironment() {
-        try {
-            if (process.env.BOSS_FORCE_VPS === '1') return true;
-            const os = require('os');
-            const totalMemGB = os.totalmem() / (1024 * 1024 * 1024);
-            const cpus = os.cpus() || [];
-            const cpuModel = String(cpus[0]?.model || '').toLowerCase();
-            // Typical cloud VPS indicators (low core/RAM or virtualized/server CPU/env)
-            const isVirtualCpu = /virtual|qemu|kvm|vmware|xen|xeon|epyc|cloud/i.test(cpuModel);
-            const hasRdpSession = Boolean(process.env.SESSIONNAME && /^rdp/i.test(String(process.env.SESSIONNAME)));
-            return Boolean(hasRdpSession || (isVirtualCpu && cpus.length <= 4 && totalMemGB <= 16));
-        } catch (_) {
-            return false;
-        }
-    }
-
-    // DETECT BLANK / ALL-WHITE QR DATA URL ON VPS
-    isLikelyBlankQrDataUrl(dataUrl) {
-        if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
-            return true;
-        }
-        // Solid white PNGs with QR dimensions compress very small in base64
-        const base64Part = dataUrl.split(',')[1] || '';
-        if (base64Part.length < 3500) {
-            return true;
-        }
-        return false;
-    }
 
     // HELPER: SEND LIVE PROGRESS TO UI
     sendProgress(stepName, message, percentage = 0) {
@@ -4985,17 +4956,6 @@ try {
                 attemptError.message
             );
         }
-
-        // VPS-ONLY GUARD: Normal PC/laptop flow is completely untouched.
-            // On VPS, if captured QR looks blank/white, wait and retry instead of accepting a blank white QR.
-            if (qrReady && qrImage && this.isVpsEnvironment() && this.isLikelyBlankQrDataUrl(qrImage)) {
-                console.warn('[VPS QR GUARD] Blank/white QR detected on VPS. Waiting for full QR render...');
-                qrImage = null;
-                qrElement = null;
-                qrReady = false;
-                await new Promise(resolve => setTimeout(resolve, 600));
-                continue;
-            }
 
         await new Promise(resolve => setTimeout(resolve, 50));
     }

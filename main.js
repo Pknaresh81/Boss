@@ -22,57 +22,6 @@ const puppeteer = require('puppeteer');
 const APIEngine = require('./apiengine');
 const apiKeyStore = require('./api-key-store');
 const { startManualLogin } = require('./loginManager');
-const crypto = require('crypto');
-
-function formatDateDDMonYear(dateInput) {
-    const d = dateInput ? new Date(dateInput) : new Date();
-    if (Number.isNaN(d.getTime())) return '';
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mon = months[d.getMonth()];
-    const yyyy = d.getFullYear();
-    return `${dd}, ${mon}, ${yyyy}`;
-}
-
-function getLicenseScopeId(licenseKey) {
-    return crypto
-        .createHash('sha256')
-        .update(String(licenseKey || '').trim().toUpperCase())
-        .digest('hex')
-        .slice(0, 12);
-}
-
-async function resetDataOnLicenseSwitch(newLicenseKey) {
-    const scopeId = getLicenseScopeId(newLicenseKey);
-    const activeScopeFile = path.join(app.getPath('userData'), 'active-license-scope.txt');
-
-    let previousScopeId = null;
-    try {
-        if (fs.existsSync(activeScopeFile)) {
-            previousScopeId = fs.readFileSync(activeScopeFile, 'utf8').trim();
-        }
-    } catch (_) {}
-
-    if (previousScopeId && previousScopeId !== scopeId) {
-        const dirsToClean = [
-            path.join(process.env.LOCALAPPDATA || os.homedir(), 'Boss', 'BrowserProfiles'),
-            path.join(__dirname, 'Boss')
-        ];
-
-        for (const dir of dirsToClean) {
-            try {
-                if (fs.existsSync(dir)) {
-                    await fs.promises.rm(dir, { recursive: true, force: true });
-                }
-            } catch (_) {}
-        }
-    }
-
-    try {
-        fs.mkdirSync(app.getPath('userData'), { recursive: true });
-        fs.writeFileSync(activeScopeFile, scopeId, 'utf8');
-    } catch (_) {}
-}
 
 let win = null;
 let licenseWindow = null;
@@ -81,7 +30,6 @@ let miniAutomationWindows = new Map();
 let miniAutomationWindowsByBrowser = new Map();
 const managedBrowserInstances = new Map();
 const managedBrowserProcesses = new Map();
-
 const profileResetInProgress = new Set();
 
 async function cleanupBossProfileAfterClose(config) {
@@ -1454,7 +1402,7 @@ if (firefoxProcess) {
     console.log('[WEB4] Firefox default home page navigation skipped.');
 }
 
-const zoomLevel = 0.75; // 75% zoom
+const zoomLevel = 0.80; // 80% zoom
         await page.evaluate((z) => {
             document.documentElement.style.zoom = String(z);
         }, zoomLevel).catch(() => {});
@@ -1488,11 +1436,11 @@ const zoomLevel = 0.75; // 75% zoom
 
 const workArea = screen.getPrimaryDisplay().workAreaSize;
 
-const browserWidth = 440;
-const browserHeight = 680;
+const browserWidth = 480;
+const browserHeight = 660;
 
-// 75% scale factor ke saath actual screen height ka hisaab (~0.75x)
-const effectiveHeight = Math.round(browserHeight * 0.75);
+// 75% scale factor ke saath actual screen height ka hisaab (~0.80x)
+const effectiveHeight = Math.round(browserHeight * 0.80);
 const yOffset = 60; // Aur neeche karne ke liye is number ko badhayein (jaise 80 ya 100)
 const y = Math.max(0, workArea.height - effectiveHeight + yOffset);
 
@@ -1514,7 +1462,7 @@ const child = spawn(
         `--app=${appUrl}`,
         `--window-size=${browserWidth},${browserHeight}`,
         `--window-position=${x},${y}`,
-        '--force-device-scale-factor=0.75',
+        '--force-device-scale-factor=0.80',
         '--high-dpi-support=1',
         '--no-default-browser-check',
         '--disable-sync',
@@ -2520,7 +2468,7 @@ try {
         `[${config.type}] Existing browser page selected: ${await page.url()}`
     );
 
-    const zoomLevel = 0.75; // 75% zoom
+    const zoomLevel = 0.80; // 80% zoom
     await page.evaluate((z) => {
         document.documentElement.style.zoom = String(z);
     }, zoomLevel).catch(() => {});
@@ -3931,7 +3879,7 @@ if (!page) {
         );
     }
 
-    const zoomLevel = 0.75; // 75% zoom
+    const zoomLevel = 0.80; // 80% zoom
     await page.evaluate((z) => {
         document.documentElement.style.zoom = String(z);
     }, zoomLevel).catch(() => {});
