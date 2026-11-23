@@ -39,6 +39,36 @@ this.qrCallbacks =
         `[APIEngine] Browser=${this.browserType} | Session=${this.sessionFilePath}`
     );
 }
+// VPS DETECTION (ONLY USED FOR VPS QR BLANK/WHITE GUARD; NORMAL PC FLOW UNTOUCHED)
+    isVpsEnvironment() {
+        try {
+            if (process.env.BOSS_FORCE_VPS === '1') return true;
+            const os = require('os');
+            const totalMemGB = os.totalmem() / (1024 * 1024 * 1024);
+            const cpus = os.cpus() || [];
+            const cpuModel = String(cpus[0]?.model || '').toLowerCase();
+            // Typical cloud VPS indicators (low core/RAM or virtualized/server CPU/env)
+            const isVirtualCpu = /virtual|qemu|kvm|vmware|xen|xeon|epyc|cloud/i.test(cpuModel);
+            const hasRdpSession = Boolean(process.env.SESSIONNAME && /^rdp/i.test(String(process.env.SESSIONNAME)));
+            return Boolean(hasRdpSession || (isVirtualCpu && cpus.length <= 4 && totalMemGB <= 16));
+        } catch (_) {
+            return false;
+        }
+    }
+
+    // DETECT BLANK / ALL-WHITE QR DATA URL ON VPS
+    isLikelyBlankQrDataUrl(dataUrl) {
+        if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
+            return true;
+        }
+        // Solid white PNGs with QR dimensions compress very small in base64
+        const base64Part = dataUrl.split(',')[1] || '';
+        if (base64Part.length < 3500) {
+            return true;
+        }
+        return false;
+    }
+
     // HELPER: SEND LIVE PROGRESS TO UI
     sendProgress(stepName, message, percentage = 0) {
         console.log(`[PROGRESS] ${stepName}: ${message} (${percentage}%)`);
@@ -462,7 +492,7 @@ async checkPreLoginAvailabilityFromUI(bookingData) {
         this.sendBookingStatus('Availability aur Fare check kar rahe hain...', 'PRE-LOGIN AVAILABILITY', 5);
 
         if (!this.page.url().includes(new URL(targetUrl).pathname)) {
-            await this.page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            await this.page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 180000 });
         }
 
         const jDate = String(bookingData.journeyDate || bookingData.date || '').replace(/-/g, '');
@@ -3415,7 +3445,7 @@ if (isFirefoxWEB4PaymentCalculateFare) {
      calculateFareBtn.click();
 
      var fareResponseDetected = false;
-     for (var fareWait = 0; fareWait < 120; fareWait++) {
+     for (var fareWait = 0; fareWait < 360; fareWait++) {
          await new Promise(function(resolve) { setTimeout(resolve, 500); });
          var currentFareButton = Array.from(document.querySelectorAll('button.btn-calc-fare')).find(function(b) {
              return b.getClientRects().length > 0 && isButtonClickable(b);
@@ -3447,7 +3477,7 @@ if (isFirefoxWEB4PaymentCalculateFare) {
      }
      if (web4FareRetrySuccess) break;
      if (!fareResponseDetected) {
-         return { success: false, error: 'WEB4: Calculate Fare click ke baad 60 seconds tak page response nahi mila.', logs: diagnosticLogs };
+         return { success: false, error: 'WEB4: Calculate Fare click ke baad 180 seconds tak page response nahi mila.', logs: diagnosticLogs };
      }
  }
 
@@ -3725,7 +3755,7 @@ for (;;) {
 
             if (!isFirefoxWEB4Payment) {
                 var multiplePaymentService = null;
-                var multiPaymentDeadline = Date.now() + 60000;
+                var multiPaymentDeadline = Date.now() + 180000;
                 while (Date.now() < multiPaymentDeadline) {
                     multiplePaymentService = Array.from(document.querySelectorAll('.bank-type')).find(function(el) {
                         if (!el || !el.isConnected || el.offsetParent === null) return false;
@@ -3737,7 +3767,7 @@ for (;;) {
                     await new Promise(function(resolve) { setTimeout(resolve, 250); });
                 }
                 if (!multiplePaymentService) {
-                    return { success: false, error: 'Multiple Payment Service option 60 seconds mein nahi mila.', logs: diagnosticLogs };
+                    return { success: false, error: 'Multiple Payment Service option 180 seconds mein nahi mila.', logs: diagnosticLogs };
                 }
 
                 function isMultiplePaymentServiceActive(el) {
@@ -3757,7 +3787,7 @@ for (;;) {
                     multiplePaymentService.click();
                 }
 
-                var multiVerifyDeadline = Date.now() + 60000;
+                var multiVerifyDeadline = Date.now() + 180000;
                 while (Date.now() < multiVerifyDeadline) {
                     var freshMulti = Array.from(document.querySelectorAll('.bank-type')).find(function(el) {
                         if (!el || !el.isConnected || el.offsetParent === null) return false;
@@ -3769,7 +3799,7 @@ for (;;) {
             }
 
             var providerElement = null;
-            var providerDeadline = Date.now() + 60000;
+            var providerDeadline = Date.now() + 180000;
             while (Date.now() < providerDeadline) {
                 var providerElements = Array.from(document.querySelectorAll('.border-all.link, .col-pad a, .col-pad button, .bank-type'));
                 function isUsableProviderElement(el) {
@@ -3858,7 +3888,7 @@ for (;;) {
                     }
                 }
 
-                var payBookDeadline = Date.now() + 60000;
+                var payBookDeadline = Date.now() + 180000;
                 payAndBookBtn = null;
                 while (Date.now() < payBookDeadline) {
                     payAndBookBtn = Array.from(document.querySelectorAll('button, a, [role="button"]')).find(function(button) {
@@ -3881,7 +3911,7 @@ for (;;) {
 
                 var payBookRetryAlreadyCounted = false;
                 var payBookSuccess = false;
-                var payWaitDeadline = Date.now() + 60000;
+                var payWaitDeadline = Date.now() + 180000;
                 while (Date.now() < payWaitDeadline) {
                     await new Promise(function(resolve) { setTimeout(resolve, 250); });
                     var payText = (document.body.innerText || '').toLowerCase();
@@ -4541,7 +4571,7 @@ if (
                 canvas.height >= 100
             );
         },
-        { timeout: 15000 }
+        { timeout: 180000 }
     );
     console.log(
         '[IPAY] Existing QR canvas verified. No extra click.'
@@ -4601,14 +4631,14 @@ try {
                     return false;
                 });
             },
-            { timeout: 60000 },
+            { timeout: 180000 },
             qrSelector
         );
     }
 } catch (e) {
     throw new Error(
         paymentValue +
-        ' ka loaded QR 60 seconds mein nahi mila: ' +
+        ' ka loaded QR 180 seconds mein nahi mila: ' +
         e.message
     );
 }
@@ -4626,7 +4656,7 @@ try {
 
     if (!this._instantRazorpaySent) {
         // WAIT FOR QR TO ACTUALLY LOAD
-        const qrDeadline = Date.now() + 60000;
+        const qrDeadline = Date.now() + 180000;
         while (Date.now() < qrDeadline) {
         try {
             if (!this.page || this.page.isClosed()) {
@@ -4955,12 +4985,24 @@ try {
                 attemptError.message
             );
         }
+
+        // VPS-ONLY GUARD: Normal PC/laptop flow is completely untouched.
+            // On VPS, if captured QR looks blank/white, wait and retry instead of accepting a blank white QR.
+            if (qrReady && qrImage && this.isVpsEnvironment() && this.isLikelyBlankQrDataUrl(qrImage)) {
+                console.warn('[VPS QR GUARD] Blank/white QR detected on VPS. Waiting for full QR render...');
+                qrImage = null;
+                qrElement = null;
+                qrReady = false;
+                await new Promise(resolve => setTimeout(resolve, 600));
+                continue;
+            }
+
         await new Promise(resolve => setTimeout(resolve, 50));
     }
     if (!qrReady || !qrImage) {
         throw new Error(
             paymentValue +
-            ' QR 60 seconds mein load nahi hua. Blank popup nahi bheja gaya.'
+            ' QR 180 seconds mein load nahi hua. Blank popup nahi bheja gaya.'
         );
     }
 

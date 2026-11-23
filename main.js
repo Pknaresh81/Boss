@@ -22,6 +22,57 @@ const puppeteer = require('puppeteer');
 const APIEngine = require('./apiengine');
 const apiKeyStore = require('./api-key-store');
 const { startManualLogin } = require('./loginManager');
+const crypto = require('crypto');
+
+function formatDateDDMonYear(dateInput) {
+    const d = dateInput ? new Date(dateInput) : new Date();
+    if (Number.isNaN(d.getTime())) return '';
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mon = months[d.getMonth()];
+    const yyyy = d.getFullYear();
+    return `${dd}, ${mon}, ${yyyy}`;
+}
+
+function getLicenseScopeId(licenseKey) {
+    return crypto
+        .createHash('sha256')
+        .update(String(licenseKey || '').trim().toUpperCase())
+        .digest('hex')
+        .slice(0, 12);
+}
+
+async function resetDataOnLicenseSwitch(newLicenseKey) {
+    const scopeId = getLicenseScopeId(newLicenseKey);
+    const activeScopeFile = path.join(app.getPath('userData'), 'active-license-scope.txt');
+
+    let previousScopeId = null;
+    try {
+        if (fs.existsSync(activeScopeFile)) {
+            previousScopeId = fs.readFileSync(activeScopeFile, 'utf8').trim();
+        }
+    } catch (_) {}
+
+    if (previousScopeId && previousScopeId !== scopeId) {
+        const dirsToClean = [
+            path.join(process.env.LOCALAPPDATA || os.homedir(), 'Boss', 'BrowserProfiles'),
+            path.join(__dirname, 'Boss')
+        ];
+
+        for (const dir of dirsToClean) {
+            try {
+                if (fs.existsSync(dir)) {
+                    await fs.promises.rm(dir, { recursive: true, force: true });
+                }
+            } catch (_) {}
+        }
+    }
+
+    try {
+        fs.mkdirSync(app.getPath('userData'), { recursive: true });
+        fs.writeFileSync(activeScopeFile, scopeId, 'utf8');
+    } catch (_) {}
+}
 
 let win = null;
 let licenseWindow = null;
@@ -2934,7 +2985,8 @@ ipcMain.handle('verify-license-key', async (event, licenseKey) => {
                 message: result?.message || 'Invalid license key.'
             };
         }
-
+await resetDataOnLicenseSwitch(key);
+        licenseVerified = true;
         
 licenseVerified = true;
 
