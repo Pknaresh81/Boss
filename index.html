@@ -684,6 +684,53 @@ body {
     position: relative;
 }
 
+#bookingDateWrap {
+    position: relative !important;
+    width: 100% !important;
+}
+
+#bookingDateWrap {
+    position: relative !important;
+    width: 100% !important;
+}
+
+#bookingDateWrap #bookingDate {
+    width: 100% !important;
+}
+
+#bookingDateWrap.is-empty #bookingDate::-webkit-datetime-edit,
+#bookingDateWrap.is-empty #bookingDate::-webkit-datetime-edit-fields-wrapper,
+#bookingDateWrap.is-empty #bookingDate::-webkit-datetime-edit-text,
+#bookingDateWrap.is-empty #bookingDate::-webkit-datetime-edit-month-field,
+#bookingDateWrap.is-empty #bookingDate::-webkit-datetime-edit-day-field,
+#bookingDateWrap.is-empty #bookingDate::-webkit-datetime-edit-year-field {
+    color: transparent !important;
+}
+
+#bookingDateWrap .booking-date-hint {
+    display: none !important;
+    position: absolute !important;
+    left: 9px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    height: 24px !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    font-size: 11px !important;
+    letter-spacing: 0.04em !important;
+    color: #7791aa !important;
+    background: transparent !important;
+    padding: 0 !important;
+    pointer-events: none !important;
+    user-select: none !important;
+    z-index: 9999 !important;
+    line-height: normal !important;
+}
+
+#bookingDateWrap.is-empty .booking-date-hint {
+    display: flex !important;
+}
+
 </style>
 
 <script id="BOSS_NON_BLOCKING_ALERT_FIX">
@@ -1036,10 +1083,13 @@ body {
                                     Booking Date
                                 </label>
 
-                                <input type="date"
-                                       id="bookingDate"
-                                       class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
-                           
+                                <div id="bookingDateWrap">
+    <input type="date"
+           id="bookingDate"
+           class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800">
+    <span class="booking-date-hint">DD-MM-YEAR</span>
+</div>
+
                                        <button type="button"
                               onclick="openRouteTrainsPopup()"
                               class="bg-cyan-600 hover:bg-cyan-700 text-white px-2 py-1.5 rounded text-sm font-bold block w-fit ml-auto mt-2">
@@ -1184,17 +1234,17 @@ body {
     <div class="space-y-1">
 
         <label class="font-semibold text-slate-700">
-    IRCTC.dev API Key
-</label>
+            IRCTCDev API Key
+        </label>
 
-<input
-    type="password"
-    id="irctc-dev-api-key"
-    autocomplete="off"
-    spellcheck="false"
-    placeholder="Enter your IRCTC.dev API key"
-    class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800"
-/>
+        <input
+            type="password"
+            id="irctc-dev-api-key"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Enter your IRCTCDev API key"
+            class="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800"
+        />
 
     </div>
 
@@ -1714,46 +1764,61 @@ setInterval(() => {
    STORAGE HELPERS
 ========================================================= */
 
+// Main process se aaya hua SHA-256 license scope; raw license key renderer mein nahi aati.
+const LICENSE_STORAGE_SCOPE = new URLSearchParams(window.location.search)
+    .get('licenseScope');
+
+function getLicenseStorageKey(key) {
+    if (!/^[a-f0-9]{64}$/i.test(String(LICENSE_STORAGE_SCOPE || ''))) {
+        throw new Error('Valid license storage scope nahi mila. Data access blocked.');
+    }
+    return `boss_license_${LICENSE_STORAGE_SCOPE}_${key}`;
+}
+
+function isLegacyDataOwner() {
+    const ownerKey = 'boss_license_legacy_data_owner';
+    let owner = localStorage.getItem(ownerKey);
+
+    // Jo license upgrade ke baad pehli baar launch hoga, wahi purane shared data ka owner hoga.
+    if (!owner) {
+        owner = LICENSE_STORAGE_SCOPE;
+        localStorage.setItem(ownerKey, owner);
+    }
+
+    return owner === LICENSE_STORAGE_SCOPE;
+}
+
 function loadStorage(key, fallback) {
-
     try {
+        const scopedKey = getLicenseStorageKey(key);
+        const canMigrateLegacy = isLegacyDataOwner();
+        let data = localStorage.getItem(scopedKey);
 
-        const data =
-            localStorage.getItem(key);
-
-        if (!data) {
-            return fallback;
+        // Legacy shared values sirf pehle license ko migrate honge.
+        if (data === null && canMigrateLegacy) {
+            const legacyData = localStorage.getItem(key);
+            if (legacyData !== null) {
+                localStorage.setItem(scopedKey, legacyData);
+                localStorage.removeItem(key);
+                data = legacyData;
+                console.log('[STORAGE] Legacy data migrated into this license bucket:', key);
+            }
         }
 
+        if (data === null) return fallback;
         return JSON.parse(data);
-
     } catch (error) {
-
-        console.error(
-            "Storage read error:",
-            error
-        );
-
+        console.error('Storage read error:', error);
         return fallback;
     }
 }
 
-
 function saveStorage(key, value) {
-
     try {
-
-        localStorage.setItem(
-            key,
-            JSON.stringify(value)
-        );
-
+        const scopedKey = getLicenseStorageKey(key);
+        localStorage.setItem(scopedKey, JSON.stringify(value));
     } catch (error) {
-
-        console.error(
-            "Storage write error:",
-            error
-        );
+        console.error('Storage write error:', error);
     }
 }
 
@@ -1809,8 +1874,8 @@ function renderPassengerInputs() {
                 type="text"
                 id="p-name-${i}"
                 placeholder="Enter full name"
-                autocomplete="off"
                 oninput="this.value = this.value.toUpperCase()"
+                autocomplete="off"
             >
 
             <input
@@ -1879,7 +1944,7 @@ function saveTicketToQueue() {
         const nameElement = document.getElementById(`p-name-${i}`);
         if (!nameElement) continue;
 
-        const name = nameElement.value.trim();
+        const name = nameElement.value.trim().toUpperCase();
 
  if (name !== "") {
  passengersList.push({
@@ -2120,6 +2185,9 @@ function editTicket(idx) {
 
     document.getElementById("bookingDate").value =
         ticket.bookingDate || "";
+
+    document.getElementById(`p-name-${n}`).value =
+    String(p.name || "").toUpperCase();
 
     document.getElementById("inp-irctc").value =
         ticket.irctc || "";
@@ -3238,7 +3306,6 @@ function renderPayments() {
     }
 }
 
-
 async function loadApiKeyStatus() {
     const statusEl =
         document.getElementById('api-key-status');
@@ -3254,7 +3321,7 @@ async function loadApiKeyStatus() {
         statusEl.textContent =
             'Direct API.SH: ' +
             (result.directApiShConfigured ? 'Saved' : 'Not saved') +
-            ' | IRCTC.dev: ' +
+            ' | IRCTCDev: ' +
             (result.irctcDevConfigured ? 'Saved' : 'Not saved');
 
         document.getElementById('direct-api-sh-key').placeholder =
@@ -3265,7 +3332,7 @@ async function loadApiKeyStatus() {
         document.getElementById('irctc-dev-api-key').placeholder =
             result.irctcDevConfigured
                 ? 'Saved key - enter new key to replace'
-                : 'Enter your IRCTC.dev API key';
+                : 'Enter your IRCTCDev API key';
 
     } catch (error) {
         statusEl.textContent = error.message;
@@ -3277,7 +3344,7 @@ async function saveApiKeys() {
         document.getElementById('direct-api-sh-key');
 
     const irctcInput =
-        document.getElementById('irctc-dev-api-key');
+    document.getElementById('irctc-dev-api-key');
 
     const statusEl =
         document.getElementById('api-key-status');
@@ -3325,7 +3392,6 @@ async function saveApiKeys() {
         saveBtn.textContent = 'Save API Keys';
     }
 }
-
 
 /* =========================================================
    SECURITY / HTML ESCAPE
@@ -4301,7 +4367,7 @@ closeLicenseBtn.addEventListener(
 <script>
 
 // ==========================================
-// ROUTE TRAINS + RAILCORE AVAILABILITY
+// ROUTE TRAINS + IRCTC AVAILABILITY
 // ==========================================
 async function openRouteTrainsPopup() {
     const modal = document.getElementById('route-trains-modal');
@@ -4325,7 +4391,7 @@ async function openRouteTrainsPopup() {
         <div style="padding:12px;">
             <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:15px;">
                 <b style="color:#38bdf8;">SELECT QUOTA</b>
-                <div id="railcore-quota-buttons" style="display:flex;gap:8px;">
+                <div id="IRCTC-quota-buttons" style="display:flex;gap:8px;">
                     ${['GN','TQ','PT'].map(q => `
                         <button type="button" data-quota="${q}"
                             style="border:2px solid ${q === 'GN' ? '#22c55e' : '#64748b'};
@@ -4338,14 +4404,14 @@ async function openRouteTrainsPopup() {
                 </div>
             </div>
 
-            <div id="railcore-train-list" style="color:#38bdf8;text-align:center;">
+            <div id="IRCTC-train-list" style="color:#38bdf8;text-align:center;">
                 Route ki trains search ho rahi hain...
             </div>
         </div>
     `;
 
-    const trainList = document.getElementById('railcore-train-list');
-    const quotaButtons = document.getElementById('railcore-quota-buttons');
+    const trainList = document.getElementById('IRCTC-train-list');
+    const quotaButtons = document.getElementById('IRCTC-quota-buttons');
 
     try {
         const response = await window.electronAPI.searchRouteTrains({
@@ -4393,7 +4459,7 @@ async function openRouteTrainsPopup() {
                                         <div style="display:flex;flex-direction:row;flex-wrap:wrap;gap:6px;">
                                             ${(t.avlClasses || []).map((cls, j) => `
                                                 <button type="button"
-                                                    class="railcore-class-btn"
+                                                    class="irctc-dev-class-btn"
                                                     data-train="${i}"
                                                     data-class="${j}"
                                                     style="padding:7px 11px;border:1px solid #0ea5e9;
@@ -4404,7 +4470,7 @@ async function openRouteTrainsPopup() {
                                             `).join('')}
                                         </div>
 
-                                        <div id="railcore-result-${i}"
+                                        <div id="irctc-dev-result-${i}"
                                             style="margin-top:9px;font-size:13px;color:#cbd5e1;">
                                         </div>
                                     </td>
@@ -4434,9 +4500,9 @@ async function openRouteTrainsPopup() {
             renderTrains();
         };
 
-        // CLASS CLICK - IRCTC.dev API
+        // CLASS CLICK - IRCTCDev API
         trainList.onclick = async (event) => {
-            const button = event.target.closest('.railcore-class-btn');
+            const button = event.target.closest('.irctc-dev-class-btn');
             if (!button) return;
 
             const trainIndex = Number(button.dataset.train);
@@ -4448,7 +4514,7 @@ async function openRouteTrainsPopup() {
             if (!train || !travelClass || button.disabled) return;
 
             const resultBox = document.getElementById(
-                `railcore-result-${trainIndex}`
+                `irctc-dev-result-${trainIndex}`
             );
 
             button.disabled = true;
@@ -4516,6 +4582,36 @@ async function openRouteTrainsPopup() {
 }
 
 loadApiKeyStatus();
+
+(() => {
+    const inp = document.getElementById("bookingDate");
+    const wrap = document.getElementById("bookingDateWrap");
+    if (!inp || !wrap) return;
+
+    function updateEmptyHint() {
+        const hasValue = Boolean(String(inp.value || "").trim());
+        wrap.classList.toggle("is-empty", !hasValue);
+    }
+
+    inp.addEventListener("input", updateEmptyHint);
+    inp.addEventListener("change", updateEmptyHint);
+    inp.addEventListener("blur", updateEmptyHint);
+
+    // Agar kahi se value set ho toh bhi sync rahe
+    const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+    if (desc && desc.set) {
+        Object.defineProperty(inp, "value", {
+            get: desc.get,
+            set(v) {
+                desc.set.call(this, v);
+                updateEmptyHint();
+            },
+            configurable: true
+        });
+    }
+
+    updateEmptyHint();
+})();
 
 </script>
 </body>

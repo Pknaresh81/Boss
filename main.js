@@ -6,7 +6,7 @@ const {
     session,
     safeStorage
 } = require('electron');
-
+app.commandLine.appendSwitch('lang', 'en-GB');
 const pendingWLDecisions = new Map();
 
 const {
@@ -16,6 +16,11 @@ const {
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
+
+// Boss ka Electron data folder fixed rakhein, taaki uninstall script exact folder clean kar sake.
+const BOSS_USER_DATA_PATH = path.join(app.getPath('appData'), 'Boss');
+app.setPath('userData', BOSS_USER_DATA_PATH);
 const { exec, spawn } = require('child_process');
 const puppeteer = require('puppeteer');
 
@@ -71,6 +76,33 @@ async function cleanupBossProfileAfterClose(config) {
 }
 
 let licenseVerified = false;
+let activeLicenseScope = null;
+
+function createLicenseScope(licenseKey) {
+    return crypto.createHash('sha256')
+        .update(String(licenseKey).trim(), 'utf8')
+        .digest('hex');
+}
+
+function applyLicenseBrowserRoot(scope) {
+    const root = path.join(
+        process.env.LOCALAPPDATA || os.homedir(),
+        'Boss',
+        'BrowserProfiles',
+        scope
+    );
+
+    for (const [type, folder] of Object.entries({
+        WEB: 'Chrome',
+        WEB2: 'Edge',
+        WEB3: 'Brave',
+        WEB4: 'Firefox'
+    })) {
+        if (BROWSER_CONFIG[type]) {
+            BROWSER_CONFIG[type].userDataDir = path.join(root, folder);
+        }
+    }
+}
 
 // ==========================================
 // SECURE API KEY MANAGEMENT
@@ -152,27 +184,31 @@ function createQRPaymentWindow(browserType = 'WEB', targetMiniWin = null) {
     return existingWindow;
 }
 
-    const qrWindow =
+   const qrWindow =
     new BrowserWindow({
         width: 300,
         height: 360,
         minWidth: 300,
-        minHeight: 360,         
-            movable: true,
-            alwaysOnTop: true,
-            autoHideMenuBar: true,
-            backgroundColor: '#00000000',
-            transparent: true,
+        minHeight: 360,
 
-            webPreferences: {
-                preload: path.join(
-                    __dirname,
-                    'preload.js'
-                ),
-                contextIsolation: true,
-                nodeIntegration: false
-            }
-        });
+        movable: true,
+        alwaysOnTop: true,
+        autoHideMenuBar: true,
+
+        // VPS compatibility: transparent window disabled
+        backgroundColor: '#FFFFFF',
+        transparent: false,
+
+        webPreferences: {
+            preload: path.join(
+                __dirname,
+                'preload.js'
+            ),
+            contextIsolation: true,
+            nodeIntegration: false,
+            backgroundThrottling: false
+        }
+    });
 
     qrPaymentWindows.set(
         type,
@@ -1276,93 +1312,77 @@ if (config.type === 'WEB4') {
         console.log('[WEB4] Starting Firefox with Puppeteer...');
 
         const { screen } = require('electron');
-const workArea = screen.getPrimaryDisplay().workAreaSize;
+const workArea = screen.getPrimaryDisplay().workArea;
 
 const firefoxWidth = 440;
-const firefoxHeight = 680;
-const firefoxX = Math.max(0, workArea.width - firefoxWidth);
+const firefoxHeight = 600;
+const firefoxX = Math.max(0, workArea.width - firefoxWidth - 10);
 const firefoxY = Math.min(160, Math.max(0, workArea.height - firefoxHeight));
 
-        firefoxBrowser = await puppeteer.launch({
+// Firefox ko pehle se right-side position dena
+const fs = require('fs');
 
-            browser: 'firefox',
+const xulStorePath = require('path').join(
+    config.userDataDir,
+    'xulstore.json'
+);
 
-            executablePath: config.exePath,
+let xulStore = {};
 
-            headless: false,
-
-            userDataDir: config.userDataDir,
-
-            defaultViewport: null,
-
-            protocolTimeout: 30 * 60 * 1000,
-
-            args: [
-                `--width=${firefoxWidth}`,
-                `--height=${firefoxHeight}`
-            ]
-
-        });
-
-// WEB4 Firefox window position
-
-const firefoxPid = firefoxBrowser.process()?.pid;
-
-if (firefoxPid) {
-    const psScript = `
-$targetPid = ${firefoxPid}
-
-Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-
-public class FirefoxWindowPosition {
-    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-
-    [DllImport("user32.dll")]
-    public static extern bool IsWindowVisible(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int width, int height, uint flags);
-}
-'@
-
-[FirefoxWindowPosition]::EnumWindows({
-    param($hWnd, $lParam)
-
-    [uint32]$windowPid = 0
-    [void][FirefoxWindowPosition]::GetWindowThreadProcessId($hWnd, [ref]$windowPid)
-
-    if ($windowPid -eq $targetPid -and [FirefoxWindowPosition]::IsWindowVisible($hWnd)) {
-        [void][FirefoxWindowPosition]::SetWindowPos($hWnd, [IntPtr]::Zero, ${firefoxX}, ${firefoxY}, ${firefoxWidth}, ${firefoxHeight}, 0x0040)
-        return $false
-    }
-
-    return $true
-}, [IntPtr]::Zero)
-`;
-
-    const encodedScript = Buffer.from(psScript, 'utf16le').toString('base64');
-
-    setTimeout(() => {
-        exec(
-            `powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedScript}`,
-            (error) => {
-                if (error) {
-                    console.error('[WEB4] Window positioning failed:', error.message);
-                } else {
-                    console.log('[WEB4] Firefox position set successfully.');
-                }
-            }
+try {
+    if (fs.existsSync(xulStorePath)) {
+        xulStore = JSON.parse(
+            fs.readFileSync(xulStorePath, 'utf8')
         );
-    }, 1500);
+    }
+} catch (e) {
+    console.log('[WEB4] Creating fresh window settings');
 }
+
+const firefoxWindowSettings = {
+    screenX: String(firefoxX),
+    screenY: String(firefoxY),
+    width: String(firefoxWidth),
+    height: String(firefoxHeight),
+    sizemode: 'normal'
+};
+
+if (!xulStore['chrome://browser/content/browser.xhtml']) {
+    xulStore['chrome://browser/content/browser.xhtml'] = {};
+}
+
+xulStore['chrome://browser/content/browser.xhtml']['main-window'] =
+    firefoxWindowSettings;
+
+fs.writeFileSync(
+    xulStorePath,
+    JSON.stringify(xulStore, null, 2),
+    'utf8'
+);
+
+const firefoxArgs = [
+    `--width=${firefoxWidth}`,
+    `--height=${firefoxHeight}`,
+    `--new-window`
+];
+
+firefoxBrowser = await puppeteer.launch({
+
+    browser: 'firefox',
+
+    executablePath: config.exePath,
+
+    headless: false,
+
+    userDataDir: config.userDataDir,
+
+    defaultViewport: null,
+
+    protocolTimeout: 30 * 60 * 1000,
+
+    args: firefoxArgs
+
+});
 
         // Firefox instance ko memory mein save karo
         managedBrowserInstances.set('WEB4', firefoxBrowser);
@@ -1436,7 +1456,7 @@ const zoomLevel = 0.80; // 80% zoom
 
 const workArea = screen.getPrimaryDisplay().workAreaSize;
 
-const browserWidth = 480;
+const browserWidth = 500;
 const browserHeight = 660;
 
 // 75% scale factor ke saath actual screen height ka hisaab (~0.80x)
@@ -1934,8 +1954,9 @@ ipcMain.handle(
             const config =
                 getBrowserConfig(browserName);
 
-            const targetUrl = 'about:home';
-
+            const targetUrl = browserName === 'WEB4'
+    ? 'https://www.irctc.co.in/eticket/train-search'
+    : 'about:home';
 
             console.log(
                 `[LAUNCH ${config.type}] ` +
@@ -2933,10 +2954,11 @@ ipcMain.handle('verify-license-key', async (event, licenseKey) => {
                 message: result?.message || 'Invalid license key.'
             };
         }
-await resetDataOnLicenseSwitch(key);
+activeLicenseScope = createLicenseScope(key);
+        apiKeyStore.setLicenseScope(activeLicenseScope);
+        applyLicenseBrowserRoot(activeLicenseScope);
+
         licenseVerified = true;
-        
-licenseVerified = true;
 
 console.log('[LICENSE] Verification SUCCESS');
 
@@ -3065,11 +3087,13 @@ win.webContents.on('did-navigate', async (event, url) => {
     const realUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
     win.webContents.setUserAgent(realUserAgent);
 
+    if (!activeLicenseScope) {
+        throw new Error('License data scope missing; dashboard load blocked.');
+    }
+
     win.loadFile(
-        path.join(
-            __dirname,
-            'index.html'
-        )
+        path.join(__dirname, 'index.html'),
+        { query: { licenseScope: activeLicenseScope } }
     );
 
     win.once(
@@ -3191,11 +3215,16 @@ async function saveUserSession(
                     sessionStorage: {}
                 }));
 
-        const sessionDir =
-            path.join(
-                __dirname,
-                'Boss'
-            );
+        if (!activeLicenseScope) {
+            throw new Error('License scope unavailable; refusing to save shared session data.');
+        }
+
+        const sessionDir = path.join(
+            app.getPath('userData'),
+            'LicenseData',
+            activeLicenseScope,
+            'Sessions'
+        );
 
         if (!fs.existsSync(sessionDir)) {
             fs.mkdirSync(

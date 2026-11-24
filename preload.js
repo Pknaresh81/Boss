@@ -293,7 +293,6 @@ sendWLDecision: (windowId, decision) => {
         'api-keys:save',
         {
             directApiSh: String(values?.directApiSh || ''),
-            railCore: String(values?.railCore || ''),
             irctcDev: String(values?.irctcDev || '')
         }
     )
