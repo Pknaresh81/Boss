@@ -4,29 +4,31 @@
   "description": "IRCTC Train Booking Automation",
   "main": "main.js",
   "author": "Boss",
- "scripts": {
+  "scripts": {
     "start": "electron .",
     "dist": "electron-builder --win nsis && node -e \"require('fs').readdirSync('dist').filter(f=>f!=='BOSS.exe').forEach(f=>require('fs').rmSync('dist/'+f,{recursive:true,force:true}))\""
-},
+  },
   "dependencies": {
-    "axios": "^1.20.0",
+    "axios": "^1.21.1",
+    "axios-cookiejar-support": "^7.0.0",
     "firebase": "^12.19.0",
-    "puppeteer": "^24.17.0"
+    "puppeteer": "^24.17.0",
+    "tough-cookie": "^6.1.0"
   },
   "devDependencies": {
     "electron": "^28.0.0",
     "electron-builder": "^24.13.3"
   },
-"build": {
+  "build": {
     "appId": "com.boss.automation",
     "productName": "Boss",
     "artifactName": "BOSS.exe",
     "win": {
-        "target": "nsis",
-        "icon": "build/BOSS-icon.ico"
+      "target": "nsis",
+      "icon": "build/BOSS-icon.ico"
     },
     "nsis": {
-        "include": "build/installer.nsh"
+      "include": "build/installer.nsh"
     }
-}
+  }
 }

@@ -2186,9 +2186,6 @@ function editTicket(idx) {
     document.getElementById("bookingDate").value =
         ticket.bookingDate || "";
 
-    document.getElementById(`p-name-${n}`).value =
-    String(p.name || "").toUpperCase();
-
     document.getElementById("inp-irctc").value =
         ticket.irctc || "";
 
@@ -2216,7 +2213,7 @@ function editTicket(idx) {
         const n = i + 1;
 
         document.getElementById(`p-name-${n}`).value =
-            p.name || "";
+            String(p.name || "").toUpperCase();
 
         document.getElementById(`p-age-${n}`).value =
             p.age || "";
@@ -2238,7 +2235,6 @@ function editTicket(idx) {
         ticket
     );
 }
-
 
 /* =========================================================
    DELETE TICKET
