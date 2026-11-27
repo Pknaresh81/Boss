@@ -2462,13 +2462,48 @@ result = await this.page.evaluate(script);
                     }
 
                     var isFirefoxWEB4 = String(payload.browserType || '').trim().toUpperCase() === 'WEB4';
-                    if (isFirefoxWEB4) {
-                        // Existing WEB4 block remains unchanged
-                    } else {
-                        var targetClass = String(payload.trainClass || '').trim().toUpperCase();
-                        if (!targetClass) {
-                            return { success: false, error: 'trainClass missing from payload', logs: diagnosticLogs };
-                        }
+var targetClass = String(payload.trainClass || '').trim().toUpperCase();
+if (!targetClass) {
+    return { success: false, error: 'trainClass missing from payload', logs: diagnosticLogs };
+}
+
+if (isFirefoxWEB4) {
+    var web4ClassMatched = false;
+    var web4CardNodes = Array.from(
+        targetCard.querySelectorAll('button, a, label, span, div, td')
+    );
+
+    for (var wci = 0; wci < web4CardNodes.length; wci++) {
+        var wEl = web4CardNodes[wci];
+        if (!wEl || !wEl.isConnected || wEl.getClientRects().length === 0) continue;
+        var wTxt = (wEl.innerText || wEl.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+        var hasCode = new RegExp('(^|[^A-Z0-9])' + targetClass + '([^A-Z0-9]|$)').test(wTxt);
+        if (!hasCode || wTxt.length > 80) continue;
+
+        var hasSmallerMatch = Array.from(wEl.querySelectorAll('button, a, label, span, div, td')).some(function(ch) {
+            if (ch.getClientRects().length === 0) return false;
+            var cTxt = (ch.innerText || ch.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+            return new RegExp('(^|[^A-Z0-9])' + targetClass + '([^A-Z0-9]|$)').test(cTxt) && cTxt.length <= 80;
+        });
+        if (hasSmallerMatch) continue;
+
+        var wClickable = wEl.closest('button, a, [role="button"], [role="radio"], td, label') || wEl;
+        try { wClickable.scrollIntoView({ behavior: 'auto', block: 'center' }); } catch (_) {}
+        await new Promise(function(r) { setTimeout(r, 150); });
+        wClickable.click();
+        web4ClassMatched = true;
+        diagnosticLogs.push('WEB4: Class clicked -> ' + targetClass + ' (' + wTxt + ')');
+        await new Promise(function(r) { setTimeout(r, 600); });
+        break;
+    }
+
+    if (!web4ClassMatched) {
+        diagnosticLogs.push('WEB4: Class not found yet -> ' + targetClass + '. Retrying...');
+        await new Promise(function(r) { setTimeout(r, 700); });
+        attempts++;
+        continue;
+    }
+} else {
                         var classNames = {
                             'SL': 'SLEEPER',
                             '3E': 'AC 3 ECONOMY',
@@ -2680,12 +2715,49 @@ result = await this.page.evaluate(script);
                     var targetDay = '';
                     var targetMonth = '';
                     try {
-                        var isFirefoxWEB4DateFlow = String(payload.browserType || '').trim().toUpperCase() === 'WEB4';
-                        if (isFirefoxWEB4DateFlow && classSelectionCompleted) {
-                            journeyDateSelected = true;
-                            diagnosticLogs.push('WEB4: Class BOOK button click ho chuka hai; journey-date card search skip ki ja rahi hai.');
-                            await liveProgress('CLASS BOOK CLICKED', 'Selected class ka Book button click ho gaya.', 38);
-                        } else {
+var isFirefoxWEB4DateFlow = String(payload.browserType || '').trim().toUpperCase() === 'WEB4';
+if (isFirefoxWEB4DateFlow && classSelectionCompleted) {
+    var freshWeb4Card = findFreshTrainCard() || targetCard;
+    var web4CardScope = freshWeb4Card || document;
+
+    var web4ActionBtn = Array.from(
+        web4CardScope.querySelectorAll('button, a, [role="button"]')
+    ).find(function(b) {
+        if (!b || !b.isConnected || b.getClientRects().length === 0) return false;
+        if (b.disabled || b.getAttribute('aria-disabled') === 'true') return false;
+        var bTxt = (b.innerText || b.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+        return (
+            bTxt.indexOf('CHECK AVAILABILITY') !== -1 ||
+            bTxt === 'BOOK NOW' ||
+            bTxt === 'BOOK' ||
+            bTxt.indexOf('BOOK NOW') !== -1 ||
+            bTxt.indexOf('BOOK ') === 0
+        );
+    });
+
+    if (web4ActionBtn) {
+        var btnLabel = (web4ActionBtn.innerText || web4ActionBtn.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+        try { web4ActionBtn.scrollIntoView({ behavior: 'auto', block: 'center' }); } catch (_) {}
+        await new Promise(function(r) { setTimeout(r, 150); });
+        web4ActionBtn.click();
+
+        if (btnLabel.indexOf('CHECK AVAILABILITY') !== -1) {
+            journeyDateSelected = false;
+            bookNowClicked = false;
+            diagnosticLogs.push('WEB4: Check Availability clicked -> ' + btnLabel);
+            await liveProgress('CHECK AVAILABILITY', 'Availability check kar rahe hain...', 36);
+            await new Promise(function(r) { setTimeout(r, 1200); });
+        } else {
+            journeyDateSelected = true;
+            bookNowClicked = true;
+            diagnosticLogs.push('WEB4: Actual Book button clicked -> ' + btnLabel);
+            await liveProgress('CLASS BOOK CLICKED', 'Selected class ka Book button click ho gaya.', 38);
+        }
+    } else {
+        journeyDateSelected = false;
+        diagnosticLogs.push('WEB4: Check Availability / Book button abhi nahi mila ya disabled hai. Retrying...');
+    }
+} else {
                             await liveProgress('JOURNEY DATE', 'Journey date select ho rahi hain...', 36);
                             diagnosticLogs.push("Targeting journey date card...");
                             var jd = String(payload.journeyDate || '').trim();
