@@ -2716,9 +2716,10 @@ if (isFirefoxWEB4) {
                     var targetMonth = '';
                     try {
 var isFirefoxWEB4DateFlow = String(payload.browserType || '').trim().toUpperCase() === 'WEB4';
-if (isFirefoxWEB4DateFlow && classSelectionCompleted) {
+if (isFirefoxWEB4DateFlow) {
     var web4AvlRetryLimit = 20;
     var web4AvlRetryCount = 0;
+    var web4AvlReady = false;
     var web4ActionDone = false;
 
     var targetTrainId = String(payload.targetTrainNo || '').trim();
@@ -2732,150 +2733,172 @@ if (isFirefoxWEB4DateFlow && classSelectionCompleted) {
         '1A': 'AC FIRST CLASS'
     };
 
-    if (!targetTrainId) {
-        journeyDateSelected = false;
-        diagnosticLogs.push('WEB4: targetTrainNo missing hai. Book click blocked.');
-    } else if (!wantedWeb4Class || validClasses.indexOf(wantedWeb4Class) === -1) {
-        journeyDateSelected = false;
-        diagnosticLogs.push('WEB4: Invalid or missing target class (' + wantedWeb4Class + '). Book click blocked.');
-    } else {
+    function getWeb4TrainContainer() {
+        var card = findFreshTrainCard() || targetCard;
+        if (card && card.isConnected && (!targetTrainId || (card.innerText || '').indexOf(targetTrainId) !== -1)) {
+            return card;
+        }
+        if (!targetTrainId) return card || null;
+
+        // Fallback: train number wale element ka sahi parent card nikaalein
+        var allEls = Array.from(document.querySelectorAll('div, section, app-train-list-item, app-jp-availability, tr, li'));
+        var matches = allEls.filter(function(el) {
+            if (!el || !el.isConnected || el.getClientRects().length === 0) return false;
+            var txt = (el.innerText || el.textContent || '');
+            if (txt.indexOf(targetTrainId) === -1) return false;
+            return txt.length < 4000 && /CHECK AVAILABILITY|REFRESH AVAILABILITY|BOOK NOW|BOOK/i.test(txt);
+        });
+        matches.sort(function(a, b) {
+            return (a.innerText || '').length - (b.innerText || '').length;
+        });
+        return matches[0] || card || null;
+    }
+
+    function getWeb4ActionCandidates(scope) {
+        var root = scope || document;
+        return Array.from(root.querySelectorAll('button, a, span, div, label, [role="button"]')).filter(function(el) {
+            if (!el || !el.isConnected || el.getClientRects().length === 0) return false;
+            if (el.disabled || el.getAttribute('aria-disabled') === 'true') return false;
+            var style = window.getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+            return true;
+        });
+    }
+
+    function findBestActionEl(scope, targetPhrases) {
+        var candidates = getWeb4ActionCandidates(scope);
+        for (var i = 0; i < candidates.length; i++) {
+            var el = candidates[i];
+            var txt = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+            if (!txt || txt.length > 50) continue;
+            var matched = targetPhrases.some(function(p) {
+                return txt === p || txt.indexOf(p) === 0;
+            });
+            if (!matched) continue;
+
+            // Agar andar koi chhota child same text ke saath hai to usko lena behtar hai
+            var hasSmallerSameText = candidates.some(function(other) {
+                if (other === el || !el.contains(other)) return false;
+                var oTxt = (other.innerText || other.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+                return targetPhrases.some(function(p) { return oTxt === p || oTxt.indexOf(p) === 0; });
+            });
+            if (hasSmallerSameText) continue;
+
+            return el.closest('button, a, [role="button"]') || el;
+        }
+        return null;
+    }
+
+    function triggerRealWeb4Click(el) {
+        try { el.scrollIntoView({ behavior: 'auto', block: 'center' }); } catch (_) {}
+        try {
+            var rect = el.getBoundingClientRect();
+            var cx = rect.left + rect.width / 2;
+            var cy = rect.top + rect.height / 2;
+            el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy }));
+            el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy }));
+            el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy }));
+        } catch (_) {
+            try { el.click(); } catch (__) {}
+        }
+    }
+
+    // 1. Pehle Check Availability / Refresh Availability par 20 retries
+    while (web4AvlRetryCount < web4AvlRetryLimit && !web4AvlReady) {
+        detectAndCloseIRCTCError();
+        var avlCard = getWeb4TrainContainer();
+
+        var bookCheck = findBestActionEl(avlCard, ['BOOK NOW', 'BOOK']);
+        var cardTextNow = (avlCard && (avlCard.innerText || avlCard.textContent)) || '';
+        var hasAvlInfo = /AVL|AVAILABLE|WL|RAC|TRAIN DEPARTED|NOT AVAILABLE|REGRET/i.test(cardTextNow);
+
+        if (bookCheck || (hasAvlInfo && !findBestActionEl(avlCard, ['CHECK AVAILABILITY', 'REFRESH AVAILABILITY']))) {
+            web4AvlReady = true;
+            diagnosticLogs.push('WEB4: Availability ready / Book button visible.');
+            break;
+        }
+
+        var avlBtn = findBestActionEl(avlCard, ['CHECK AVAILABILITY', 'REFRESH AVAILABILITY']);
+        if (avlBtn) {
+            web4AvlRetryCount++;
+            var btnLabel = (avlBtn.innerText || avlBtn.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+            triggerRealWeb4Click(avlBtn);
+            diagnosticLogs.push('WEB4: Clicked ' + btnLabel + ' (attempt ' + web4AvlRetryCount + '/' + web4AvlRetryLimit + ')');
+            await liveProgress('CHECK AVAILABILITY', btnLabel + ' retry (' + web4AvlRetryCount + '/' + web4AvlRetryLimit + ')...', 36);
+
+            for (var wTick = 0; wTick < 6; wTick++) {
+                await new Promise(function(r) { setTimeout(r, 350); });
+                var errToast = detectAndCloseIRCTCError();
+                var curCard = getWeb4TrainContainer();
+                var nowBook = findBestActionEl(curCard, ['BOOK NOW', 'BOOK']);
+                var nowRefresh = findBestActionEl(curCard, ['REFRESH AVAILABILITY']);
+                if (nowBook || nowRefresh || errToast) break;
+            }
+        } else {
+            web4AvlRetryCount++;
+            diagnosticLogs.push('WEB4: Check/Refresh Availability button nahi mila (' + web4AvlRetryCount + '/' + web4AvlRetryLimit + ')');
+            await new Promise(function(r) { setTimeout(r, 500); });
+        }
+    }
+
+    // 2. Availability ke baad exact class + exact class ka Book / Book Now button
+    var classCard = getWeb4TrainContainer();
+    if (classCard && wantedWeb4Class && validClasses.indexOf(wantedWeb4Class) !== -1) {
         var wantedClassRegex = new RegExp('(^|[^A-Z0-9])' + wantedWeb4Class + '([^A-Z0-9]|$)');
         var wantedFullName = web4ClassFullNames[wantedWeb4Class] || wantedWeb4Class;
         var otherClasses = validClasses.filter(function(c) { return c !== wantedWeb4Class; });
 
-        function getStrictTargetTrainCard() {
-            var candidateCard = findFreshTrainCard() || targetCard;
-            if (!candidateCard || !candidateCard.isConnected) return null;
-            var cardText = (candidateCard.innerText || candidateCard.textContent || '');
-            if (cardText.indexOf(targetTrainId) === -1) return null;
-            return candidateCard;
+        var classTab = getWeb4ActionCandidates(classCard).find(function(el) {
+            var txt = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+            if (!txt || txt.length > 60) return false;
+            return wantedClassRegex.test(txt) && !otherClasses.some(function(oc) {
+                return new RegExp('(^|[^A-Z0-9])' + oc + '([^A-Z0-9]|$)').test(txt);
+            });
+        });
+
+        if (classTab) {
+            triggerRealWeb4Click(classTab.closest('button, a, [role="button"], [role="radio"], td, label') || classTab);
+            diagnosticLogs.push('WEB4: Exact class [' + wantedWeb4Class + '] clicked.');
+            await new Promise(function(r) { setTimeout(r, 400); });
         }
 
-        function isExactTrainAndClassButton(btn, card) {
-            if (!btn || !card || !btn.isConnected || !card.contains(btn)) return false;
-            if (btn.getClientRects().length === 0) return false;
-            if (btn.disabled || btn.getAttribute('aria-disabled') === 'true') return false;
+        classCard = getWeb4TrainContainer();
+        var exactBookBtn = getWeb4ActionCandidates(classCard).find(function(b) {
+            var bTxt = (b.innerText || b.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+            var isBook = bTxt === 'BOOK NOW' || bTxt === 'BOOK' || bTxt.indexOf('BOOK NOW') === 0 || bTxt.indexOf('BOOK ') === 0;
+            if (!isBook) return false;
 
-            var cardText = (card.innerText || card.textContent || '');
-            if (cardText.indexOf(targetTrainId) === -1) return false;
-
-            var node = btn;
-            for (var depth = 0; depth < 6 && node && card.contains(node); depth++) {
-                var txt = (node.innerText || node.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
-                if (!txt) {
-                    node = node.parentElement;
-                    continue;
-                }
-
-                var hasWanted = wantedClassRegex.test(txt) || txt.indexOf(wantedFullName) !== -1;
-                if (hasWanted) {
-                    var hasOtherClass = otherClasses.some(function(otherCls) {
-                        var otherRegex = new RegExp('(^|[^A-Z0-9])' + otherCls + '([^A-Z0-9]|$)');
-                        return otherRegex.test(txt);
-                    });
-                    if (!hasOtherClass) {
-                        return true;
-                    }
-                }
+            var node = b;
+            for (var depth = 0; depth < 6 && node && classCard.contains(node); depth++) {
+                var nTxt = (node.innerText || node.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+                var hasWanted = wantedClassRegex.test(nTxt) || nTxt.indexOf(wantedFullName) !== -1;
+                var hasOther = otherClasses.some(function(oc) {
+                    return new RegExp('(^|[^A-Z0-9])' + oc + '([^A-Z0-9]|$)').test(nTxt);
+                });
+                if (hasWanted && !hasOther) return true;
                 node = node.parentElement;
             }
             return false;
-        }
+        });
 
-        function findExactClassInTrainCard(card, matcherFn) {
-            if (!card) return null;
-            var allBtns = Array.from(card.querySelectorAll('button, a, [role="button"]'));
-            return allBtns.find(function(b) {
-                if (!isExactTrainAndClassButton(b, card)) return false;
-                var bTxt = (b.innerText || b.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
-                return matcherFn(bTxt);
-            }) || null;
-        }
-
-        while (web4AvlRetryCount < web4AvlRetryLimit && !web4ActionDone) {
-            detectAndCloseIRCTCError();
-            var strictCard = getStrictTargetTrainCard();
-
-            if (!strictCard) {
-                web4AvlRetryCount++;
-                diagnosticLogs.push(
-                    'WEB4: Target train [' + targetTrainId + '] card abhi nahi mila (' +
-                    web4AvlRetryCount + '/' + web4AvlRetryLimit + ')'
-                );
-                await new Promise(function(r) { setTimeout(r, 500); });
-                continue;
-            }
-
-            // 1. Exact train + exact class ka BOOK / BOOK NOW button
-            var exactBookBtn = findExactClassInTrainCard(strictCard, function(bTxt) {
-                return bTxt === 'BOOK NOW' || bTxt === 'BOOK' || bTxt.indexOf('BOOK NOW') !== -1 || bTxt.indexOf('BOOK ') === 0;
-            });
-
-            if (exactBookBtn) {
-                var bookLabel = (exactBookBtn.innerText || exactBookBtn.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
-                try { exactBookBtn.scrollIntoView({ behavior: 'auto', block: 'center' }); } catch (_) {}
-                await new Promise(function(r) { setTimeout(r, 150); });
-                exactBookBtn.click();
-                journeyDateSelected = true;
-                bookNowClicked = true;
-                web4ActionDone = true;
-                diagnosticLogs.push(
-                    'WEB4: Train [' + targetTrainId + '] | Class [' + wantedWeb4Class + '] Book button clicked -> ' + bookLabel
-                );
-                await liveProgress('CLASS BOOK CLICKED', 'Selected class ka Book button click ho gaya.', 38);
-                break;
-            }
-
-            // 2. Exact train + exact class ka CHECK AVAILABILITY / REFRESH AVAILABILITY button (20 retries)
-            var exactAvlBtn = findExactClassInTrainCard(strictCard, function(bTxt) {
-                return bTxt.indexOf('CHECK AVAILABILITY') !== -1 || bTxt.indexOf('REFRESH AVAILABILITY') !== -1;
-            });
-
-            if (exactAvlBtn) {
-                web4AvlRetryCount++;
-                var avlLabel = (exactAvlBtn.innerText || exactAvlBtn.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
-                try { exactAvlBtn.scrollIntoView({ behavior: 'auto', block: 'center' }); } catch (_) {}
-                await new Promise(function(r) { setTimeout(r, 150); });
-                exactAvlBtn.click();
-                diagnosticLogs.push(
-                    'WEB4: Train [' + targetTrainId + '] | Class [' + wantedWeb4Class + '] ' + avlLabel +
-                    ' clicked (attempt ' + web4AvlRetryCount + '/' + web4AvlRetryLimit + ')'
-                );
-                await liveProgress(
-                    'CHECK AVAILABILITY',
-                    'Class ' + wantedWeb4Class + ' - ' + avlLabel + ' retry (' + web4AvlRetryCount + '/' + web4AvlRetryLimit + ')...',
-                    36
-                );
-
-                for (var wTick = 0; wTick < 6; wTick++) {
-                    await new Promise(function(r) { setTimeout(r, 350); });
-                    var errToast = detectAndCloseIRCTCError();
-                    var nowCard = getStrictTargetTrainCard();
-                    var bookReadyNow = Boolean(findExactClassInTrainCard(nowCard, function(t) {
-                        return t === 'BOOK NOW' || t === 'BOOK' || t.indexOf('BOOK NOW') !== -1 || t.indexOf('BOOK ') === 0;
-                    }));
-                    if (bookReadyNow || errToast) break;
-                }
-            } else {
-                web4AvlRetryCount++;
-                diagnosticLogs.push(
-                    'WEB4: Train [' + targetTrainId + '] | Class [' + wantedWeb4Class + '] ka button abhi nahi mila (' +
-                    web4AvlRetryCount + '/' + web4AvlRetryLimit + ')'
-                );
-                await new Promise(function(r) { setTimeout(r, 500); });
-            }
-        }
-
-        if (!web4ActionDone) {
+        if (exactBookBtn) {
+            var bLabel = (exactBookBtn.innerText || exactBookBtn.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+            triggerRealWeb4Click(exactBookBtn);
+            journeyDateSelected = true;
+            bookNowClicked = true;
+            web4ActionDone = true;
+            diagnosticLogs.push('WEB4: Train [' + targetTrainId + '] | Class [' + wantedWeb4Class + '] Book clicked -> ' + bLabel);
+            await liveProgress('CLASS BOOK CLICKED', 'Class ' + wantedWeb4Class + ' ka Book button click ho gaya.', 38);
+        } else {
             journeyDateSelected = false;
-            diagnosticLogs.push(
-                'WEB4: 20 retries ke baad bhi Train [' + targetTrainId + '] | Class [' + wantedWeb4Class + '] ka Book button nahi mila.'
-            );
+            diagnosticLogs.push('WEB4: Train [' + targetTrainId + '] | Class [' + wantedWeb4Class + '] ka Book button nahi mila.');
         }
+    } else {
+        journeyDateSelected = false;
+        diagnosticLogs.push('WEB4: Availability flow ke baad card/class valid nahi mila.');
     }
 } else {
-
-    var jd = String(payload.journeyDate || '').trim();
+                            var jd = String(payload.journeyDate || '').trim();
                             var monthList = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
                             if (jd.indexOf('-') !== -1) {
