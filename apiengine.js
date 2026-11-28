@@ -2406,10 +2406,10 @@ result = await this.page.evaluate(script);
                         var isACClass = acClasses.indexOf(classForTiming) !== -1;
                         var tatkalHour = isACClass ? 10 : 11;
                         var tatkalMinute = 0;
-                        var tatkalSecond = 2;
+                        var tatkalSecond = 1;
                         diagnosticLogs.push("Tatkal timing detected.");
                         diagnosticLogs.push("Selected class: " + classForTiming);
-                        diagnosticLogs.push("Tatkal opening time: " + (tatkalHour === 10 ? "10:00:02 AM" : "11:00:02 AM"));
+                        diagnosticLogs.push("Tatkal opening time: " + (tatkalHour === 10 ? "10:00:01 AM" : "11:00:01 AM"));
 
                         while (true) {
                             var now = new Date();
@@ -2717,50 +2717,165 @@ if (isFirefoxWEB4) {
                     try {
 var isFirefoxWEB4DateFlow = String(payload.browserType || '').trim().toUpperCase() === 'WEB4';
 if (isFirefoxWEB4DateFlow && classSelectionCompleted) {
-    var freshWeb4Card = findFreshTrainCard() || targetCard;
-    var web4CardScope = freshWeb4Card || document;
+    var web4AvlRetryLimit = 20;
+    var web4AvlRetryCount = 0;
+    var web4ActionDone = false;
 
-    var web4ActionBtn = Array.from(
-        web4CardScope.querySelectorAll('button, a, [role="button"]')
-    ).find(function(b) {
-        if (!b || !b.isConnected || b.getClientRects().length === 0) return false;
-        if (b.disabled || b.getAttribute('aria-disabled') === 'true') return false;
-        var bTxt = (b.innerText || b.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
-        return (
-            bTxt.indexOf('CHECK AVAILABILITY') !== -1 ||
-            bTxt === 'BOOK NOW' ||
-            bTxt === 'BOOK' ||
-            bTxt.indexOf('BOOK NOW') !== -1 ||
-            bTxt.indexOf('BOOK ') === 0
-        );
-    });
+    var targetTrainId = String(payload.targetTrainNo || '').trim();
+    var wantedWeb4Class = String(payload.trainClass || '').trim().toUpperCase();
+    var validClasses = ['SL', '3E', '3A', '2A', '1A'];
+    var web4ClassFullNames = {
+        'SL': 'SLEEPER',
+        '3E': 'AC 3 ECONOMY',
+        '3A': 'AC 3 TIER',
+        '2A': 'AC 2 TIER',
+        '1A': 'AC FIRST CLASS'
+    };
 
-    if (web4ActionBtn) {
-        var btnLabel = (web4ActionBtn.innerText || web4ActionBtn.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
-        try { web4ActionBtn.scrollIntoView({ behavior: 'auto', block: 'center' }); } catch (_) {}
-        await new Promise(function(r) { setTimeout(r, 150); });
-        web4ActionBtn.click();
-
-        if (btnLabel.indexOf('CHECK AVAILABILITY') !== -1) {
-            journeyDateSelected = false;
-            bookNowClicked = false;
-            diagnosticLogs.push('WEB4: Check Availability clicked -> ' + btnLabel);
-            await liveProgress('CHECK AVAILABILITY', 'Availability check kar rahe hain...', 36);
-            await new Promise(function(r) { setTimeout(r, 1200); });
-        } else {
-            journeyDateSelected = true;
-            bookNowClicked = true;
-            diagnosticLogs.push('WEB4: Actual Book button clicked -> ' + btnLabel);
-            await liveProgress('CLASS BOOK CLICKED', 'Selected class ka Book button click ho gaya.', 38);
-        }
-    } else {
+    if (!targetTrainId) {
         journeyDateSelected = false;
-        diagnosticLogs.push('WEB4: Check Availability / Book button abhi nahi mila ya disabled hai. Retrying...');
+        diagnosticLogs.push('WEB4: targetTrainNo missing hai. Book click blocked.');
+    } else if (!wantedWeb4Class || validClasses.indexOf(wantedWeb4Class) === -1) {
+        journeyDateSelected = false;
+        diagnosticLogs.push('WEB4: Invalid or missing target class (' + wantedWeb4Class + '). Book click blocked.');
+    } else {
+        var wantedClassRegex = new RegExp('(^|[^A-Z0-9])' + wantedWeb4Class + '([^A-Z0-9]|$)');
+        var wantedFullName = web4ClassFullNames[wantedWeb4Class] || wantedWeb4Class;
+        var otherClasses = validClasses.filter(function(c) { return c !== wantedWeb4Class; });
+
+        function getStrictTargetTrainCard() {
+            var candidateCard = findFreshTrainCard() || targetCard;
+            if (!candidateCard || !candidateCard.isConnected) return null;
+            var cardText = (candidateCard.innerText || candidateCard.textContent || '');
+            if (cardText.indexOf(targetTrainId) === -1) return null;
+            return candidateCard;
+        }
+
+        function isExactTrainAndClassButton(btn, card) {
+            if (!btn || !card || !btn.isConnected || !card.contains(btn)) return false;
+            if (btn.getClientRects().length === 0) return false;
+            if (btn.disabled || btn.getAttribute('aria-disabled') === 'true') return false;
+
+            var cardText = (card.innerText || card.textContent || '');
+            if (cardText.indexOf(targetTrainId) === -1) return false;
+
+            var node = btn;
+            for (var depth = 0; depth < 6 && node && card.contains(node); depth++) {
+                var txt = (node.innerText || node.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+                if (!txt) {
+                    node = node.parentElement;
+                    continue;
+                }
+
+                var hasWanted = wantedClassRegex.test(txt) || txt.indexOf(wantedFullName) !== -1;
+                if (hasWanted) {
+                    var hasOtherClass = otherClasses.some(function(otherCls) {
+                        var otherRegex = new RegExp('(^|[^A-Z0-9])' + otherCls + '([^A-Z0-9]|$)');
+                        return otherRegex.test(txt);
+                    });
+                    if (!hasOtherClass) {
+                        return true;
+                    }
+                }
+                node = node.parentElement;
+            }
+            return false;
+        }
+
+        function findExactClassInTrainCard(card, matcherFn) {
+            if (!card) return null;
+            var allBtns = Array.from(card.querySelectorAll('button, a, [role="button"]'));
+            return allBtns.find(function(b) {
+                if (!isExactTrainAndClassButton(b, card)) return false;
+                var bTxt = (b.innerText || b.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+                return matcherFn(bTxt);
+            }) || null;
+        }
+
+        while (web4AvlRetryCount < web4AvlRetryLimit && !web4ActionDone) {
+            detectAndCloseIRCTCError();
+            var strictCard = getStrictTargetTrainCard();
+
+            if (!strictCard) {
+                web4AvlRetryCount++;
+                diagnosticLogs.push(
+                    'WEB4: Target train [' + targetTrainId + '] card abhi nahi mila (' +
+                    web4AvlRetryCount + '/' + web4AvlRetryLimit + ')'
+                );
+                await new Promise(function(r) { setTimeout(r, 500); });
+                continue;
+            }
+
+            // 1. Exact train + exact class ka BOOK / BOOK NOW button
+            var exactBookBtn = findExactClassInTrainCard(strictCard, function(bTxt) {
+                return bTxt === 'BOOK NOW' || bTxt === 'BOOK' || bTxt.indexOf('BOOK NOW') !== -1 || bTxt.indexOf('BOOK ') === 0;
+            });
+
+            if (exactBookBtn) {
+                var bookLabel = (exactBookBtn.innerText || exactBookBtn.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+                try { exactBookBtn.scrollIntoView({ behavior: 'auto', block: 'center' }); } catch (_) {}
+                await new Promise(function(r) { setTimeout(r, 150); });
+                exactBookBtn.click();
+                journeyDateSelected = true;
+                bookNowClicked = true;
+                web4ActionDone = true;
+                diagnosticLogs.push(
+                    'WEB4: Train [' + targetTrainId + '] | Class [' + wantedWeb4Class + '] Book button clicked -> ' + bookLabel
+                );
+                await liveProgress('CLASS BOOK CLICKED', 'Selected class ka Book button click ho gaya.', 38);
+                break;
+            }
+
+            // 2. Exact train + exact class ka CHECK AVAILABILITY / REFRESH AVAILABILITY button (20 retries)
+            var exactAvlBtn = findExactClassInTrainCard(strictCard, function(bTxt) {
+                return bTxt.indexOf('CHECK AVAILABILITY') !== -1 || bTxt.indexOf('REFRESH AVAILABILITY') !== -1;
+            });
+
+            if (exactAvlBtn) {
+                web4AvlRetryCount++;
+                var avlLabel = (exactAvlBtn.innerText || exactAvlBtn.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+                try { exactAvlBtn.scrollIntoView({ behavior: 'auto', block: 'center' }); } catch (_) {}
+                await new Promise(function(r) { setTimeout(r, 150); });
+                exactAvlBtn.click();
+                diagnosticLogs.push(
+                    'WEB4: Train [' + targetTrainId + '] | Class [' + wantedWeb4Class + '] ' + avlLabel +
+                    ' clicked (attempt ' + web4AvlRetryCount + '/' + web4AvlRetryLimit + ')'
+                );
+                await liveProgress(
+                    'CHECK AVAILABILITY',
+                    'Class ' + wantedWeb4Class + ' - ' + avlLabel + ' retry (' + web4AvlRetryCount + '/' + web4AvlRetryLimit + ')...',
+                    36
+                );
+
+                for (var wTick = 0; wTick < 6; wTick++) {
+                    await new Promise(function(r) { setTimeout(r, 350); });
+                    var errToast = detectAndCloseIRCTCError();
+                    var nowCard = getStrictTargetTrainCard();
+                    var bookReadyNow = Boolean(findExactClassInTrainCard(nowCard, function(t) {
+                        return t === 'BOOK NOW' || t === 'BOOK' || t.indexOf('BOOK NOW') !== -1 || t.indexOf('BOOK ') === 0;
+                    }));
+                    if (bookReadyNow || errToast) break;
+                }
+            } else {
+                web4AvlRetryCount++;
+                diagnosticLogs.push(
+                    'WEB4: Train [' + targetTrainId + '] | Class [' + wantedWeb4Class + '] ka button abhi nahi mila (' +
+                    web4AvlRetryCount + '/' + web4AvlRetryLimit + ')'
+                );
+                await new Promise(function(r) { setTimeout(r, 500); });
+            }
+        }
+
+        if (!web4ActionDone) {
+            journeyDateSelected = false;
+            diagnosticLogs.push(
+                'WEB4: 20 retries ke baad bhi Train [' + targetTrainId + '] | Class [' + wantedWeb4Class + '] ka Book button nahi mila.'
+            );
+        }
     }
 } else {
-                            await liveProgress('JOURNEY DATE', 'Journey date select ho rahi hain...', 36);
-                            diagnosticLogs.push("Targeting journey date card...");
-                            var jd = String(payload.journeyDate || '').trim();
+
+    var jd = String(payload.journeyDate || '').trim();
                             var monthList = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
                             if (jd.indexOf('-') !== -1) {
@@ -2964,11 +3079,72 @@ if (isFirefoxWEB4DateFlow && classSelectionCompleted) {
                         return false;
                     }
 
-                    for (var bTry = 0; bTry < bookRetryLimit && !passengerPageReached; bTry++) {
+        for (var bTry = 0; bTry < bookRetryLimit && !passengerPageReached; bTry++) {
                         if (checkPassengerPage()) break;
                         detectAndCloseIRCTCError();
 
                         targetCard = findFreshTrainCard();
+
+                        // Agar retry ke dauran date/availability card hide ho gaya hai, to selected class par click karke wapas expand karein
+                        var isDateCardVisibleNow = function(card) {
+                            if (!card || !card.isConnected) return false;
+                            var hasBook = Array.from(card.querySelectorAll('button, a')).some(function(b) {
+                                var t = (b.innerText || b.textContent || '').trim().toUpperCase();
+                                return t.indexOf('BOOK NOW') !== -1;
+                            });
+                            var hasBox = Array.from(
+                                card.querySelectorAll('div.avl-date, div.pre-avl, div.box-avl, td, div.ng-star-inserted')
+                            ).some(function(box) {
+                                if (!box || !box.isConnected || box.offsetParent === null) return false;
+                                var t = (box.innerText || box.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+                                return (
+                                    (t.indexOf('AVL') !== -1 || t.indexOf('WL') !== -1 || t.indexOf('AVAILABLE') !== -1 || t.indexOf('RAC') !== -1) &&
+                                    t.length < 100
+                                );
+                            });
+                            return hasBook || hasBox;
+                        };
+
+                        if (targetCard && !isDateCardVisibleNow(targetCard)) {
+                            var clsCode = String(payload.trainClass || '').trim().toUpperCase();
+                            var clsLabels = {
+                                'SL': 'SLEEPER',
+                                '3E': 'AC 3 ECONOMY',
+                                '3A': 'AC 3 TIER',
+                                '2A': 'AC 2 TIER',
+                                '1A': 'AC FIRST CLASS'
+                            };
+                            var clsFull = clsLabels[clsCode] || clsCode;
+
+                            for (var reExp = 0; reExp < 20; reExp++) {
+                                detectAndCloseIRCTCError();
+                                targetCard = findFreshTrainCard() || targetCard;
+                                if (!targetCard) {
+                                    await new Promise(function(r) { setTimeout(r, 350); });
+                                    continue;
+                                }
+                                if (isDateCardVisibleNow(targetCard)) break;
+
+                                var clsTarget = Array.from(targetCard.querySelectorAll('button, a, label, span, div')).find(function(el) {
+                                    if (!el || !el.isConnected) return false;
+                                    var t = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+                                    return (t.indexOf('(' + clsCode + ')') !== -1 && t.indexOf(clsFull) !== -1) ||
+                                           new RegExp('(^|[^A-Z0-9])' + clsCode + '([^A-Z0-9]|$)').test(t);
+                                });
+                                var clsBtn = clsTarget
+                                    ? (clsTarget.closest('button, a, label, [role="button"], [role="radio"]') || clsTarget)
+                                    : null;
+                                if (clsBtn) {
+                                    try { clsBtn.scrollIntoView({ behavior: 'auto', block: 'center' }); } catch (_) {}
+                                    try { clsBtn.click(); } catch (_) {}
+                                    diagnosticLogs.push('Date card hidden during retry -> re-clicking class ' + clsCode + ' (' + (reExp + 1) + '/20)');
+                                }
+                                await new Promise(function(r) { setTimeout(r, 350); });
+                                targetCard = findFreshTrainCard() || targetCard;
+                                if (targetCard && isDateCardVisibleNow(targetCard)) break;
+                            }
+                        }
+
                         if (!targetCard) {
                             diagnosticLogs.push("Retry: Target train card DOM mein abhi available nahi hai. Waiting...");
                             await new Promise(function(r) { setTimeout(r, 500); });
