@@ -827,94 +827,199 @@ async autoLogin(username, password) {
         );
     }
 
-    // STEP 1 - WAIT FOR LOGIN BUTTON
-    const loginFormAlreadyOpen =
-        await this.page.$('input[formcontrolname="userid"]');
-    if (!loginFormAlreadyOpen) {
+
+    // STEP 1 - PROFILE MENU / LOGIN REGISTER / DIRECT LOGIN
+    const loginFormSelector =
+        'input[formcontrolname="userid"]';
+
+    const isLoginFormVisible = async () => {
+        return await this.page.evaluate(() => {
+            const input = document.querySelector(
+                'input[formcontrolname="userid"]'
+            );
+
+            if (!input) return false;
+
+            const style = window.getComputedStyle(input);
+
+            return (
+                style.display !== 'none' &&
+                style.visibility !== 'hidden' &&
+                input.getClientRects().length > 0
+            );
+        });
+    };
+
+    let loginFormOpen = await isLoginFormVisible();
+
+    if (!loginFormOpen) {
         console.log(
-            `[AUTO LOGIN ${this.browserType}] Waiting for LOGIN button...`
+            `[AUTO LOGIN ${this.browserType}] Opening profile menu...`
         );
+
         try {
+            // WEB / WEB2 / WEB3: Open profile/menu
             if (!isFirefoxWEB4) {
-                const menuButton = await this.page.$(
-                    'i.fa.fa-align-justify'
-                );
-                if (menuButton) {
-                    await this.page.evaluate(() => {
-                        const icon = document.querySelector(
-                            'i.fa.fa-align-justify'
-                        );
-                        if (icon) {
-                            const clickable =
-                                icon.closest('button, a, div') || icon;
-                            clickable.click();
+
+    const profileSelector =
+        'app-header .h_menu_drop_button.moblogo a i';
+
+    console.log(
+        `[AUTO LOGIN ${this.browserType}] Waiting for profile menu...`
+    );
+
+    await this.page.waitForSelector(profileSelector, {
+        visible: true,
+        timeout: 30000
+    });
+
+    await this.page.$eval(profileSelector, icon => {
+        const clickable = icon.closest('a');
+        if (clickable) clickable.click();
+    });
+
+    console.log(
+        `[AUTO LOGIN ${this.browserType}] Profile menu clicked.`
+    );
+}
+
+            // Wait for either:
+            // 1. Direct login form
+            // 2. LOGIN / REGISTER button inside profile menu
+            // 3. WEB4 LOGIN button
+            const loginTargetHandle =
+                await this.page.waitForFunction(
+                    (isWeb4) => {
+                        const visible = (el) => {
+                            if (!el || !el.isConnected) return false;
+
+                            const style =
+                                window.getComputedStyle(el);
+
+                            return (
+                                style.display !== 'none' &&
+                                style.visibility !== 'hidden' &&
+                                Number(style.opacity) !== 0 &&
+                                el.getClientRects().length > 0
+                            );
+                        };
+
+                        // Direct login window already opened?
+                        const usernameInput =
+                            document.querySelector(
+                                'input[formcontrolname="userid"]'
+                            );
+
+                        if (visible(usernameInput)) {
+                            return usernameInput;
                         }
-                    });
-                    console.log(
-                        `[AUTO LOGIN ${this.browserType}] Menu opened.`
-                    );
-                }
+
+                        // Find the correct login button
+                        const selector = isWeb4
+                            ? 'button.btn-login'
+                            : 'button.search_btn';
+
+                        const buttons = Array.from(
+                            document.querySelectorAll(selector)
+                        );
+
+                        const loginButton = buttons.find(button => {
+                            const text = (
+                                button.innerText ||
+                                button.textContent ||
+                                ''
+                            )
+                                .replace(/\s+/g, ' ')
+                                .trim()
+                                .toUpperCase();
+
+                            const enabled =
+                                !button.disabled &&
+                                button.getAttribute(
+                                    'aria-disabled'
+                                ) !== 'true';
+
+                            const correctText = isWeb4
+                                ? text === 'LOGIN'
+                                : (
+                                    text === 'LOGIN / REGISTER' ||
+                                    text === 'LOGIN'
+                                );
+
+                            return (
+                                visible(button) &&
+                                enabled &&
+                                correctText
+                            );
+                        });
+
+                        return loginButton || false;
+                    },
+                    {
+                        polling: 100,
+                        timeout: 0
+                    },
+                    isFirefoxWEB4
+                );
+
+            const loginTarget =
+                loginTargetHandle.asElement();
+
+            if (!loginTarget) {
+                throw new Error(
+                    'Login form ya LOGIN / REGISTER button nahi mila.'
+                );
             }
-            const loginButtonHandle = await this.page.waitForFunction(
-                (isWeb4) => {
-                    if (document.readyState !== 'complete') return false;
-                    const selector = isWeb4
-                        ? 'button.btn-login'
-                        : 'button.search_btn';
-                    const buttons = Array.from(
-                        document.querySelectorAll(selector)
-                    );
-                    return buttons.find(button => {
-                        const text = (
-                            button.innerText ||
-                            button.textContent ||
-                            ''
-                        ).trim().toUpperCase();
-                        const style = window.getComputedStyle(button);
-                        const visible =
-                            style.display !== 'none' &&
-                            style.visibility !== 'hidden' &&
-                            Number(style.opacity) !== 0 &&
-                            button.getClientRects().length > 0;
-                        const enabled =
-                            !button.disabled &&
-                            button.getAttribute('aria-disabled') !== 'true';
-                        const correctText = isWeb4
-                            ? text === 'LOGIN'
-                            : true;
-                        return visible && enabled && correctText;
-                    }) || false;
-                },
+
+            const targetIsLoginForm =
+                await loginTarget.evaluate(el =>
+                    el.matches(
+                        'input[formcontrolname="userid"]'
+                    )
+                );
+
+            if (targetIsLoginForm) {
+                // Profile click directly opened login window
+                console.log(
+                    `[AUTO LOGIN ${this.browserType}] Direct login window detected.`
+                );
+            } else {
+                // Profile menu showed LOGIN / REGISTER button
+                console.log(
+                    `[AUTO LOGIN ${this.browserType}] LOGIN / REGISTER button detected. Clicking...`
+                );
+
+                await loginTarget.click();
+
+                console.log(
+                    `[AUTO LOGIN ${this.browserType}] LOGIN / REGISTER clicked.`
+                );
+            }
+
+            // Both paths must reach the actual username field
+            await this.page.waitForSelector(
+                loginFormSelector,
                 {
-                    polling: 100,
+                    visible: true,
                     timeout: 0
-                },
-                isFirefoxWEB4
+                }
             );
-            const loginButton = loginButtonHandle.asElement();
-            if (!loginButton) {
-                throw new Error('LOGIN button element nahi mila.');
-            }
-            await loginButton.click();
+
             console.log(
-                `[AUTO LOGIN ${this.browserType}] LOGIN button clicked successfully.`
+                `[AUTO LOGIN ${this.browserType}] Login window opened successfully.`
             );
+
         } catch (loginButtonError) {
             console.error(
-                `[AUTO LOGIN ${this.browserType}] LOGIN button error:`,
+                `[AUTO LOGIN ${this.browserType}] Login opening error:`,
                 loginButtonError.message
             );
+
             throw loginButtonError;
         }
-        await this.page.waitForSelector(
-            'input[formcontrolname="userid"]',
-            {
-                visible: true,
-                timeout: 0
-            }
-        );
+    } else {
         console.log(
-            `[AUTO LOGIN ${this.browserType}] Login window opened successfully.`
+            `[AUTO LOGIN ${this.browserType}] Login form already open.`
         );
     }
 
@@ -3604,7 +3709,7 @@ if (isFirefoxWEB4DateFlow) {
                 diagnosticLogs.push("UPI Selection Error: " + payErr.message);
             }
 
-            await new Promise(function(r) { setTimeout(r, 3500); });
+            await new Promise(function(r) { setTimeout(r, 3000); });
 
             var loginModalOpen = document.querySelector('input[formcontrolname="userid"]');
             var pageBodyUpper = (document.body.innerText || '').toUpperCase();
@@ -3675,7 +3780,7 @@ if (isFirefoxWEB4PaymentCalculateFare) {
              return text.includes('calculate fare') && b.getClientRects().length > 0 && isButtonClickable(b);
          });
          if (calculateFareBtn) break;
-         await new Promise(function(resolve) { setTimeout(resolve, 500); });
+         await new Promise(function(resolve) { setTimeout(resolve, 1500); });
      }
      if (!calculateFareBtn) {
          return { success: false, error: 'WEB4: Calculate Fare button nahi mila ya enabled nahi hua.', logs: diagnosticLogs };
@@ -3711,7 +3816,7 @@ if (isFirefoxWEB4PaymentCalculateFare) {
              );
              closeAnyIRCTCErrors();
              if (fareTry < web4FareRetryLimit) {
-                 await new Promise(function(resolve) { setTimeout(resolve, 4500); });
+                 await new Promise(function(resolve) { setTimeout(resolve, 3000); });
              }
              fareResponseDetected = true;
              break;
@@ -3721,7 +3826,7 @@ if (isFirefoxWEB4PaymentCalculateFare) {
      if (!fareResponseDetected) {
          return { success: false, error: 'WEB4: Calculate Fare click ke baad 180 seconds tak page response nahi mila.', logs: diagnosticLogs };
      }
- }
+ } 
 
  if (!web4FareRetrySuccess) {
      return {
@@ -3740,7 +3845,6 @@ if (isFirefoxWEB4PaymentCalculateFare) {
      if (fallbackUpi) {
          var radioBox = fallbackUpi.querySelector('.ui-radiobutton-box, .p-radiobutton-box') || fallbackUpi;
          radioBox.click();
-         await new Promise(function(r) { setTimeout(r, 600); });
      }
  }
 
@@ -3748,10 +3852,10 @@ if (isFirefoxWEB4PaymentCalculateFare) {
     if (!continueBtn1) {
         return { success: false, error: 'First continue button nahi mila.', logs: diagnosticLogs };
     }
-    await new Promise(function(r) { setTimeout(r, 500); });
+    await new Promise(function(r) { setTimeout(r, 1500); });
     continueBtn1 = findContinueButton(false);
     if (!continueBtn1) {
-        return { success: false, error: 'First continue button 500ms state wait ke baad nahi mila.', logs: diagnosticLogs };
+        return { success: false, error: 'First continue button 1500ms state wait ke baad nahi mila.', logs: diagnosticLogs };
     }
     continueBtn1.click();
     diagnosticLogs.push('First Continue button clicked.');
@@ -3821,7 +3925,7 @@ if (!isFirefoxWEB4PaymentCalculateFare) {
             }
 
             // 2 second wait taaki toast clear ho aur button enable ho sake
-            await new Promise(function(r) { setTimeout(r, 4500); });
+            await new Promise(function(r) { setTimeout(r, 3000); });
             closeAnyIRCTCErrors();
 
             var retryBtn1 = findContinueButton(false);
@@ -3866,7 +3970,7 @@ for (;;) {
         var detectedError2 = getIRCTCErrorStatus(document.body.innerText || '');
         await liveProgress(detectedError2.step, detectedError2.message, 20);
         closeAnyIRCTCErrors();
-        await new Promise(function(r) { setTimeout(r, 4500); });
+        await new Promise(function(r) { setTimeout(r, 2000); });
 
         if (secondFindRetry >= secondFindLimit) {
             return { success: false, error: 'Second Continue button nahi mila after retries.', logs: diagnosticLogs };
@@ -3939,7 +4043,7 @@ for (;;) {
         closeAnyIRCTCErrors();
 
         // 2 second wait taaki toast clear ho aur button dubara active ho sake
-        await new Promise(function(r) { setTimeout(r, 4500); });
+        await new Promise(function(r) { setTimeout(r, 2000); });
         closeAnyIRCTCErrors();
 
         var retryBtn2 = findContinueButton(isWEB4SecondContinue);
